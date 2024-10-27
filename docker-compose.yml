@@ -4,12 +4,11 @@ services:
     build: .
     volumes:
       - .:/app  # Mounts the current directory to the /app directory in the container
+    ports:
+      - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    working_dir: /app/src  # Set the working directory inside the container to /app/src
     stdin_open: true  # Keep the container open for interactive commands
     tty: true         # Enable terminal support
-    # For executing the transctiption
-    #command: python main.py  # Override the default command to run the main.py script
-    # For development: runs an indefinite process that keeps the environment running
-    command: tail -f /dev/null
+    # Run the development server
+    command: poetry run python manage.py runserver 0.0.0.0:8000

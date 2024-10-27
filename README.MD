@@ -11,18 +11,10 @@ Get OpenAI API Key and store in `.env` file as `OPENAI_API_KEY` (ensure that thi
 
 ## Usage
 
-Build Docker container: `docker-compose build` (rerun if dependencies change)
+Start Django application by running `docker-compose up`.  Application will be visible at [http://localhost:8000](http://localhost:8000)
 
-### Development
-
-1. Update the commands to initatie the container so that they execute an indefinite process
-
-2. Exec into the container: `docker exec -it <container_name> /bin/bash` (preface with winpty if running Git Bash on Windows)
-
-### Transcription
+The logic for transcribing the files is contained within `src`, but currently integrating this into the django application.  Process for executing this is included for reference below:
 
 1. Place files that you want to transcribe in the `audio-files` folder (currently only validated against MP3 file types).
-
-2. Run `docker-compose up` from the root of the directory to transcribe the files.  Transcripts will be output into the `transcripts` folder.
-
+2. Exec into the running docker container and run `main.py`.  This will output transcripts in the `/transcripts` folder.
 3. Recommend maintaining audio files and transcripts in these folders with initial naming conventions as the script currently validates that audio files are not transcribed multiple times and saving credits.  Plan to implement a better method for validating that files aren't transcribed multiple times.
