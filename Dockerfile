@@ -32,6 +32,7 @@ COPY . /app
 WORKDIR /app/missourai_django
 
 # Migrate the database
+CMD ["poetry", "run", "python", "manage.py", "makemigrations"]
 CMD ["poetry", "run", "python", "manage.py", "migrate"]
 
 # Run the web app
