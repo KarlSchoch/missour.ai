@@ -9,4 +9,7 @@ services:
     working_dir: /app/src  # Set the working directory inside the container to /app/src
     stdin_open: true  # Keep the container open for interactive commands
     tty: true         # Enable terminal support
-    command: python main.py  # Override the default command to run the main.py script
+    # For executing the transctiption
+    #command: python main.py  # Override the default command to run the main.py script
+    # For development: runs an indefinite process that keeps the environment running
+    command: tail -f /dev/null
