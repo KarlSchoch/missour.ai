@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "missour-ai"
+version = "0.1.0"
+description = ""
+authors = ["Karl Schoch <karl.schoch@gmail.com>"]
+readme = "README.md"
+packages = [{include = "missour"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+openai = "^1.45.1"
+pydub = "^0.25.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
