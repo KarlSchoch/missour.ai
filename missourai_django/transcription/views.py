@@ -4,7 +4,10 @@ from .forms import AudioFileForm
 
 # Create your views here.
 def index(request):
-    return HttpResponse("Hello world.  You are at the transcription index.")
+    return render(request, 'transcription/index.html')
+
+def transcripts(request):
+    return render(request, 'transcription/transcripts.html')
 
 def upload_audio(request):
     if request.method == 'POST':

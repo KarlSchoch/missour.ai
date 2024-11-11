@@ -1,14 +1,12 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>Upload Audio File</title>
-    </head>
-    <body>
-        <h1>Upload Audio File</h1>
-        <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit">Upload</button>
-        </form>
-    </body>
-</html>
+{% extends "transcription/base.html" %}
+
+{% block title %}Upload Audio - missour.ai{% endblock %}
+
+{% block content %}
+<h1>Upload Audio Files for Transcription</h1>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Upload</button>
+</form>
+{% endblock %}
