@@ -17,8 +17,20 @@
         {% for transcript in transcripts %}
         <tr>
             <td>{{ transcript.name }}</td>
-            <td><a href="{{ transcript.audio_file.url }}">Download Audio</a></td>
-            <td>{{ transcript.transcript_file }}</td>
+            <td>
+                {% if transcript.audio_file %}
+                    <a href="{{ transcript.audio_file.url }}">Download Audio</a>
+                {% else %}
+                    Audio not available
+                {% endif %}
+            </td>
+            <td>
+                {% if transcript.transcript_file %}
+                    <a href="{{ transcript.transcript_file.url }}">Download Transcript</a>
+                {% else %}
+                    Transcript not available
+                {% endif %}
+            </td>
             <td>{{ transcript.created_at }}</td>
         </tr>
         {% endfor %}

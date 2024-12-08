@@ -7,5 +7,8 @@ class Transcript(models.Model):
         upload_to='uploads/audio/',
         default='uploads/audio/placeholder.mp3'
     )
-    transcript_file = models.TextField()
+    transcript_file = models.FileField(
+        upload_to='uploads/transcripts/', 
+        null=True, blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
