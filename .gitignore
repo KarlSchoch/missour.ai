@@ -65,6 +65,7 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 missourai_django/missourai_web_app/settings.py
+missourai_django/media
 
 # Flask stuff:
 instance/

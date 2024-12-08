@@ -4,7 +4,7 @@ from .forms import TranscriptForm
 from .models import Transcript
 import os
 
-def process_audio(f, name):
+def process_audio(file_path):
     # Placeholder for transcript generation logic
     # Replace with transcription model
     return "Generated transcript text for the file."
@@ -37,8 +37,8 @@ def upload_audio(request):
             transcript_obj.save()
 
             # Redirect to transcripts page
-            return redirect('transcripts')
+            return redirect('transcription:transcripts')
     else:
         form = TranscriptForm()
 
-    return render(request, 'transcription/upload.html', {'form': form})
+    return render(request, 'transcription/upload_audio.html', {'form': form})
