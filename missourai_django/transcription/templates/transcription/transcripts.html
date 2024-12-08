@@ -4,11 +4,24 @@
 
 {% block content %}
 <h1>List of Transcripts</h1>
-<ul>
-    {% for transcript in transcripts %}
-    <li>
-        <a href="{{ transcript.transcript_file.url }}" download>{{ transcript.transcript_file.name }}</a>
-    </li>
-    {% endfor %}
-</ul>
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Audio File</th>
+            <th>Transcript</th>
+            <th>Created At Timestamp</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for transcript in transcripts %}
+        <tr>
+            <td>{{ transcript.name }}</td>
+            <td><a href="{{ transcript.audio_file.url }}">Download Audio</a></td>
+            <td>{{ transcript.transcript_file }}</td>
+            <td>{{ transcript.created_at }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
 {% endblock %}
