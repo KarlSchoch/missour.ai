@@ -7,9 +7,10 @@ readme = "README.md"
 packages = [{include = "missour"}]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = ">=3.10,<4.0"
 openai = "^1.45.1"
 pydub = "^0.25.1"
+django = "^5.1.2"
 
 
 [build-system]

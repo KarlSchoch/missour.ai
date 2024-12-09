@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+        {% block title %}missour.ai{% endblock %}
+    </title>
+    <!-- Add any CSS or Bootstrap links here -->
+</head>
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="{% url 'transcription:index' %}">Home</a></li>
+                <li><a href="{% url 'transcription:transcripts' %}">Transcripts</a></li>
+                <li><a href="{% url 'transcription:upload_audio' %}">Upload Audio</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; 2024 missour.ai</p>
+    </footer>
+</body>
+</html>

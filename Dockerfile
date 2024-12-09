@@ -27,8 +27,13 @@ RUN poetry install --no-interaction --no-ansi
 # Copy the rest of the project
 COPY . /app
 
-# Set the working directory to /app/src (where your main.py is now located)
-WORKDIR /app/src
+# Set the working directory to the django app
+# Maintaining the /src/ side for logic on executing transcription, but will be integrated into the django app
+WORKDIR /app/missourai_django
 
-# Command to run the transcription process
-CMD ["python", "main.py"]
+# Migrate the database
+CMD ["poetry", "run", "python", "manage.py", "makemigrations"]
+CMD ["poetry", "run", "python", "manage.py", "migrate"]
+
+# Run the web app
+CMD ["poetry", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
