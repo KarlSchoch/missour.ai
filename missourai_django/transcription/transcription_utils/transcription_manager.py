@@ -2,19 +2,12 @@
 import os
 import logging
 from openai import OpenAI
-from chunk_manager import ChunkManager
-from audio_file import AudioFile
+from pydub import AudioSegment
 
 class TranscriptionManager:
-    def __init__(self, api_key, audio_dir='../audio-files', transcript_dir='../transcripts'):
+    def __init__(self, api_key:str, max_file_size=25 * 1024 * 1024):
         self.client = OpenAI(api_key=api_key)
-        self.audio_dir = audio_dir
-        self.transcript_dir = transcript_dir
-
-    def get_files_to_transcribe(self):
-        audio_files = {f.split(".")[0] for f in os.listdir(self.audio_dir)}
-        transcript_files = {f.split(".")[0] for f in os.listdir(self.transcript_dir)}
-        return [f"{self.audio_dir}/{file}.mp3" for file in audio_files - transcript_files]
+        self.max_file_size = max_file_size
 
     def create_transcript(self, file_path):
         with open(file_path, "rb") as audio_file:
@@ -50,13 +43,3 @@ class TranscriptionManager:
 
         except Exception as e:
             logging.error(f"Error processing {audio_file.file_base}: {str(e)}")
-
-    def transcribe_all_files(self):
-        files_to_transcribe = self.get_files_to_transcribe()
-        if not files_to_transcribe:
-            logging.info("No new files to transcribe.")
-            return
-        
-        for file_path in files_to_transcribe:
-            audio_file = AudioFile(file_path)
-            self.process_audio_file(audio_file)

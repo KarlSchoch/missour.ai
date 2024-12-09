@@ -4,12 +4,18 @@ from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404
 from .forms import TranscriptForm
 from .models import Transcript
+from .transcription_utils.transcription_manager import TranscriptionManager
 import os
 
 def process_audio(file_path):
-    # Placeholder for transcript generation logic
-    # Replace with transcription model
-    return "Generated transcript text for the file."
+    # Intialize TranscriptionManager with OpenAI API key
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable not set.")
+    manager = TranscriptionManager(api_key)
+    transcript_text = manager.create_transcript(file_path)
+    
+    return transcript_text
 
 # Create your views here.
 def index(request):
@@ -40,6 +46,9 @@ def upload_audio(request):
 
             # Save the transcript as a file
             transcript_filename = f"{transcript_obj.name}_transcript.txt"
+            transcript_path = os.path.join('transcripts', transcript_filename)
+            with open(transcript_path, 'w') as f:
+                f.write(transcript_text)
             transcript_obj.transcript_file.save(transcript_filename, ContentFile(transcript_text))
 
             # Save the object
