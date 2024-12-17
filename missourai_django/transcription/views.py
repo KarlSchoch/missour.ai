@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404
+from django.contrib.auth.decorators import login_required
 from .forms import TranscriptForm
 from .models import Transcript
 from .transcription_utils.transcription_manager import TranscriptionManager
@@ -22,6 +23,7 @@ def process_audio(file_path:str) -> str:
 def index(request):
     return render(request, 'transcription/index.html')
 
+@login_required
 def transcripts(request):
     transcripts = Transcript.objects.all()
 
@@ -31,6 +33,7 @@ def transcripts(request):
         {'transcripts': transcripts}
     )
 
+@login_required
 def upload_audio(request):
     if request.method == 'POST':
         form = TranscriptForm(request.POST, request.FILES)
