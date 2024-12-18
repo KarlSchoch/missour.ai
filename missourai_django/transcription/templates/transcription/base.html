@@ -15,6 +15,16 @@
                 <li><a href="{% url 'transcription:index' %}">Home</a></li>
                 <li><a href="{% url 'transcription:transcripts' %}">Transcripts</a></li>
                 <li><a href="{% url 'transcription:upload_audio' %}">Upload Audio</a></li>
+                {% if user.is_authenticated %}
+                    <li>
+                        <form method="post" action="{% url 'logout' %}">
+                            {% csrf_token %}
+                            <button type="submit">Log Out</button>
+                        </form>
+                    </li>
+                {% else %}
+                    <li><a href="{% url 'login' %}">Log In</a></li>
+                {% endif %}
             </ul>
         </nav>
     </header>
