@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404
+from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from .forms import TranscriptForm
 from .models import Transcript

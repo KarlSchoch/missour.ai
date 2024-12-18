@@ -126,3 +126,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Enable project to handle uploaded files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Redirect users to the home page after login/logout
+LOGIN_REDIRECT_URL = 'transcription:index'
+LOGOUT_REDIRECT_URL = 'transcription:index'
