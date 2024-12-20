@@ -11,6 +11,7 @@ python = ">=3.10,<4.0"
 openai = "^1.45.1"
 pydub = "^0.25.1"
 django = "^5.1.2"
+uvicorn = "^0.34.0"
 
 
 [build-system]

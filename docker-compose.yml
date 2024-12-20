@@ -8,7 +8,15 @@ services:
       - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ENV=${ENV}
+      - DEBUG=${DEBUG}
     stdin_open: true  # Keep the container open for interactive commands
     tty: true         # Enable terminal support
-    # Run the development server
-    command: poetry run python manage.py runserver 0.0.0.0:8000
+    # Run the web server
+    command: >
+      sh -c "
+      if [ '$ENV' = 'development' ]; then
+        poetry run python manage.py runserver 0.0.0.0:8000;
+      else
+        poetry run uvicorn missourai_web_app.asgi:application --host 0.0.0.0 --port 8000;
+      fi"
