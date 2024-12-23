@@ -8,30 +8,18 @@
     <thead>
         <tr>
             <th>Name</th>
-            <th>Audio File</th>
+            <th>Created At</th>
             <th>Transcript</th>
-            <th>Created At Timestamp</th>
         </tr>
     </thead>
     <tbody>
         {% for transcript in transcripts %}
         <tr>
             <td>{{ transcript.name }}</td>
-            <td>
-                {% if transcript.audio_file %}
-                    <a href="{{ transcript.audio_file.url }}">Download Audio</a>
-                {% else %}
-                    Audio not available
-                {% endif %}
-            </td>
-            <td>
-                {% if transcript.transcript_file %}
-                    <a href="{{ transcript.transcript_file.url }}">Download Transcript</a>
-                {% else %}
-                    Transcript not available
-                {% endif %}
-            </td>
             <td>{{ transcript.created_at }}</td>
+            <td>
+                <a href="{% url 'transcription:view_transcript' transcript.id %}">View Transcript</a>
+            </td>
         </tr>
         {% endfor %}
     </tbody>

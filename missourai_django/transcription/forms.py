@@ -1,7 +1,6 @@
 from django import forms
 from .models import Transcript
 
-class TranscriptForm(forms.ModelForm):
-    class Meta:
-        model = Transcript
-        fields = ['name', 'audio_file']
+class TranscriptForm(forms.Form):
+    name = forms.CharField(max_length=255)
+    audio_file = forms.FileField()
