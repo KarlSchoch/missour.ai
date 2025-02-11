@@ -17,8 +17,8 @@ def process_audio(file_path:str) -> str:
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set.")
-    manager = TranscriptionManager(api_key)
-    transcript_text = manager.create_transcript(file_path)
+    manager = TranscriptionManager(api_key, file_path)
+    transcript_text = manager.create_transcript()
     
     return transcript_text
 

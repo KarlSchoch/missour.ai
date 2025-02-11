@@ -10,6 +10,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ENV=${ENV}
       - DEBUG=${DEBUG}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
     stdin_open: true  # Keep the container open for interactive commands
     tty: true         # Enable terminal support
     # Run the web server
