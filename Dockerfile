@@ -1,4 +1,4 @@
-# Use an official Python image as the base image
+#Use an official Python image as the base image
 FROM python:3.11-slim
 
 # Set the working directory inside the container
@@ -22,6 +22,7 @@ RUN poetry config virtualenvs.create false
 COPY pyproject.toml poetry.lock* /app/
 
 # Install dependencies defined in the Poetry files
+RUN poetry lock
 RUN poetry install --no-interaction --no-ansi
 
 # Copy the rest of the project

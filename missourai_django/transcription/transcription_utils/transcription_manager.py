@@ -3,10 +3,8 @@ import os
 import logging
 import openai
 from openai import OpenAI
-from pydub import AudioSegment
 import io
 import math
-import tracemalloc
 import subprocess
 import json
 

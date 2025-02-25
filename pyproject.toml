@@ -3,13 +3,11 @@ name = "missour-ai"
 version = "0.1.0"
 description = ""
 authors = ["Karl Schoch <karl.schoch@gmail.com>"]
-readme = "README.md"
-packages = [{include = "missour"}]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
 openai = "^1.45.1"
-pydub = "^0.25.1"
 django = "^5.1.2"
 uvicorn = "^0.34.0"
 
