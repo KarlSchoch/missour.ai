@@ -4,19 +4,21 @@ from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from .forms import TranscriptForm
 from .models import Transcript
 from .transcription_utils.transcription_manager import TranscriptionManager
 import os
 import logging
+import tempfile
 
 def process_audio(file_path:str) -> str:
     # Intialize TranscriptionManager with OpenAI API key
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set.")
-    manager = TranscriptionManager(api_key)
-    transcript_text = manager.create_transcript(file_path)
+    manager = TranscriptionManager(api_key, file_path)
+    transcript_text = manager.create_transcript()
     
     return transcript_text
 
@@ -39,34 +41,27 @@ def upload_audio(request):
     if request.method == 'POST':
         form = TranscriptForm(request.POST, request.FILES)
         if form.is_valid():
-            transcript_obj = form.save(commit=False)
-            audio_file = request.FILES['audio_file']
+            name = form.cleaned_data['name']
+            audio_file = form.cleaned_data['audio_file']
 
-            # Save audio file
-            transcript_obj.audio_file = audio_file
-            transcript_obj.save()
+            # Save audio file to a temporary location
+            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                for chunk in audio_file.chunks():
+                    tmp_file.write(chunk)
+                tmp_file_path = tmp_file.name
 
             # Generate transcript
-            audio_file_path = transcript_obj.audio_file.path
-            print(f"Audio file path: {audio_file_path}")
-            transcript_text = process_audio(audio_file_path)
+            transcript_text = process_audio(tmp_file_path)
 
-            # Build path for transcript file based on model's default location
-            transcript_filename = f"{transcript_obj.name}_transcript.txt"
-            transcript_dir = os.path.dirname(transcript_obj.transcript_file.field.upload_to)
-            transcript_path = os.path.join(transcript_dir, transcript_filename)
-
-            # Ensure directory exists
-            if not os.path.exists(transcript_dir):
-                os.makedirs(transcript_dir)
-
-            # Save the transcript as a file
-            with open(transcript_path, 'w') as f:
-                f.write(transcript_text)
-            transcript_obj.transcript_file.save(transcript_filename, ContentFile(transcript_text))
-
-            # Save the object
+            # Save the transcript text
+            transcript_obj = Transcript(
+                name=name,
+                transcript_text=transcript_text,
+            )
             transcript_obj.save()
+
+            # Remove the temporary file
+            os.remove(tmp_file_path)
 
             # Redirect to transcripts page
             return redirect('transcription:transcripts')
@@ -74,3 +69,8 @@ def upload_audio(request):
         form = TranscriptForm()
 
     return render(request, 'transcription/upload_audio.html', {'form': form})
+
+@login_required
+def view_transcript(request, transcript_id):
+    transcript = get_object_or_404(Transcript, id=transcript_id)
+    return render(request, 'transcription/view_transcript.html', {'transcript': transcript})

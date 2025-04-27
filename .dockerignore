@@ -1,0 +1,16 @@
+# Ignore the audio-files directory
+audio-files
+
+# Other files and directories to ignore
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info
+dist
+build
+.env
+venv

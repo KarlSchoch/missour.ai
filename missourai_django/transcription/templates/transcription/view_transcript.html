@@ -1,0 +1,9 @@
+{% extends "transcription/base.html" %}
+
+{% block title %}View Transcript - missour.ai{% endblock %}
+
+{% block content %}
+<h1>{{ transcript.name }}</h1>
+<p>{{ transcript.transcript_text }}</p>
+<a href="{% url 'transcription:transcripts' %}">Back to Transcripts</a>
+{% endblock %}
