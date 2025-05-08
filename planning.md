@@ -1,0 +1,21 @@
+- Improve the structure
+    - Non-logged in user: 
+        - Home page with "Missour.ai" on the left and Login on the top right
+        - Missour.ai Home Page contains really brief description of what the application does: "Provides AI-based tools..."
+    - Logged in user
+- Overall Improvements
+    - CSS styling from Code Academy project
+    - Button styling
+- Individual Section Updates
+    - Navigation pane
+        - Missouri statehouse background image
+        - Fixed to the top
+        - Display depends upon user being logged in/out
+        - Layout is Horizontal vs. Vertical
+    - Home Page: Just add some basic content decsribing the application
+    - Transcripts
+        - 
+    - Transcripts/Specific Transcript
+        - 
+    - Upload Audio
+        - No Change
