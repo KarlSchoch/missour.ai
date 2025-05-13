@@ -1,21 +1,23 @@
 - Improve the structure
-    - Non-logged in user: 
-        - Home page with "Missour.ai" on the left and Login on the top right
-        - Missour.ai Home Page contains really brief description of what the application does: "Provides AI-based tools..."
-    - Logged in user
+    - [x] Non-logged in user: 
+        - [x] Home page with "Missour.ai" on the left and Login on the top right
+        - [x] Missour.ai Home Page contains really brief description of what the application does: "Provides AI-based tools..."
+    - [x] Logged in user: See all the sections
 - Overall Improvements
-    - CSS styling from Code Academy project
-    - Button styling
+    - [] CSS styling from Code Academy project
+    - [] Button styling
 - Individual Section Updates
-    - Navigation pane
-        - Missouri statehouse background image
-        - Fixed to the top
-        - Display depends upon user being logged in/out
-        - Layout is Horizontal vs. Vertical
-    - Home Page: Just add some basic content decsribing the application
-    - Transcripts
-        - 
-    - Transcripts/Specific Transcript
-        - 
-    - Upload Audio
-        - No Change
+    - [] Navigation pane
+        - [x] Missouri statehouse background image
+        - [] Fixed to the top
+        - [x] Display depends upon user being logged in/out
+        - [x] Layout is Horizontal vs. Vertical
+    - [] Home Page: Just add some basic content decsribing the application.  "Utilized AI to develop an understanding of Missouri politics"
+    - [] Transcripts
+        - [] Make the table a little cleaner
+    - [] Transcripts/Specific Transcript
+        - [] Have the title "stick" to the top when scrolling down
+        - [] Put the "Back to Transcripts" link at the top
+    - [x] Upload Audio: No Change
+- Screen Size Adjustments
+    - [] Navigation Menu at top uses hamburger menu
