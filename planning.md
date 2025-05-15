@@ -4,19 +4,19 @@
         - [x] Missour.ai Home Page contains really brief description of what the application does: "Provides AI-based tools..."
     - [x] Logged in user: See all the sections
 - Overall Improvements
-    - [] CSS styling from Code Academy project
+    - [x] CSS styling from Code Academy project
     - [] Button styling
 - Individual Section Updates
-    - [] Navigation pane
+    - [x] Navigation pane
         - [x] Missouri statehouse background image
-        - [] Fixed to the top
+        - [x] Fixed to the top
         - [x] Display depends upon user being logged in/out
         - [x] Layout is Horizontal vs. Vertical
     - [] Home Page: Just add some basic content decsribing the application.  "Utilized AI to develop an understanding of Missouri politics"
     - [] Transcripts
         - [] Make the table a little cleaner
     - [] Transcripts/Specific Transcript
-        - [] Have the title "stick" to the top when scrolling down
+        - [x] Have the title "stick" to the top when scrolling down
         - [] Put the "Back to Transcripts" link at the top
     - [x] Upload Audio: No Change
 - Screen Size Adjustments
