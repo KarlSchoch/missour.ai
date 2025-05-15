@@ -68,7 +68,7 @@ nav ul li a:hover {
 
 /* Content Offset */
 .content-offset {
-    padding-top: 4rem; /* Adjust padding to match the height of the fixed nav */
+    padding-top: 10vh; /* Adjust padding to match the height of the fixed nav */
 }
 
 /* 
