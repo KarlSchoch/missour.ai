@@ -1,5 +1,15 @@
-/* Generic Styles to apply across entire page */
-/* Follow responsive design using Flexbox and media queries to account for mobile decives */
+/* 
+    Overall Guidance to apply to the entire page:
+    - Follow responsive design using Flexbox and media queries to account for mobile decives
+    - Use a consistent color palette based on the following:
+        - River Blue: #0076A8; 
+        - Flag Red: #C8102E;
+        - State White: #FFFFFF;
+        - Forest Green: #228B22;
+        - Gold Wheat: #D4AF37;
+        - Slate Gray: #4E5D6C;
+ */
+
 * {
     font-family: Merriweather; /* Set a default font for the entire document */
 }
@@ -22,7 +32,7 @@ p {
     color: #4E5D6C;
 }
 
-/* Navy Styling */
+/* Nav Styling */
 nav {
     background-image: linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25)), url('../images/missouri-state-house.webp');
     background-size: cover;
@@ -66,17 +76,41 @@ nav ul li a:hover {
     color: #D4AF37; /* Gold Wheat for hover effect */
 }
 
-/* Content Offset */
-.content-offset {
-    padding-top: 10vh; /* Adjust padding to match the height of the fixed nav */
+/* Hamburger menu */
+.hamburger {
+    display: none; /* Hide by default */
+    cursor: pointer;
+    padding: 2rem;
+}
+#menu-toggle {
+    display: none; /* Hide the checkbox */
+}
+/* Established rules for smaller screen */
+/* 
+    Nav 
+    - If the user is authenticated, use a hambuger menu
+    - IF the user is not authenticated, show the login
+
+*/
+@media (max-width: 768px) {
+    
+    .nav-li-authenticated {
+        display: none; /* Hide the authenticated links */
+    }
+    .nav-li-authenticated {
+        display: none; /* Hide the authenticated links */
+    }
+
+    /* Use IDs indicating auth status to control whether hamburger icon is displayed */
+    #hamburger-authenticated {
+        display: block;
+    }
+    #hamburger-unauthenticated {
+        display: none;
+    }
 }
 
-/* 
-    Color Palette:
-    - River Blue: #0076A8; 
-    - Flag Red: #C8102E;
-    - State White: #FFFFFF;
-    - Forest Green: #228B22;
-    - Gold Wheat: #D4AF37;
-    - Slate Gray: #4E5D6C;
- */
+/* Content Offset */ 
+.content-offset {
+    padding-top: 4.5rem; /* Adjust padding to match the height of the fixed nav */
+}
