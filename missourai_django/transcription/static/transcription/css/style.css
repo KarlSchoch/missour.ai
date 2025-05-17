@@ -83,6 +83,7 @@ nav ul li a:hover {
     font-size: 1.5rem;
     cursor: pointer;
     padding: 0.5rem;
+    color: #FFFFFF;
 }
 .nav-hamburger-toggle input {
     display: none; 
@@ -103,6 +104,7 @@ nav ul li a:hover {
         When the hamburger is clicked, show the menu items which will
         be aligned from top to bottom now
     */
+/* Commented out to try new approach
     .nav-list-authenticated .nav-menu-item {
         display: none;
     }
@@ -113,6 +115,13 @@ nav ul li a:hover {
         display: none;
     }
     .nav-list-unauthenticated .nav-menu-item {
+        display: block;
+    }
+     */
+    .nav-menu-item {
+        display: none;
+    }
+    .nav-hamburger-toggle input:checked ~ .nav-menu-item {
         display: block;
     }
 }
