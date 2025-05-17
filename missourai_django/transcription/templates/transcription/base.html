@@ -17,12 +17,12 @@
             <h1><a href="{% url 'transcription:index' %}">Missour.ai</a></h1>
             <ul class="nav-list-{% if user.is_authenticated %}authenticated{% else %}unauthenticated{% endif %}">
                 {% if user.is_authenticated %}
-                    <!-- Menu items for logged-in users -->    
-                    <!-- Hamburger toggle checkbox and label (hidden on large screens) -->
+                    <!-- Hamburger toggle checkbox and label -->
                     <li class="nav-hamburger-toggle">
                         <input type="checkbox" id="nav-menu-toggle">
-                        <label for="menu-toggle" class="nav-hamburger">&#9776</label>
-                    </li>    
+                        <label for="nav-menu-toggle" class="nav-hamburger">&#9776;</label>
+                    </li>
+                    <!-- Menu items for logged-in users -->
                     <li class="nav-menu-item"><a href="{% url 'transcription:transcripts' %}">Transcripts</a></li>
                     <li class="nav-menu-item"><a href="{% url 'transcription:upload_audio' %}">Upload Audio</a></li>
                     <li class="nav-menu-item">
@@ -32,6 +32,7 @@
                         </form>
                     </li>
                 {% else %}
+                    <!-- Menu items for unauthenticated users -->
                     <li class="nav-menu-item"><a href="{% url 'login' %}">Log In</a></li>
                 {% endif %}
             </ul>

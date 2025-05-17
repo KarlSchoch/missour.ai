@@ -89,6 +89,64 @@ nav ul li a:hover {
     display: none; 
 }
 
+/* Adjust nav styling for unauthenticated users */
+.nav-list-unauthenticated {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nav-list-unauthenticated .nav-menu-item {
+    display: block;
+}
+
+/* Adjust nav styling for authenticated users */
+.nav-list-authenticated {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nav-list-authenticated .nav-menu-item {
+    display: block;
+}
+
+.nav-list-authenticated .nav-hamburger {
+    display: none;
+}
+
+/* Responsive rules for authenticated users */
+@media (max-width: 768px) {
+    .nav-list-authenticated {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .nav-list-authenticated .nav-hamburger {
+        display: block;
+    }
+
+    .nav-list-authenticated .nav-menu-item {
+        display: none;
+    }
+
+    .nav-hamburger-toggle input:checked ~ .nav-menu-item {
+        display: block;
+    }
+
+    .nav-hamburger-toggle input:checked ~ ul {
+        display: flex;
+        flex-direction: column;
+        background-color: rgba(0, 0, 0, 0.8);
+        position: absolute;
+        top: 4.5rem;
+        left: 0;
+        width: 100%;
+        padding: 1rem;
+        box-sizing: border-box;
+    }
+}
+
 /* Established rules for smaller screen to logged in users*/
 @media (max-width: 768px) {   
     .nav-list-authenticated ul {
@@ -104,20 +162,6 @@ nav ul li a:hover {
         When the hamburger is clicked, show the menu items which will
         be aligned from top to bottom now
     */
-/* Commented out to try new approach
-    .nav-list-authenticated .nav-menu-item {
-        display: none;
-    }
-    #nav-menu-toggle:checked ~ .nav-menu-item {
-        display: block;
-    }
-    .nav-list-unauthenticated .nav-hamburger-toggle {
-        display: none;
-    }
-    .nav-list-unauthenticated .nav-menu-item {
-        display: block;
-    }
-     */
     .nav-menu-item {
         display: none;
     }
