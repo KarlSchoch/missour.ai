@@ -119,5 +119,9 @@ details {
 
 /* Content Offset */ 
 .content-offset {
-    padding-top: 4.5rem; /* Adjust padding to match the height of the fixed nav */
+    padding-top: 5.25rem; /* Adjust padding to match the height of the fixed nav */
+}
+/* index.html */
+.tagline {
+    text-align: center;
 }

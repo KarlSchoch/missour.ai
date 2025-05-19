@@ -20,13 +20,4 @@
         - [] Put the "Back to Transcripts" link at the top
     - [x] Upload Audio: No Change
 - Screen Size Adjustments
-    - [] Navigation Menu at top uses hamburger menu
-        - [] Logic: Logged in and screen size is small
-        - Process:
-            - 1. Add in the hamburger menu HTML
-            ```
-            <input type="checkbox" id="menu-toggle" />
-            <label for="menu-toggle" class="hamburger">&#9776;</label>
-            ```
-            - 2. Update rules to display/not display hamburger menu/list items based on the size of the screen
-                - Logic considerations: only display hamburger if the user is logged on
+    - [x] Navigation Menu at top uses collapsible menu
