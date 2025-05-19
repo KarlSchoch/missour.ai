@@ -90,7 +90,7 @@ details {
 }
 .nav-menu-link-details-logged-in {
     display: none;
-}
+    }
 .nav-menu-link-details-logged-out {
     display: none;
 }
@@ -106,6 +106,13 @@ details {
     }
     .nav-menu-details {
         display: block;
+    }
+    .nav-menu-link-details-logged-in {
+        display: list-item;
+        padding-left: 1rem; /* Ensure indentation is applied in responsive view */
+    }
+    nav ul li a {
+        font-weight: 200;
     }
     
 }
