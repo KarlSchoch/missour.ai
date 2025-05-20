@@ -31,6 +31,22 @@ p {
     line-height: 1.6;
     color: #4E5D6C;
 }
+/* Default Button styling */
+button {
+    font-family: Merriweather; /* Set a default font for buttons */
+    font-weight: 600;
+    background-color: rgba(0, 118, 168, 0.8);
+    color: #FFFFFF; /* State White for button text */
+    border: 2px solid #0076A8;
+    padding: 0.25rem 0.5rem;
+    border-radius: 5px;
+    cursor: pointer;
+}
+button:hover{
+    /* Turn text blue and background state white with reduced opacity */
+    background-color: rgba(255, 255, 255, 0.8);
+    color: #0076A8;
+}
 
 /* Nav Styling */
 nav {
@@ -79,38 +95,23 @@ nav ul li a:hover {
 /* Nav Menu Button Styling */
 /* Login */
 .nav-menu-button-login {
-    background-color: rgba(34, 139, 34, 0.8); /* Forest Green with reduced opacity */
-    color: #FFFFFF; /* State White for text */
-    border: rgba(34, 139, 34);
-    padding: 0.5rem 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    border-radius: 5px;
+    background-color: rgba(34, 139, 34, 0.8);
+    border: 2px solid rgba(34, 139, 34);
 }
 .nav-menu-button-login:hover {
-    /* Turn background color white with reduced opacity */
     background-color: rgba(255, 255, 255, 0.8);
-    /* Turn text and border dark forest green */
     color: #228B22;
-    border: 2px solid #228B22;
 }
 .nav-menu-button-login-link:hover {
     color: #228B22; /* Forest Green for hover effect */
 }
 /* Logout */
 .nav-menu-button-logout {
-    background-color: rgba(200, 16, 46, 0.8); /* Flag Red with reduced opacity */
-    color: #FFFFFF; /* State White for text */
+    background-color: rgba(200, 16, 46, 0.8);
     border: 2px solid rgba(200, 16, 46);
-    padding: 0.25rem 0.5rem;
-    font-weight: 600;
-    cursor: pointer;
-    border-radius: 5px;
 }
 .nav-menu-button-logout:hover {
-    /* Turn background color white with reduced opacity */
     background-color: rgba(255, 255, 255, 0.8);
-    /* Turn text and border Flag Red */
     color: #C8102E;
     border: 2px solid #C8102E;
 }
@@ -169,4 +170,21 @@ details:hover {
 /* index.html */
 .tagline {
     text-align: center;
+}
+
+
+/* Form Styling */
+input[type="file"]::file-selector-button {
+    font-family: Merriweather;
+    font-weight: 600;
+    background-color: rgba(0, 118, 168, 0.8);
+    color: #FFFFFF;
+    border: 2px solid #0076A8;
+    padding: 0.25rem 0.5rem;
+    border-radius: 5px;
+    cursor: pointer;
+}
+input[type="file"]::file-selector-button:hover {
+    background-color: rgba(255, 255, 255, 0.8); /* State White with reduced opacity */
+    color: #0076A8; /* River Blue for text */
 }

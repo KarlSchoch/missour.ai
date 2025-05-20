@@ -6,6 +6,9 @@
 - Overall Improvements
     - [x] CSS styling from Code Academy project
     - [x] Button styling
+        - [x] Login/Logout
+        - [x] General styling
+        - [x] File input
 - Individual Section Updates
     - [x] Navigation pane
         - [x] Missouri statehouse background image
