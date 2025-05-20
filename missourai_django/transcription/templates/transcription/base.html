@@ -26,7 +26,7 @@
                         <li class="nav-menu-link-details-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}">
                             <form method="post" action="{% url 'logout' %}">
                                 {% csrf_token %}
-                                <button type="submit">Log Out</button>
+                                <button class="nav-menu-button-logout" type="submit">Log Out</button>
                             </form>
                         </li>
                     </details>
@@ -36,12 +36,16 @@
                     <li class="nav-menu-link-base-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}">
                         <form method="post" action="{% url 'logout' %}">
                             {% csrf_token %}
-                            <button type="submit">Log Out</button>
+                            <button class="nav-menu-button-logout" type="submit">Log Out</button>
                         </form>
                     </li>
                 {% else %}
                     <!-- Menu items for unauthenticated users -->
-                    <li class="nav-menu-item"><a href="{% url 'login' %}">Log In</a></li>
+                    <li>
+                        <button class="nav-menu-button-login">
+                            <a class="nav-menu-button-login-link" href="{% url 'login' %}">Log In</a>
+                        </button>
+                    </li>
                 {% endif %}
             </ul>
         </nav>
