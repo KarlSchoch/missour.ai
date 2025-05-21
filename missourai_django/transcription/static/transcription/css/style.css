@@ -188,3 +188,35 @@ input[type="file"]::file-selector-button:hover {
     background-color: rgba(255, 255, 255, 0.8); /* State White with reduced opacity */
     color: #0076A8; /* River Blue for text */
 }
+
+/* transcripts.html */
+.table-container {
+    max-height: 65vh;
+    overflow: auto;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+thead th {
+    background-color: #f9f9f9;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    padding: 12px;
+    border-bottom: 2px solid #ddd;
+    font-weight: bold;
+}
+tbody td {
+    padding: 0.25rem;
+    border-bottom: 1px solid #eee;
+}
+/* zebra striping with low opacity slate gray and low opacity river blue hover affect */
+tbody tr:nth-child(even) {
+    background-color: rgba(78, 93, 108, 0.1);
+}
+tbody tr:nth-child(even):hover,
+tbody tr:nth-child(odd):hover {
+    background-color: rgba(0, 118, 168, 0.3);
+}

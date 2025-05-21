@@ -4,24 +4,26 @@
 
 {% block content %}
 <h1>List of Transcripts</h1>
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Created At</th>
-            <th>Transcript</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for transcript in transcripts %}
-        <tr>
-            <td>{{ transcript.name }}</td>
-            <td>{{ transcript.created_at }}</td>
-            <td>
-                <a href="{% url 'transcription:view_transcript' transcript.id %}">View Transcript</a>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Created At</th>
+                <th>Transcript</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transcript in transcripts %}
+            <tr>
+                <td>{{ transcript.name }}</td>
+                <td>{{ transcript.created_at }}</td>
+                <td>
+                    <a href="{% url 'transcription:view_transcript' transcript.id %}">View Transcript</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% endblock %}
