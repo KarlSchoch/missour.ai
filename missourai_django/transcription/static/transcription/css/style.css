@@ -1,0 +1,229 @@
+/* 
+    Overall Guidance to apply to the entire page:
+    - Follow responsive design using Flexbox and media queries to account for mobile decives
+    - Use a consistent color palette based on the following:
+        - River Blue: #0076A8; 
+        - Flag Red: #C8102E;
+        - State White: #FFFFFF;
+        - Forest Green: #228B22;
+        - Gold Wheat: #D4AF37;
+        - Slate Gray: #4E5D6C;
+ */
+
+* {
+    font-family: Merriweather; /* Set a default font for the entire document */
+}
+
+h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #0076A8; /* River Blue for the main title */
+}
+h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #4E5D6C; /* Slate Gray for section titles */
+}
+p {
+    font-family: Open Sans, sans-serif; /* Use Open Sans for paragraph text */
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.6;
+    color: #4E5D6C;
+}
+/* Default Button styling */
+button {
+    font-family: Merriweather; /* Set a default font for buttons */
+    font-weight: 600;
+    background-color: rgba(0, 118, 168, 0.8);
+    color: #FFFFFF; /* State White for button text */
+    border: 2px solid #0076A8;
+    padding: 0.25rem 0.5rem;
+    border-radius: 5px;
+    cursor: pointer;
+}
+button:hover{
+    /* Turn text blue and background state white with reduced opacity */
+    background-color: rgba(255, 255, 255, 0.8);
+    color: #0076A8;
+}
+
+/* Nav Styling */
+nav {
+    background-image: linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25)), url('../images/missouri-state-house.webp');
+    background-size: cover;
+    background-position: center;
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Three equal columns for the logo/title and navigation */
+    /* Position it at the top of the screen */
+    position: fixed;
+    top: 0;
+    z-index: 1000; /* Ensure it stays above other elements */
+    /* Ensure it fits properly into the screen */
+    width: 100%;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+nav ul {
+    list-style: none;
+    display: flex;
+    align-items:center;
+    justify-content: end;
+    padding-right: 1rem;
+}
+
+nav h1 a {
+    color: #FFFFFF; /* State White for text */
+    text-decoration: none;
+    padding-left: 1rem;
+}
+nav h1 a:hover {
+    color: #D4AF37; /* Gold Wheat for hover effect */
+}
+
+nav ul li a {
+    color: #FFFFFF; /* State White for text */
+    text-decoration: none;
+    font-weight: 600;
+    padding: 0.5rem;
+}
+
+nav ul li a:hover {
+    color: #D4AF37; /* Gold Wheat for hover effect */
+}
+/* Nav Menu Button Styling */
+/* Login */
+.nav-menu-button-login {
+    background-color: rgba(34, 139, 34, 0.8);
+    border: 2px solid rgba(34, 139, 34);
+}
+.nav-menu-button-login:hover {
+    background-color: rgba(255, 255, 255, 0.8);
+    color: #228B22;
+}
+.nav-menu-button-login-link:hover {
+    color: #228B22; /* Forest Green for hover effect */
+}
+/* Logout */
+.nav-menu-button-logout {
+    background-color: rgba(200, 16, 46, 0.8);
+    border: 2px solid rgba(200, 16, 46);
+}
+.nav-menu-button-logout:hover {
+    background-color: rgba(255, 255, 255, 0.8);
+    color: #C8102E;
+    border: 2px solid #C8102E;
+}
+
+
+details {
+    color: #FFFFFF; /* State White for text */
+    text-decoration: none;
+    font-weight: 600;
+    padding: 0.5rem;
+}
+details:hover {
+    color: #D4AF37; /* Gold Wheat for hover effect */
+}
+
+/* Hide responsive elements as default */
+.nav-menu-details {
+    display: none;
+}
+.nav-menu-link-details-logged-in {
+    display: none;
+    }
+.nav-menu-link-details-logged-out {
+    display: none;
+}
+
+/* Responsive rules for authenticated users */
+@media (max-width: 768px) {
+    /* Hide base links */
+    .nav-menu-link-base-logged-out {
+        display: none;
+    }
+    .nav-menu-link-base-logged-in {
+        display: none;
+    }
+    .nav-menu-details {
+        display: block;
+    }
+    .nav-menu-link-details-logged-in {
+        display: list-item;
+        padding-left: 1rem; /* Ensure indentation is applied in responsive view */
+    }
+    nav ul li a {
+        font-weight: 200;
+    }
+    .nav-menu-button-logout {
+        margin-left: 0.5rem;
+    }
+    
+}
+
+/* Content Offset */ 
+.content-offset {
+    padding-top: 5.25rem; /* Adjust padding to match the height of the fixed nav */
+}
+/* index.html */
+.tagline {
+    text-align: center;
+}
+
+
+/* Form Styling */
+input[type="file"]::file-selector-button {
+    font-family: Merriweather;
+    font-weight: 600;
+    background-color: rgba(0, 118, 168, 0.8);
+    color: #FFFFFF;
+    border: 2px solid #0076A8;
+    padding: 0.25rem 0.5rem;
+    border-radius: 5px;
+    cursor: pointer;
+}
+input[type="file"]::file-selector-button:hover {
+    background-color: rgba(255, 255, 255, 0.8); /* State White with reduced opacity */
+    color: #0076A8; /* River Blue for text */
+}
+
+/* transcripts.html */
+.table-container {
+    max-height: 65vh;
+    overflow: auto;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+thead th {
+    background-color: #f9f9f9;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    padding: 12px;
+    border-bottom: 2px solid #ddd;
+    font-weight: bold;
+}
+tbody td {
+    padding: 0.25rem;
+    border-bottom: 1px solid #eee;
+}
+/* zebra striping with low opacity slate gray and low opacity river blue hover affect */
+tbody tr:nth-child(even) {
+    background-color: rgba(78, 93, 108, 0.1);
+}
+tbody tr:nth-child(even):hover,
+tbody tr:nth-child(odd):hover {
+    background-color: rgba(0, 118, 168, 0.3);
+}
+
+/* view_transcript.html */
+.transcript-header {
+    position: sticky;
+    top: 5.75rem;
+    background-color: #f9f9f9;
+}

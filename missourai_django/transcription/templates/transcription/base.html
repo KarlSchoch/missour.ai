@@ -1,35 +1,57 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>
-        {% block title %}missour.ai{% endblock %}
+        {% block title %}Missour.ai{% endblock %}
     </title>
     <!-- Add any CSS or Bootstrap links here -->
+    <link href="{% static 'transcription/css/style.css' %}" rel="stylesheet" type="text/css">
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <header>
         <nav>
+            <h1><a href="{% url 'transcription:index' %}">Missour.ai</a></h1>
             <ul>
-                <li><a href="{% url 'transcription:index' %}">Home</a></li>
-                <li><a href="{% url 'transcription:transcripts' %}">Transcripts</a></li>
-                <li><a href="{% url 'transcription:upload_audio' %}">Upload Audio</a></li>
                 {% if user.is_authenticated %}
-                    <li>
+                    <!-- Menu items for logged-in users -->
+                    <!-- Small Screen -->
+                    <details class="nav-menu-details">
+                        <summary>Menu</summary>
+                        <li class="nav-menu-link-details-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}"><a href="{% url 'transcription:transcripts' %}">Transcripts</a></li>
+                        <li class="nav-menu-link-details-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}"><a href="{% url 'transcription:upload_audio' %}">Upload Audio</a></li>
+                        <li class="nav-menu-link-details-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}">
+                            <form method="post" action="{% url 'logout' %}">
+                                {% csrf_token %}
+                                <button class="nav-menu-button-logout" type="submit">Log Out</button>
+                            </form>
+                        </li>
+                    </details>
+                    <!-- Large Screen -->
+                    <li class="nav-menu-link-base-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}"><a href="{% url 'transcription:transcripts' %}">Transcripts</a></li>
+                    <li class="nav-menu-link-base-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}"><a href="{% url 'transcription:upload_audio' %}">Upload Audio</a></li>
+                    <li class="nav-menu-link-base-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}">
                         <form method="post" action="{% url 'logout' %}">
                             {% csrf_token %}
-                            <button type="submit">Log Out</button>
+                            <button class="nav-menu-button-logout" type="submit">Log Out</button>
                         </form>
                     </li>
                 {% else %}
-                    <li><a href="{% url 'login' %}">Log In</a></li>
+                    <!-- Menu items for unauthenticated users -->
+                    <li>
+                        <button class="nav-menu-button-login">
+                            <a class="nav-menu-button-login-link" href="{% url 'login' %}">Log In</a>
+                        </button>
+                    </li>
                 {% endif %}
             </ul>
         </nav>
     </header>
 
-    <main>
+    <main class="content-offset">
         {% block content %}{% endblock %}
     </main>
 

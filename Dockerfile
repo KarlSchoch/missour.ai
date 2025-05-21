@@ -37,4 +37,4 @@ CMD ["poetry", "run", "python", "manage.py", "makemigrations"]
 CMD ["poetry", "run", "python", "manage.py", "migrate"]
 
 # Run the web app
-CMD ["poetry", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["poetry", "run", "python", "manage.py", "runserver", "0.0.0.0:8000", "--reload"]
