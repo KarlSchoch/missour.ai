@@ -220,3 +220,10 @@ tbody tr:nth-child(even):hover,
 tbody tr:nth-child(odd):hover {
     background-color: rgba(0, 118, 168, 0.3);
 }
+
+/* view_transcript.html */
+.transcript-header {
+    position: sticky;
+    top: 5.75rem;
+    background-color: #f9f9f9;
+}

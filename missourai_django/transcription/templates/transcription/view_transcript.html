@@ -3,7 +3,10 @@
 {% block title %}View Transcript - missour.ai{% endblock %}
 
 {% block content %}
-<h1>{{ transcript.name }}</h1>
+<div class="transcript-header">
+    <br />
+    <a href="{% url 'transcription:transcripts' %}">Back to Transcripts</a>
+    <h2>{{ transcript.name }}</h2>
+</div>
 <p>{{ transcript.transcript_text }}</p>
-<a href="{% url 'transcription:transcripts' %}">Back to Transcripts</a>
 {% endblock %}
