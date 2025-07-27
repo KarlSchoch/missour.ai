@@ -80,3 +80,100 @@ Experiment Matrix
 |                                        | GPT-4.1 mini  |
 | Sliding Window with Semantic Anchoring | GPT-4.1 nano  |
 |                                        | GPT-4.1 mini  |
+
+# PErformance eval
+
+ChatGPT recommendation for function
+
+```
+import pandas as pd
+import os
+import glob
+
+def evaluate_model_performance(
+    data_dir,
+    topic,
+    model_names,
+    chunking_strategies,
+    transcripts,
+    deep_dive_models=[],
+    deep_dive_chunking_strategies=[]
+):
+    summary_data = []
+
+    deep_dive_data = {
+        'false_positives': [],
+        'false_negatives': []
+    }
+
+    for transcript in transcripts:
+        for strategy in chunking_strategies:
+            # Construct file path pattern for matching CSVs
+            pattern = os.path.join(data_dir, f"{transcript}-{strategy}-tagged.csv")
+            matching_files = glob.glob(pattern)
+
+            for file_path in matching_files:
+                df = pd.read_csv(file_path)
+
+                for model in model_names:
+                    manual_tag_col = f"manual_{topic}_tag"
+                    model_tag_col = f"{model}_{topic}_tag"
+                    model_conf_col = f"{model}_{topic}_tag_confidence"
+                    model_rel_text_col = f"{model}_{topic}_relevant_section"
+
+                    if manual_tag_col not in df.columns or model_tag_col not in df.columns:
+                        continue  # Skip if necessary columns are missing
+
+                    total = len(df)
+                    correct = (df[manual_tag_col] == df[model_tag_col]).sum()
+                    false_positives = ((df[manual_tag_col] == False) & (df[model_tag_col] == True)).sum()
+                    false_negatives = ((df[manual_tag_col] == True) & (df[model_tag_col] == False)).sum()
+                    true_positives = ((df[manual_tag_col] == True) & (df[model_tag_col] == True)).sum()
+
+                    summary_data.append({
+                        "Transcript": transcript,
+                        "Chunking Strategy": strategy,
+                        "Model": model,
+                        "Total Chunks": total,
+                        "Accuracy": correct / total if total else None,
+                        "True Positives": true_positives,
+                        "False Positives": false_positives,
+                        "False Negatives": false_negatives
+                    })
+
+                    # Only build deep dive views for selected models and strategies
+                    if model in deep_dive_models and strategy in deep_dive_chunking_strategies:
+                        # False Positives
+                        fp_rows = df[(df[manual_tag_col] == False) & (df[model_tag_col] == True)][[
+                            'chunk_id', 'chunk_text', manual_tag_col, model_tag_col, model_rel_text_col
+                        ]].copy()
+                        fp_rows['Transcript'] = transcript
+                        fp_rows['Model'] = model
+                        fp_rows['Chunking Strategy'] = strategy
+                        deep_dive_data['false_positives'].append(fp_rows)
+
+                        # False Negatives
+                        fn_rows = df[(df[manual_tag_col] == True) & (df[model_tag_col] == False)][[
+                            'chunk_id', 'chunk_text', manual_tag_col, model_tag_col, 'manual_relevant_text'
+                        ]].copy()
+                        fn_rows['Transcript'] = transcript
+                        fn_rows['Model'] = model
+                        fn_rows['Chunking Strategy'] = strategy
+                        deep_dive_data['false_negatives'].append(fn_rows)
+
+    summary_df = pd.DataFrame(summary_data)
+    summary_df = summary_df.sort_values(by=["Model", "Chunking Strategy", "Transcript"])
+
+    if deep_dive_data['false_positives']:
+        deep_dive_data['false_positives'] = pd.concat(deep_dive_data['false_positives'], ignore_index=True)
+    else:
+        deep_dive_data['false_positives'] = pd.DataFrame()
+
+    if deep_dive_data['false_negatives']:
+        deep_dive_data['false_negatives'] = pd.concat(deep_dive_data['false_negatives'], ignore_index=True)
+    else:
+        deep_dive_data['false_negatives'] = pd.DataFrame()
+
+    return summary_df, deep_dive_data
+
+```
