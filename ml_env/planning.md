@@ -177,3 +177,20 @@ def evaluate_model_performance(
     return summary_df, deep_dive_data
 
 ```
+
+## Evaluation Function Updates
+
+Evaluate at the model and chunking strategy level and abstract away transcripts
+1. Group by the `Model` and `Chunking Strategy` column and sum up
+    - Total Chunks
+    - Correct Classifications
+    - True Positives
+    - True Negatives
+    - False Positives
+    - False Negatives
+2. Calculate the statistics
+    - Accurary
+    - True Positive Rate
+    - True Negative Rate
+    - False Positive Rate
+    - False Negative Rate
