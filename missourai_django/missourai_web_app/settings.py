@@ -38,6 +38,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_vite',
+    'rest_framework',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
@@ -48,6 +51,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware'
 ]
 
 ROOT_URLCONF = 'missourai_web_app.urls'
@@ -55,7 +60,7 @@ ROOT_URLCONF = 'missourai_web_app.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / "templates"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -131,3 +136,14 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Redirect users to the home page after login/logout
 LOGIN_REDIRECT_URL = 'transcription:index'
 LOGOUT_REDIRECT_URL = 'transcription:index'
+
+# --- django-vite ---
+# In dev, True -> inject HMR client; in prod, False -> use built assets from dist/manifest
+DJANGO_VITE_DEV_MODE = os.getenv("DJANGO_VITE_DEV", "1") == "1"
+DJANGO_VITE_ASSETS_PATH = BASE_DIR.parent / "frontend" / "dist"
+DJANGO_VITE_DEV_SERVER_HOST = "localhost"
+DJANGO_VITE_DEV_SERVER_PORT = 5173
+
+# --- CORS for local dev (only needed if you ever hit Django from :5173 directly) ---
+CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
+CORS_ALLOW_CREDENTIALS = True
