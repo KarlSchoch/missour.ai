@@ -6,12 +6,22 @@
     <head>
         <meta charset="utf-8" />
         <title>Missour.ai Dashboard</title>
-        {% vite_hmr_client %}
-        {% vite_asset 'src/dashboard.jsx' %}
+        <!-- marker: dashboard-template-from-repo v1 -->
     </head>
     <body>
-        {{ initial_payload|json_script:"initial-payload" }}
         <!-- React mount -->
-         <div id="dashboard-root"></div>
+        <div id="dashboard-root"></div>
+        {{ initial_payload|json_script:"initial-payload" }}
+        <!-- React Fast Refresh preamble for Vite (dev only) -->
+        <script type="module">
+            import RefreshRuntime from 'http://localhost:5173/static/@react-refresh'
+            RefreshRuntime.injectIntoGlobalHook(window)
+            window.$RefreshReg$ = () => {}
+            window.$RefreshSig$ = () => (type) => type
+            window.__vite_plugin_react_preamble_installed__ = true
+        </script>
+        <!-- Explicit Vite HMR client and entry (dev) -->
+        <script type="module" src="http://localhost:5173/static/@vite/client"></script>
+        <script type="module" src="http://localhost:5173/static/src/dashboard.jsx"></script>
     </body>
 </html>
