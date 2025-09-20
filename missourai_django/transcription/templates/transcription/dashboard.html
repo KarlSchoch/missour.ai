@@ -20,8 +20,7 @@
             window.$RefreshSig$ = () => (type) => type
             window.__vite_plugin_react_preamble_installed__ = true
         </script>
-        <!-- Explicit Vite HMR client and entry (dev) -->
-        <script type="module" src="http://localhost:5173/static/@vite/client"></script>
-        <script type="module" src="http://localhost:5173/static/src/dashboard.jsx"></script>
+        {% vite_hmr_client %}
+        {% vite_asset 'src/dashboard.jsx' %}
     </body>
 </html>
