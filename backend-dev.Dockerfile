@@ -32,4 +32,4 @@ COPY . /app
 WORKDIR /app/missourai_django
 
 # Run the web app
-CMD ["bash", "-lc", "poetry run python manage.py migrate && poetry run python manage.py runserver 0.0.0.0:8000"]
+CMD ["bash", "-lc", "poetry run python manage.py migrate && poetry run python manage.py collectstatic && poetry run python manage.py runserver 0.0.0.0:8000"]
