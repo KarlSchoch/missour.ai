@@ -21,7 +21,7 @@ The web application combines a Django backend that exposes APIs and serves the H
 **Development**
 1. Build the backend image (first time or after Dockerfile changes): `docker build -f backend-dev.Dockerfile -t missourai-backend:dev .`
 2. Start the backend container from the repository root:
-   `docker run --rm -it -p 8000:8000 -e DJANGO_VITE_DEV=1 -v "${PWD}:/app" -w /app/missourai_django missourai-backend:dev`
+   `docker run --rm --env-file .env -it -p 8000:8000 -e DJANGO_VITE_DEV=1 -v "${PWD}:/app" -w /app/missourai_django missourai-backend:dev`
    - In Windows PowerShell, `${PWD.Path}` expands to the current directory; adjust the flag to `-v "${PWD.Path}:/app"` if needed for your shell.
    - The bind mount keeps Django in sync with local template and code changes.
 3. In another terminal, run the React/Vite dev server:

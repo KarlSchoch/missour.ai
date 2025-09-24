@@ -26,7 +26,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', get_random_secret_key())
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost").split(',')
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS").split(',')
 CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000"]
 
 # Application definition
@@ -156,3 +156,8 @@ DJANGO_VITE_DEV_SERVER_PORT = 5173
 # --- CORS for local dev (only needed if you ever hit Django from :5173 directly) ---
 CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
 CORS_ALLOW_CREDENTIALS = True
+
+# --- White noise Middleware ---
+if DEBUG:
+    WHITENOISE_USE_FINDERS = True
+    WHITENOISE_AUTOREFRESH = True
