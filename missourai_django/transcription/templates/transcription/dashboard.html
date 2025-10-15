@@ -1,26 +1,22 @@
+{% extends "transcription/base.html" %}
 {% load django_vite %}
-{% load static %}
 
-<!doctype html>
-<html>
-    <head>
-        <meta charset="utf-8" />
-        <title>Missour.ai Dashboard</title>
-        <!-- marker: dashboard-template-from-repo v1 -->
-    </head>
-    <body>
-        <!-- React mount -->
-        <div id="dashboard-root"></div>
-        {{ initial_payload|json_script:"initial-payload" }}
-        <!-- React Fast Refresh preamble for Vite (dev only) -->
-        <script type="module">
-            import RefreshRuntime from 'http://localhost:5173/static/@react-refresh'
-            RefreshRuntime.injectIntoGlobalHook(window)
-            window.$RefreshReg$ = () => {}
-            window.$RefreshSig$ = () => (type) => type
-            window.__vite_plugin_react_preamble_installed__ = true
-        </script>
-        {% vite_hmr_client %}
-        {% vite_asset 'src/dashboard.jsx' %}
-    </body>
-</html>
+{% block title %}Dashboard - missour.ai{% endblock %}
+
+{% block content %}
+<div id="dashboard-root"></div>
+{{ initial_payload|json_script:"initial-payload" }}
+{% endblock %}
+
+{% block extra_scripts %}
+    <!-- React Fast Refresh preamble for Vite (dev only) -->
+    <script type="module">
+        import RefreshRuntime from 'http://localhost:5173/static/@react-refresh'
+        RefreshRuntime.injectIntoGlobalHook(window)
+        window.$RefreshReg$ = () => {}
+        window.$RefreshSig$ = () => (type) => type
+        window.__vite_plugin_react_preamble_installed__ = true
+    </script>
+    {% vite_hmr_client %}
+    {% vite_asset 'src/dashboard.jsx' %}
+{% endblock %}

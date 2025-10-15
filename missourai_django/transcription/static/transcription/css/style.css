@@ -198,6 +198,11 @@ table {
     width: 100%;
     border-collapse: collapse;
 }
+
+/* React dashboard mount */
+#dashboard-root {
+    padding: 1rem;
+}
 thead th {
     background-color: #f9f9f9;
     position: sticky;
