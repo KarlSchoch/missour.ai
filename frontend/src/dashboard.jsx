@@ -1,14 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { getCsrfToken } from './utils/csrf'
 
 function getInitialData() {
   const el = document.getElementById('initial-payload')
   return el ? JSON.parse(el.textContent) : {}
-}
-
-function getCsrfToken() {
-  return document.cookie.split('; ')
-    .find(row => row.startsWith('csrftoken='))?.split('=')[1]
 }
 
 function App() {
@@ -50,7 +46,7 @@ function App() {
   }
 
   return (
-    <div style={{ padding: 16 }}>
+    <div>
       <pre>Ping: {JSON.stringify(status, null, 2)}</pre>
       <button onClick={addItem}>Add Items</button>
       <ul>{items.map(i => <li key={i.id}>{i.name}</li>)}</ul>
