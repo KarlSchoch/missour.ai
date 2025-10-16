@@ -148,10 +148,11 @@ LOGOUT_REDIRECT_URL = 'transcription:index'
 
 # --- django-vite ---
 # In dev, True -> inject HMR client; in prod, False -> use built assets from dist/manifest
-DJANGO_VITE_DEV_MODE = os.getenv("DJANGO_VITE_DEV", "1") == "1"
+DJANGO_VITE_DEV_MODE = os.getenv("DJANGO_VITE_DEV", "1").lower() in {"1", "true", "yes"}
 DJANGO_VITE_ASSETS_PATH = BASE_DIR.parent / "frontend" / "dist"
-DJANGO_VITE_DEV_SERVER_HOST = "localhost"
-DJANGO_VITE_DEV_SERVER_PORT = 5173
+DJANGO_VITE_DEV_SERVER_HOST = os.getenv("DJANGO_VITE_DEV_SERVER_HOST", "localhost")
+DJANGO_VITE_DEV_SERVER_PORT = int(os.getenv("DJANGO_VITE_DEV_SERVER_PORT", "5173"))
+DJANGO_VITE_DEV_SERVER_PROTOCOL = os.getenv("DJANGO_VITE_DEV_SERVER_PROTOCOL", "http")
 
 # --- CORS for local dev (only needed if you ever hit Django from :5173 directly) ---
 CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]

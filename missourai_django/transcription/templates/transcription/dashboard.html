@@ -1,5 +1,5 @@
 {% extends "transcription/base.html" %}
-{% load django_vite %}
+{% load django_vite vite_extras %}
 
 {% block title %}Dashboard - missour.ai{% endblock %}
 
@@ -9,14 +9,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-    <!-- React Fast Refresh preamble for Vite (dev only) -->
-    <script type="module">
-        import RefreshRuntime from 'http://localhost:5173/static/@react-refresh'
-        RefreshRuntime.injectIntoGlobalHook(window)
-        window.$RefreshReg$ = () => {}
-        window.$RefreshSig$ = () => (type) => type
-        window.__vite_plugin_react_preamble_installed__ = true
-    </script>
+    {% vite_react_refresh %}
     {% vite_hmr_client %}
     {% vite_asset 'src/dashboard.jsx' %}
 {% endblock %}

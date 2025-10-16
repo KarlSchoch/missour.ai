@@ -75,7 +75,7 @@ def view_transcript(request, transcript_id):
     transcript = get_object_or_404(Transcript, id=transcript_id)
     return render(request, 'transcription/view_transcript.html', {'transcript': transcript})
 
-# @login_required
+@login_required
 def dashboard(request):
     payload = {
         "username": "Karl", # request.user.get_username(),
