@@ -40,25 +40,31 @@ The web application combines a Django backend that exposes APIs and serves the H
 - **Django owns the HTML shell.** Every UI page extends `missourai_django/transcription/templates/transcription/base.html` so that the global navigation, fonts, and `static/transcription/css/style.css` styling are always present.
 - **Vite assets are mounted under `/static/`.** The `base: '/static/'` setting in `frontend/vite.config.js` matches Django's `STATIC_URL`, so `{% vite_asset 'src/...' %}` resolves correctly in templates without extra URL rewriting.
 - **Dev traffic proxies through Django.** The Vite dev server proxies `'/api'` to `http://localhost:8000/` to reuse Django's session and CSRF cookies while developing React apps (`frontend/vite.config.js` -> `server.proxy`).
-- **Initial payloads come from Django views.** Each page view returns an `initial_payload` dictionary that gets serialized with `{{ initial_payload|json_script:"initial-payload" }}` and can be read by React via `document.getElementById('initial-payload')`.
+- **Initial payloads come from Django views.** Each page view returns an `initial_payload` dictionary that gets serialized with `{{ initial_payload|json_script:"initial-payload" }}` and can be read by React via `document.getElementById('initial-payload')`.  This `initial_payload ` is generated from the view
 - **CSRF stays consistent across fetches.** Frontend code imports `getCsrfToken` from `frontend/src/utils/csrf.js`, ensuring POST/PUT/PATCH requests include the same `csrftoken` cookie Django issued.
 
 ### Creating New Pages
 
 **Overview**
+For reference, the *Dashboard* page provides an example for the process described below.
 1. Create or update a Django view that prepares any data the page needs and renders a template extending the shared base.
 2. Register a URL in `missourai_django/transcription/ui_urls.py` that points to the view so Django can serve the page.
 3. Add a new React entry file in `frontend/src` and load it from the template with `{% vite_asset %}`.
 4. Expose any required backend APIs under `missourai_django/transcription/api_urls.py` so the React page can fetch data.
 
 #### Step 1 - Scaffold the Django view and template
-1. Add (or update) a view in `missourai_django/transcription/views.py` that returns the data React will bootstrap from:
+1. Add (or update) a view in `missourai_django/transcription/views.py` that returns the data React will bootstrap from.  Adding the `apiUrls` and `initial_payload` keys to the payload and responses, respectively, ensure that your React application has access to necessary elements uponinitial startup (you can include other parameters as necessary).
    ```python
    def reports(request):
        payload = {"apiUrls": {"list": "/api/reports/"}}
        return render(request, "transcription/reports.html", {"initial_payload": payload})
    ```
-2. Create `missourai_django/transcription/templates/transcription/reports.html` that extends the base layout, mounts a React root, and registers the Vite bundle:
+2. Create `missourai_django/transcription/templates/transcription/reports.html` that extends the base layout, mounts a React root, and registers the Vite bundle.  
+- `{{ initial_payload|json_script:"initial-payload" }}`: Pulls the `initial_payload` defined in the view into the page's HTML as a script with the id `initial-payload`
+- `{% load django_vite %}`, `{% vite_hmr_client %}`: General boilerplate for integrating Django and Vite through `django-vite`
+- `{% vite_asset 'src/reports.jsx' %}`: Used to pull in the React component.
+- `{% block extra_scripts %}`: Executes code necessary for allowing Django to access React/Vite elements
+
    ```django
    {% extends "transcription/base.html" %}
    {% load django_vite %}
@@ -71,8 +77,16 @@ The web application combines a Django backend that exposes APIs and serves the H
    {% endblock %}
 
    {% block extra_scripts %}
-       {% vite_hmr_client %}
-       {% vite_asset 'src/reports.jsx' %}
+      <!-- React Fast Refresh preamble for Vite (dev only) -->
+      <script type="module">
+         import RefreshRuntime from 'http://localhost:5173/static/@react-refresh'
+         RefreshRuntime.injectIntoGlobalHook(window)
+         window.$RefreshReg$ = () => {}
+         window.$RefreshSig$ = () => (type) => type
+         window.__vite_plugin_react_preamble_installed__ = true
+      </script>
+      {% vite_hmr_client %}
+      {% vite_asset 'src/reports.jsx' %}
    {% endblock %}
    ```
 3. **Checkpoint:** Run the backend (`docker run ...` command in the Development section) and visit the new route - the navigation and base styling should render, even though the React area is empty.
@@ -108,7 +122,20 @@ The web application combines a Django backend that exposes APIs and serves the H
 
 #### Step 4 - Provide backend APIs (if needed)
 1. Define or update API views/serializers for the new React page in `missourai_django/transcription/api_urls.py` and associated view modules.
-2. Ensure the endpoints rely on Django's session authentication so the proxied Vite requests keep working in dev.
+2. Ensure the endpoints rely on Django's session authentication so the proxied Vite requests keep working in dev.  See the code below for an illustration of how to leverage Django's CSRF Token.
+
+   ```jsx
+   await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ name: `Item ${Date.now()}` }),
+    })
+   ```
+
 3. **Checkpoint:** Call the API directly (e.g. from the browser console: `fetch(init.apiUrls.list).then(r => r.json())`) to verify it returns expected data before wiring it into the React UI.
 
 With these steps, every new page automatically inherits the Django styling, navigation, and CSRF/session handling while keeping the React code focused on page-specific logic.
