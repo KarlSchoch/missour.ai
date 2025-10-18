@@ -74,8 +74,11 @@ flowchart TB
     topic_drop_down -.-> topic_drop_down_imported2
     analyze_audio -->|NOT Analyzing Audio| view
     analyze_audio -->|Analyzing Audio| tagged_transcript_instantiation2
+	linkStyle 7 stroke:#FF0000,stroke-width:2px,color:#FF0000,labelBackground:transparent
     tagged_transcript_instantiation2 --> validate_tagging
     tagged_transcript_instantiation1 --> validate_tagging
+	tagged_transcript_instantiation2 --> transcript
+	linkStyle 10 stroke:#FF0000,stroke-width:2px,color:#FF0000,labelBackground:transparent
     tagged_transcript_def -.-> tagged_transcript_instantiation1
     tagged_transcript_def -.-> tagged_transcript_instantiation2
 
