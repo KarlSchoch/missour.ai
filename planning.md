@@ -60,7 +60,7 @@ flowchart TB
 			UI_Component_Instance("UI Component Instance")
 			Data_Model_Definition("Data Model Definition")
 			Data_Model_Instance("Data Model Instance")
-			L1[ ] -->|MVP| L2[ ] %% Link Index 0
+			L1[ ] -->|MVP| L2[ ]
 	end
 
 	style L1 fill:transparent,stroke:transparent
