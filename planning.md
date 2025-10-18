@@ -65,7 +65,7 @@ flowchart TB
 
 	style L1 fill:transparent,stroke:transparent
 	style L2 fill:transparent,stroke:transparent
-	linkStyle 0: stroke:#FF0000,stroke-width:2px
+	linkStyle 0 stroke:#FF0000,stroke-width:2px
 
     transcript_drop_down --> tagged_transcript_instantiation1
     topic_drop_down_imported1 --> tagged_transcript_instantiation1
