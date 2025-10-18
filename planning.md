@@ -50,7 +50,7 @@ flowchart TB
     validate_tagging -->|Note 3| view
     topic_drop_down -.-> topic_drop_down_imported1
     topic_drop_down -.-> topic_drop_down_imported2
-    upload_audio -->|NOT Analyzing Audio| view
+    analyze_audio -->|NOT Analyzing Audio| view
     analyze_audio -->|Analyzing Audio| tagged_transcript_instantiation2
     tagged_transcript_instantiation2 --> validate_tagging
     tagged_transcript_instantiation1 --> validate_tagging
