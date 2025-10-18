@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TB
-    subgraph view["View (Page Section)"]
+    subgraph view["View"]
         topic["Topic"]
         transcript["Transcript"]
     end
@@ -13,25 +13,25 @@ flowchart TB
         existing_topic["Existing Topic (Menu Option)"]
         create_new_topic["Create New Topic (Popout)"]
     end
-    subgraph analyze["Analyze (Page Section)"]
+    subgraph analyze["Analyze"]
         transcript_drop_down["Transcript (Searchable, Multi-Select Drop Down Menu)"]
-        topic_drop_down_imported1["Topic Drop Down (Imported)"]
+        topic_drop_down_imported1["Topic Drop Down"]
     end
-    subgraph transcripts["Transcripts (Page)"]
+    subgraph transcripts["Transcripts"]
         view
         analyze
         tagged_transcript_instantiation1["Tagged Transcript(s)"]
     end
-    subgraph upload_audio["Upload Audio (Page)"]
-        subgraph analyze_audio["Analyze Audio (Page Section)"]
-            topic_drop_down_imported2["Topic Drop Down (Imported)"]
+    subgraph upload_audio["Upload Audio"]
+        subgraph analyze_audio["Analyze Audio"]
+            topic_drop_down_imported2["Topic Drop Down"]
         end
+		tagged_transcript_instantiation2["Tagged Transcript(s)"]
     end
-    tagged_transcript_instantiation2["Tagged Transcript(s)"]
-    subgraph validate_tagging["Validate Tagging (Page)"]
+    subgraph validate_tagging["Validate Tagging"]
         subgraph validation_table["Validation Table"]
-            chunk["Chunk (Row)"]
-            chunk_tag_checkbox["Chunk Tag Checkbox (Column)"]
+            chunk["Chunk"]
+            chunk_tag_checkbox["Chunk Tag Checkbox"]
         end
     end
     transcript_drop_down --> tagged_transcript_instantiation1
@@ -46,6 +46,16 @@ flowchart TB
     tagged_transcript_def -.-> tagged_transcript_instantiation1
     tagged_transcript_def -.-> tagged_transcript_instantiation2
 
+	subgraph Legend
+		direction LR
+			Page_Full("Page")
+			Page_Section("Page Section")
+			UI_Component_Definition("UI Component Definition")
+			UI_Component_Instance("UI Component Instance")
+			Data_Model_Definition("Data Model Definition")
+			Data_Model_Instance("Data Model Instance")
+	end
+
     classDef page fill:#E8F1FF,stroke:#1B4F72,stroke-width:1px;
     classDef section fill:#FFF4E6,stroke:#EF6C00,stroke-width:1px;
     classDef ui_def fill:#EAF7EA,stroke:#2E7D32,stroke-width:1px;
@@ -53,12 +63,12 @@ flowchart TB
     classDef data_model_def fill:#F0DD05,stroke:#8B8000,stroke-width:1px;
     classDef data_model_instance fill:#FFFFFF,stroke:#8B8000,stroke-width:1px;
 
-    class transcripts,upload_audio,validate_tagging page;
-    class analyze,analyze_audio,view section;
-    class topic_drop_down,transcript_drop_down,validation_table,create_new_topic ui_def;
-    class topic_drop_down_imported1,topic_drop_down_imported2 ui_instance;
-    class tagged_transcript_def data_model_def;
-    class tagged_transcript_instantiation1,tagged_transcript_instantiation2 data_model_instance;
+    class transcripts,upload_audio,validate_tagging,Page_Full page;
+    class analyze,analyze_audio,view,Page_Section section;
+    class topic_drop_down,transcript_drop_down,validation_table,create_new_topic,UI_Component_Definition ui_def;
+    class topic_drop_down_imported1,topic_drop_down_imported2,UI_Component_Instance ui_instance;
+    class tagged_transcript_def,Data_Model_Definition data_model_def;
+    class tagged_transcript_instantiation1,tagged_transcript_instantiation2,Data_Model_Instance data_model_instance;
 ```
 > **Notes**
 > 1. Create New Topic Popout
