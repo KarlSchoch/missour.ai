@@ -1,3 +1,20 @@
+# Overview
+- [x] Complete React UI Scaffolding
+- [x] Plan out Overall UI Journey
+- [] Define MVP UI Journey
+	- *MVP Risk* Have to do tagging at time of transcript creation, can't go back.
+	- Planned to be implemented "later"
+- [] Create Clickable UI Scaffolding for MVP UI Journey
+- [] Create data model
+- [] Create dummy data that integrates data model into UI
+- [] Pull in actual tagging code
+- [] Dev deployment of MVP to enable testing with Andy
+- [] Address Andy's feedback
+- [] Prod deployment of MVP
+- [] Define implementation phases
+	1. Add ability to tag transcripts after initial audio upload
+	2. Add ability to validate tagging
+
 # 1 Complete the React UI Scaffolding stuff
 
 # 2. Plan out the UI journey
@@ -43,7 +60,12 @@ flowchart TB
 			UI_Component_Instance("UI Component Instance")
 			Data_Model_Definition("Data Model Definition")
 			Data_Model_Instance("Data Model Instance")
+			L1[ ] -->|MVP| L2[ ] %% Link Index 0
 	end
+
+	style L1 fill:transparent,stroke:transparent
+	style L2 fill:transparent,stroke:transparent
+	linkStyle 0: stroke:#FF0000,stroke-width:2px
 
     transcript_drop_down --> tagged_transcript_instantiation1
     topic_drop_down_imported1 --> tagged_transcript_instantiation1
