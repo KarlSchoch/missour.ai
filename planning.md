@@ -1,46 +1,64 @@
 # 1 Complete the React UI Scaffolding stuff
 
 # 2. Plan out the UI journey
-Transcripts (everything under this "extends" transcripts; needs sidebar that shows "View vs. Analyze" choices)
-- View Transcripts:
-	- On transcripts, automatically go into this section when you click the menu link and show the "List of Transcripts" table
-- Analyze Transcripts: Two different sections
-	- Analyze Transcript: Allows user, in a many-to-many way , to surface topics that are covered in a transcript
-		- Transcript Drop Down
-        - Topic Drop Down
-	- View Analysis: Different options
-		- Transcript: For a single transcript, show all of the topics that have been surfaced
-		- Topic: For a single topic, show all of the locations where that has shown up
+
 ```mermaid
 flowchart TB
     subgraph view["View (Page Section)"]
-       topic["Topic"]
-       transcript["Transcript"]
+        topic["Topic"]
+        transcript["Transcript"]
     end
+    tagged_transcript_def["Tagged Transcript Definition"]
     subgraph topic_drop_down["Topic (Searchable, Multi-Select Drop Down Menu)"]
-       existing_topic["Existing Topic (Menu Option)"]
-       create_new_topic["Create New Topic (Popout)"]
+        existing_topic["Existing Topic (Menu Option)"]
+        create_new_topic["Create New Topic (Popout)"]
     end
     subgraph analyze["Analyze (Page Section)"]
-       transcript_drop_down["Transcript (Searchable, Multi-Select Drop Down Menu)"]
-       topic_drop_down
+        transcript_drop_down["Transcript (Searchable, Multi-Select Drop Down Menu)"]
+        topic_drop_down_imported1["Topic Drop Down (Imported)"]
     end
     subgraph transcripts["Transcripts (Page)"]
-       view
-       analyze
+        view
+        analyze
+        tagged_transcript_instantiation1["Tagged Transcript(s)"]
     end
-    subgraph upload_audio["Upload Audio"]
-        analyze_audio["Analyze Audio (Page Section)"]
+    subgraph upload_audio["Upload Audio (Page)"]
+        subgraph analyze_audio["Analyze Audio (Page Section)"]
+            topic_drop_down_imported2["Topic Drop Down (Imported)"]
+        end
     end
+    tagged_transcript_instantiation2["Tagged Transcript(s)"]
     subgraph validate_tagging["Validate Tagging (Page)"]
-       subgraph validation_table["Validation Table"]
-           chunk["Chunk (Row)"]
-           chunk_tag_checkbox["Chunk Tag Checkbox (Column)"]
-       end
+        subgraph validation_table["Validation Table"]
+            chunk["Chunk (Row)"]
+            chunk_tag_checkbox["Chunk Tag Checkbox (Column)"]
+        end
     end
-    transcript_drop_down --> validate_tagging
-    topic_drop_down --> validate_tagging
-    validate_tagging --> view
+    transcript_drop_down --> tagged_transcript_instantiation1
+    topic_drop_down_imported1 --> tagged_transcript_instantiation1
+    validate_tagging -->|Note 3| view
+    topic_drop_down -.-> topic_drop_down_imported1
+    topic_drop_down -.-> topic_drop_down_imported2
+    upload_audio -->|NOT Analyzing Audio| view
+    upload_audio -->|Analyzing Audio| tagged_transcript_instantiation2
+    tagged_transcript_instantiation2 --> validate_tagging
+    tagged_transcript_instantiation1 --> validate_tagging
+    tagged_transcript_def -.-> tagged_transcript_instantiation1
+    tagged_transcript_def -.-> tagged_transcript_instantiation2
+
+    classDef page fill:#E8F1FF,stroke:#1B4F72,stroke-width:1px;
+    classDef section fill:#FFF4E6,stroke:#EF6C00,stroke-width:1px;
+    classDef ui_def fill:#EAF7EA,stroke:#2E7D32,stroke-width:1px;
+    classDef ui_instance fill:#FFFFFF,stroke:#2E7D32,stroke-width:1px;
+    classDef data_model_def fill:#F0DD05,stroke:#8B8000,stroke-width:1px;
+    classDef data_model_instance fill:#FFFFFF,stroke:#8B8000,stroke-width:1px;
+
+    class transcripts,upload_audio,validate_tagging page;
+    class analyze,analyze_audio,view section;
+    class topic_drop_down,transcript_drop_down,validation_table,create_new_topic ui_def;
+    class topic_drop_down_imported1,topic_drop_down_imported2 ui_instance;
+    class tagged_transcript_def data_model_def;
+    class tagged_transcript_instantiation1,tagged_transcript_instantiation2 data_model_instance;
 ```
 > **Notes**
 > 1. Create New Topic Popout
@@ -53,13 +71,16 @@ flowchart TB
 >		| ------------ | ---------- | ----- | ----- | --- | ----- |
 >       | Transcript 1 | asdfasdfad |  [x]  |  []   | []  |  [x]  |
 > 3. Validated Tagging to View transition
->	- Ensure that 
+>	- Ensure that the selected transcript(s) are maintained in state to ensure that the view transitions to the relevant transcript
 >	- See discussion around maintaining state for the selections.
 > 4. Transcript and Topic Selection
 >	- Users should be able to select multiple transcripts and topics
-> 5. 
+>	- See discussion around maintaining state for the selections.
+> 5. Transcripts Page Sidebar Menu
+> 	- There needs to be a sidebar menu within the Transcripts page that 
 
 # 3. Create clickable UI scaffolding
+- ID MVP Critical Path
 
 # 4. Create data model
 
