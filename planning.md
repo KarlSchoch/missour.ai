@@ -34,6 +34,17 @@ flowchart TB
             chunk_tag_checkbox["Chunk Tag Checkbox"]
         end
     end
+
+	subgraph Legend
+		direction LR
+			Page_Full("Page")
+			Page_Section("Page Section")
+			UI_Component_Definition("UI Component Definition")
+			UI_Component_Instance("UI Component Instance")
+			Data_Model_Definition("Data Model Definition")
+			Data_Model_Instance("Data Model Instance")
+	end
+
     transcript_drop_down --> tagged_transcript_instantiation1
     topic_drop_down_imported1 --> tagged_transcript_instantiation1
     validate_tagging -->|Note 3| view
@@ -46,15 +57,6 @@ flowchart TB
     tagged_transcript_def -.-> tagged_transcript_instantiation1
     tagged_transcript_def -.-> tagged_transcript_instantiation2
 
-	subgraph Legend
-		direction LR
-			Page_Full("Page")
-			Page_Section("Page Section")
-			UI_Component_Definition("UI Component Definition")
-			UI_Component_Instance("UI Component Instance")
-			Data_Model_Definition("Data Model Definition")
-			Data_Model_Instance("Data Model Instance")
-	end
 
     classDef page fill:#E8F1FF,stroke:#1B4F72,stroke-width:1px;
     classDef section fill:#FFF4E6,stroke:#EF6C00,stroke-width:1px;
