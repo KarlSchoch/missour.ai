@@ -1,21 +1,23 @@
 # Overview
 - [x] Complete React UI Scaffolding
 - [x] Plan out Overall UI Journey
-- [] Define MVP UI Journey
+- [x] Define MVP UI Journey
 	- *MVP Risk* Have to do tagging at time of transcript creation, can't go back.
 	- Planned to be implemented "later"
-- [] Create Clickable UI Scaffolding for MVP UI Journey
-- [] Create data model
-- [] Create dummy data that integrates data model into UI
-- [] Pull in actual tagging code
-- [] Dev deployment of MVP to enable testing with Andy
-- [] Address Andy's feedback
-- [] Prod deployment of MVP
-- [] Define implementation phases
+- [ ] Create Clickable UI Scaffolding for MVP UI Journey
+- [ ] Pull in actual tagging code
+- [ ] Dev deployment of MVP to enable testing with Andy
+- [ ] Address Andy's feedback
+- [ ] Prod deployment of MVP
+- [ ] Define implementation phases
 	1. Add ability to tag transcripts after initial audio upload
 	2. Add ability to validate tagging
 
 # 1 Complete the React UI Scaffolding stuff
+- [x] Finalize the report
+- [ ] Update dependencies
+- [ ] Add archiving feature
+- [x] Review team feedback
 
 # 2. Plan out the UI journey
 
@@ -78,11 +80,11 @@ flowchart TB
     topic_drop_down -.-> topic_drop_down_imported2
     analyze_audio -->|NOT Analyzing Audio| view
     analyze_audio -->|Analyzing Audio| tagged_transcript_instantiation2
-	linkStyle 7 stroke:#FF0000,stroke-width:2px,color:#FF0000,labelBackground:transparent
+	linkStyle 7 stroke:#FF0000,stroke-width:3px,color:#FF0000,labelBackground:transparent
     tagged_transcript_instantiation2 --> validate_tagging
     tagged_transcript_instantiation1 --> validate_tagging
 	tagged_transcript_instantiation2 --> transcript
-	linkStyle 10 stroke:#FF0000,stroke-width:2px,color:#FF0000,labelBackground:transparent
+	linkStyle 10 stroke:#FF0000,stroke-width:3px,color:#FF0000,labelBackground:transparent
     tagged_transcript_def -.-> tagged_transcript_instantiation1
     tagged_transcript_def -.-> tagged_transcript_instantiation2
 	transcript --> transcript_view
@@ -93,6 +95,7 @@ flowchart TB
     classDef ui_instance fill:#FFFFFF,stroke:#2E7D32,stroke-width:1px;
     classDef data_model_def fill:#F0DD05,stroke:#8B8000,stroke-width:1px;
     classDef data_model_instance fill:#FFFFFF,stroke:#8B8000,stroke-width:1px;
+	classDef mvp_path stroke:#FF0000,stroke-width:3px
 
     class transcripts,upload_audio,validate_tagging,Page_Full,transcript_view page;
     class analyze,analyze_audio,view,Page_Section,transcript_text,transcript_tags section;
@@ -100,33 +103,36 @@ flowchart TB
     class topic_drop_down_imported1,topic_drop_down_imported2,UI_Component_Instance ui_instance;
     class tagged_transcript_def,Data_Model_Definition data_model_def;
     class tagged_transcript_instantiation1,tagged_transcript_instantiation2,Data_Model_Instance data_model_instance;
+	class analyze_audio,transcript_tags,topic_drop_down,tagged_transcript_def mvp_path;
 ```
-> **Notes**
-> 1. Create New Topic Popout
-> 	- On Submit of form, refresh full Analyze page (ensures the Topic dropdown menu includes the new topic)
->	- Need to maintain state with the selections of the topics and transcripts so that if a user creates a new topic they don't have to re-enter previous selections.  State for the drop down menus should get cleared, however, if they do anything other than go through the process of creating a new topic.  Likely needs to be maintained throughout the process of validating the tagging to ensure that the view is correct
-> 2. Validate Tagging
->	- For each chunk/topic combination within the transcript, have a checkbox that allows users to indicate whether that tag was captured correctly (defaults to the box being checked) and *capture both the initial and user feedback version of the tag within the data model*
->	- Within the UI, this will look like a table with the check box embedded as a row.  Only include the transcript column if the user is selecting multiple transcripts at once
+**Notes**
+1. Create New Topic Popout
+	- On Submit of form, refresh full Analyze page (ensures the Topic dropdown menu includes the new topic)
+	- Need to maintain state with the selections of the topics and transcripts so that if a user creates a new topic they don't have to re-enter previous selections.  State for the drop down menus should get cleared, however, if they do anything other than go through the process of creating a new topic.  Likely needs to be maintained throughout the process of validating the tagging to ensure that the view is correct
+2. Validate Tagging
+	- For each chunk/topic combination within the transcript, have a checkbox that allows users to indicate whether that tag was captured correctly (defaults to the box being checked) and *capture both the initial and user feedback version of the tag within the data model*
+	- Within the UI, this will look like a table with the check box embedded as a row.  Only include the transcript column if the user is selecting multiple transcripts at once
 >		|  Transcript  | Chunk Text | Tag 1 | Tag 2 | ... | Tag N |
 >		| ------------ | ---------- | ----- | ----- | --- | ----- |
->       | Transcript 1 | asdfasdfad |  [x]  |  []   | []  |  [x]  |
-> 3. Validated Tagging to View transition
->	- Ensure that the selected transcript(s) are maintained in state to ensure that the view transitions to the relevant transcript
->	- See discussion around maintaining state for the selections.
-> 4. Transcript and Topic Selection
->	- Users should be able to select multiple transcripts and topics
->	- See discussion around maintaining state for the selections.
-> 5. Transcripts Page Sidebar Menu
-> 	- There needs to be a sidebar menu within the Transcripts page that 
+>       | Transcript 1 | asdfasdfad |   Y   |   N   |  N  |   Y   |
+3. Validated Tagging to View transition
+	- Ensure that the selected transcript(s) are maintained in state to ensure that the view transitions to the relevant transcript
+	- See discussion around maintaining state for the selections.
+4. Transcript and Topic Selection
+	- Users should be able to select multiple transcripts and topics
+	- See discussion around maintaining state for the selections.
+5. Transcripts Page Sidebar Menu
+	- There needs to be a sidebar menu within the Transcripts page that 
 
-# 3. Create clickable UI scaffolding
-- ID MVP Critical Path
+# 3. Define MVP UI Journey
+- See red highlighted section of diagram
+- Required Elements to build out
+	- Analyze Audio Page Section
+	- Topic Drop Down
+		- Create New Topic Poput
+	- Transcript Tags Page Section
+	- Tagged transcript Data Model
 
-# 4. Create data model
+# 4. Create clickable UI scaffolding
 
-# 5. Create dummy data that integrates data model into UI
-
-# 6. Pull in actual tagging code
-
-# 7. Create production deployment
+# 5. Pull in actual tagging code
