@@ -14,10 +14,6 @@
 	2. Add ability to validate tagging
 
 # 1 Complete the React UI Scaffolding stuff
-- [x] Finalize the report
-- [ ] Update dependencies
-- [ ] Add archiving feature
-- [x] Review team feedback
 
 # 2. Plan out the UI journey
 
