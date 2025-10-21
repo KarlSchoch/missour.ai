@@ -131,8 +131,9 @@ flowchart TB
 	
 
 # 4. Create clickable UI scaffolding
-- [] Analyze Audio Page Section (`feat/page-section` branch)
-- [] Topic Drop Down Menu
+Branching strategy: Main branch is `feat/transcript-tagging` and branches referenced below indicate the sub-branches
+- [] Analyze Audio Page Section (branches: `feat/analyze-audio` > `feat/page-section`)
+- [] Topic Drop Down Menu (branches: `feat/analyze-audio` > `feat/topic-drop-down`)
 	- [] Create Topic Data Model
 	- [] Create Base Menu
 	- [] Create "Create New Topic" Popout Form
