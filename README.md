@@ -56,53 +56,49 @@ For reference, the *Dashboard* page provides an example for the process describe
 1. Add (or update) a view in `missourai_django/transcription/views.py` that returns the data React will bootstrap from.  Adding the `apiUrls` and `initial_payload` keys to the payload and responses, respectively, ensure that your React application has access to necessary elements uponinitial startup (you can include other parameters as necessary).
    ```python
    def reports(request):
-       payload = {"apiUrls": {"list": "/api/reports/"}}
-       return render(request, "transcription/reports.html", {"initial_payload": payload})
+       payload = {"apiUrls": {"list": "/api/<some-name>/"}}
+       return render(request, "transcription/<some-name>.html", {"initial_payload": payload})
    ```
-2. Create `missourai_django/transcription/templates/transcription/reports.html` that extends the base layout, mounts a React root, and registers the Vite bundle.  
-- `{{ initial_payload|json_script:"initial-payload" }}`: Pulls the `initial_payload` defined in the view into the page's HTML as a script with the id `initial-payload`
-- `{% load django_vite %}`, `{% vite_hmr_client %}`: General boilerplate for integrating Django and Vite through `django-vite`
-- `{% vite_asset 'src/reports.jsx' %}`: Used to pull in the React component.
-- `{% block extra_scripts %}`: Executes code necessary for allowing Django to access React/Vite elements
+2. Create `missourai_django/transcription/templates/transcription/<some-name>.html` that extends the base layout, mounts a React root, and registers the Vite bundle.  
+   - `{% block extra_scripts %}`: Executes code necessary for allowing Django to access React/Vite elements
 
    ```django
    {% extends "transcription/base.html" %}
-   {% load django_vite %}
+   {% load django_vite %} # Boilerplate for integrating Django and Vite
+   {% load vite_extras %} # Loads templatetags/vite_extras.py that contains vite_react_refresh
 
-{% block title %}Reports - missour.ai{% endblock %}
+   {% block title %}Reports - missour.ai{% endblock %}
 
    {% block content %}
-   <div id="reports-root"></div>
+   # Create HTLM element node for your page
+   <div id="<some-name>-root"></div>
+   # Pull `initial_payload` defined in view into the page's HTML as a script with id `initial-payload`
    {{ initial_payload|json_script:"initial-payload" }}
    {% endblock %}
 
    {% block extra_scripts %}
-      <!-- React Fast Refresh preamble for Vite (dev only) -->
-      <script type="module">
-         import RefreshRuntime from 'http://localhost:5173/static/@react-refresh'
-         RefreshRuntime.injectIntoGlobalHook(window)
-         window.$RefreshReg$ = () => {}
-         window.$RefreshSig$ = () => (type) => type
-         window.__vite_plugin_react_preamble_installed__ = true
-      </script>
-      {% vite_hmr_client %}
-      {% vite_asset 'src/reports.jsx' %}
+      # Enables Vite, React, and Django to function in Dev mode
+      {% vite_react_refresh %}
+      {% vite_hmr_client %} # Boilerplate for integrating Django and Vite
+      {% vite_asset 'src/reports.jsx' %} # Pulls in React Component
    {% endblock %}
    ```
 3. **Checkpoint:** Run the backend (`docker run ...` command in the Development section) and visit the new route - the navigation and base styling should render, even though the React area is empty.
 
 #### Step 2 - Register the UI route
-1. Add a path to `missourai_django/transcription/ui_urls.py`, e.g. `path('reports/', views.reports, name='reports')`.
+1. Add a path to `missourai_django/transcription/ui_urls.py`, e.g. `path('<some-name>/', views.<some-name>, name='<some-name>')`.
 2. Include a link from existing navigation if desired.
-3. **Checkpoint:** `python manage.py runserver` and open `http://localhost:8000/transcription/reports/` - you should see the blank template with the global layout.
+3. **Checkpoint:** `python manage.py runserver` and open `http://localhost:8000/transcription/<some-name>/` - you should see the blank template with the global layout.
 
 #### Step 3 - Build the React entry file
-1. Create `frontend/src/reports.jsx` that reads the initial payload, mounts on the matching DOM node, and imports shared helpers:
+1. Create `frontend/src/<some-name>.jsx` that reads the initial payload, mounts on the matching DOM node, and imports shared helpers:
    ```jsx
    import React from 'react'
    import ReactDOM from 'react-dom/client'
+   // Imports utility function for pulling Django CSRF token
    import { getCsrfToken } from './utils/csrf'
 
+   // Pulls initial-data HTML element created in Django template
    function getInitialData() {
      const el = document.getElementById('initial-payload')
      return el ? JSON.parse(el.textContent) : {}
@@ -111,11 +107,12 @@ For reference, the *Dashboard* page provides an example for the process describe
    function ReportsApp() {
      const init = React.useMemo(getInitialData, [])
      // component code goes here
-     return <div>{init.username}</div>
+     return <div>Your Wonderful Content</div>
    }
 
-   const mount = document.getElementById('reports-root')
-   if (mount) ReactDOM.createRoot(mount).render(<ReportsApp />)
+   // Mount your React component at the HTLM element node created in Django template
+   const mount = document.getElementById('<some-name>-root')
+   if (mount) ReactDOM.createRoot(mount).render(<App />)
    ```
 2. Start the Vite dev server (`npm run dev` inside `frontend`) to compile and hot-reload the new entry point.
 3. **Checkpoint:** With both Django and Vite running, reload the page and confirm the React component hydrates (inspect DevTools console for any missing mount errors).
