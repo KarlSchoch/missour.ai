@@ -123,12 +123,29 @@ flowchart TB
 # 3. Define MVP UI Journey
 - See red highlighted section of diagram
 - Required Elements to build out
-	- Analyze Audio Page Section
-	- Topic Drop Down
+	1. Analyze Audio Page Section
+	2. Topic Drop Down
 		- Create New Topic Poput
-	- Transcript Tags Page Section
-	- Tagged transcript Data Model
+	3. Tagged transcript Data Model
+	4. Transcript Tags Page Section
+	
 
 # 4. Create clickable UI scaffolding
+- [] Analyze Audio Page Section
+- [] Topic Drop Down Menu
+	- [] Create Topic Data Model
+	- [] Create Base Menu
+	- [] Create "Create New Topic" Popout Form
+	- [] Integrate Base Menu with "Create New Topic" Popout Form
+- [] Tagged transcript Data Model
+- [] Transcript Tags Page Section
+
+## Step 1: Build out "Analyze Audio" Page Section
+## Step 2: Create "Topic Drop Down Menu" UI Element
+### Create Topic Data Model
+### Create Base Menu
+### Create "Create New Topic" Popout menu
+### Create "Create New Topic" Popout Form
+### Integrate Base Menu with "Create New Topic" Popout Form
 
 # 5. Pull in actual tagging code
