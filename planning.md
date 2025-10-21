@@ -131,7 +131,7 @@ flowchart TB
 	
 
 # 4. Create clickable UI scaffolding
-- [] Analyze Audio Page Section
+- [] Analyze Audio Page Section (`feat/page-section` branch)
 - [] Topic Drop Down Menu
 	- [] Create Topic Data Model
 	- [] Create Base Menu
