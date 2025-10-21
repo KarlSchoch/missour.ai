@@ -51,6 +51,10 @@ flowchart TB
             chunk_tag_checkbox["Chunk Tag Checkbox"]
         end
     end
+	subgraph transcript_view["Transcript"]
+		transcript_text["Transcript Text"]
+		transcript_tags["Transcript Tags"]
+	end
 
 	subgraph Legend
 		direction LR
@@ -81,7 +85,7 @@ flowchart TB
 	linkStyle 10 stroke:#FF0000,stroke-width:2px,color:#FF0000,labelBackground:transparent
     tagged_transcript_def -.-> tagged_transcript_instantiation1
     tagged_transcript_def -.-> tagged_transcript_instantiation2
-
+	transcript --> transcript_view
 
     classDef page fill:#E8F1FF,stroke:#1B4F72,stroke-width:1px;
     classDef section fill:#FFF4E6,stroke:#EF6C00,stroke-width:1px;
@@ -90,8 +94,8 @@ flowchart TB
     classDef data_model_def fill:#F0DD05,stroke:#8B8000,stroke-width:1px;
     classDef data_model_instance fill:#FFFFFF,stroke:#8B8000,stroke-width:1px;
 
-    class transcripts,upload_audio,validate_tagging,Page_Full page;
-    class analyze,analyze_audio,view,Page_Section section;
+    class transcripts,upload_audio,validate_tagging,Page_Full,transcript_view page;
+    class analyze,analyze_audio,view,Page_Section,transcript_text,transcript_tags section;
     class topic_drop_down,transcript_drop_down,validation_table,create_new_topic,UI_Component_Definition ui_def;
     class topic_drop_down_imported1,topic_drop_down_imported2,UI_Component_Instance ui_instance;
     class tagged_transcript_def,Data_Model_Definition data_model_def;
