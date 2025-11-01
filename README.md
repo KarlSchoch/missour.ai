@@ -137,6 +137,50 @@ For reference, the *Dashboard* page provides an example for the process describe
 
 With these steps, every new page automatically inherits the Django styling, navigation, and CSRF/session handling while keeping the React code focused on page-specific logic.
 
+### Adding React Components to existing Django Pages
+Given that Missour.ai was initially built in pure Django, there are a number of "backbone" pages that are written in Django and it is useful to be able to add React components to these pages rather than recreate that existing page in React.  This section outlines the process for doing it
+
+**Overview**
+1. Create React Component
+2. Add Boilerplate to Existing Django Page's Template
+3. Create Django template for your **partial**
+4. Create Django view for React template
+
+#### Step 1: Create React Component
+This is exactly the same as the process covered in [Step 3 - Build the React entry file](#step-3---build-the-react-entry-file).
+
+#### Step 2: Add Boilerplate to Existing Django Page's Template
+Since the Django template for the existing page is now "managing" the React component, you need to add much of the same boilerplate that you included in [Step 1 - Scaffold the Django View and Template](#step-1---scaffold-the-django-view-and-template) to the exisiting Django template as shown in the code below.
+
+The main thing to notice that is *new* for this implementation compared to managing the entire page in React is that you need to create a new `{% block %}` for the React component at the location where you want it to be pulled in within the template that references the template for your partial using an `{% include %}` statement
+```html
+<!-- Existing loads, extends, etc. -->
+{% load django_vite vite_extras %}
+{% block content %}
+   <!-- Existing elements -->
+    {% block <relevant-section-name> %}
+        {% include 'transcription/partials/<your-partial-template>.html' %}
+    {% endblock %}
+{% endblock %}
+
+{% block extra_scripts %}
+    {% vite_react_refresh %}
+    {% vite_hmr_client %}
+    {% vite_asset 'src/<your-react-component>.jsx' %}
+{% endblock %}
+```
+
+#### Step 3: Create Django template for your **partial**
+Given that all of the "management" tasks are handled within the parent file, the contents of this file are very simple.  You just need to create the `<div>` that you referenced within the original react component from earlier in [Step 1](#step-1-create-react-component) and provide the initial payload.  Best practice is to create this within the `templates/transcription/partials` directory for clarity but the main consideration is that it matches what is referenced in the `{% include %}` statement from [Step 2](#step-2-add-boilerplate-to-existing-django-pages-template).
+
+```html
+<div id="<id-generated-in-react-component>-root"></div>
+{{ initial_payload|json_script:"initial-payload"}}
+```
+
+#### Step 4: Create Django view for React template
+You can follow the instructions for creating the view from [Step 1](#step-1---scaffold-the-django-view-and-template) of the process for creating an entirely React-based page.
+
 ## ML Environment
 To use the ML Experiments environment, do the following
 1. Go into the `ml_env` directory.
