@@ -142,6 +142,9 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
 - [] Transcript Tags Page Section
 
 ## Step 1: Build out "Analyze Audio" Page Section
+-[ ] Create the react component
+    - checkbox that expands into a new section when selected that contains an explanatory hover
+-[ ] Bring the react component into the Django page with a minimal 
 ## Step 2: Create "Topic Drop Down Menu" UI Element
 ### Create Topic Data Model
 ### Create Base Menu
