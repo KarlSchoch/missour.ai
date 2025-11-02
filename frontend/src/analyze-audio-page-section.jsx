@@ -34,20 +34,43 @@ function App() {
                     <input 
                         type="checkbox"
                         checked={conductAnalysis}
-                        onChange={(e) => setConductAnalysis(e.target.checked)}
+                        onChange={(e) => {
+                            setConductAnalysis(e.target.checked);
+                            setSelected(() => new Set([]));
+                        }}
                     />
                 </label>
             </div>
             <br />
             <div
-                id="topic-selection"
                 hidden={!conductAnalysis}
             >
-                { selected.size === 0 ? (
-                    <span>No options selected</span>
-                ) : (
-                    <span>Options selected</span>
-                ) }
+                <div
+                    id="topic-selection"
+                >
+                    { selected.size === 0 ? (
+                        <span>No Topics Selected</span>
+                    ) : (
+                        `Selected Topics: ${Array.from(selected).join(', ')}`
+                    )}
+                </div>
+                <fieldset role="listbox">
+                    { options.map(opt => {
+                        const checked = selected.has(opt.value);
+                        return (
+                            <div>
+                                <label key={opt.value} role="option">
+                                    <input 
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() => toggleOption(opt.value)}
+                                    />
+                                    <span>{opt.label}</span>
+                                </label>
+                            </div>
+                        )
+                    })}
+                </fieldset>
             </div>
         </div>
     )
