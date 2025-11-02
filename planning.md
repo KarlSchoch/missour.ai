@@ -142,20 +142,24 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
 - [] Transcript Tags Page Section
 
 ## Step 1: Build out "Analyze Audio" Page Section
-- [ ] Create the react component
+- [x] Create the react component
     - checkbox that expands into a new section when selected that contains an explanatory hover
 - [x] Bring the react component into the Django page
+
+## Step 2: Create "Topic Drop Down Menu" UI Element
+### UI Components
 - [ ] Provide data from the React Component to the Django form
     > Put <input type="hidden" name="component_json" id="component_json"> in the form.
     > In React, whenever state changes (or on submit), document.getElementById('component_json').value = JSON.stringify(state).
-
-In the Django view: data = json.loads(request.POST['component_json']).
-## Step 2: Create "Topic Drop Down Menu" UI Element
+    > In the Django view: data = json.loads(request.POST['component_json']).
+- [ ] Abstract multi-select from Page section into it's own component
 ### Create Topic Data Model
-- [] Populate data
-### Create Base Menu
-### Create "Create New Topic" Popout menu
-### Create "Create New Topic" Popout Form
-### Integrate Base Menu with "Create New Topic" Popout Form
+- [] Pre-populate data based on andy's recommendation
+### Create Tagging Data Model
+Notes
+- Long (transcript_id, chunk_id, topic, topic_present) is probably better than wide (column for each topic)
+### Create Chunk data model
+- transcript_id, chunk_id, chunk_text
 
 # 5. Pull in actual tagging code
+# N. Allow user to tag a transcript rather than just an audio file
