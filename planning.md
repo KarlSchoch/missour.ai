@@ -142,11 +142,17 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
 - [] Transcript Tags Page Section
 
 ## Step 1: Build out "Analyze Audio" Page Section
--[ ] Create the react component
+- [ ] Create the react component
     - checkbox that expands into a new section when selected that contains an explanatory hover
--[ ] Bring the react component into the Django page with a minimal 
+- [x] Bring the react component into the Django page
+- [ ] Provide data from the React Component to the Django form
+    > Put <input type="hidden" name="component_json" id="component_json"> in the form.
+    > In React, whenever state changes (or on submit), document.getElementById('component_json').value = JSON.stringify(state).
+
+In the Django view: data = json.loads(request.POST['component_json']).
 ## Step 2: Create "Topic Drop Down Menu" UI Element
 ### Create Topic Data Model
+- [] Populate data
 ### Create Base Menu
 ### Create "Create New Topic" Popout menu
 ### Create "Create New Topic" Popout Form
