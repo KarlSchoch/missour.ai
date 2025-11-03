@@ -9,10 +9,10 @@
         {% csrf_token %}
         {{ form.as_p }}
         <button type="submit">Upload</button>
+        {% block analyze_audio_page_section %}
+            {% include 'transcription/partials/analyze-audio-page-section.html' %}
+        {% endblock %}
     </form>
-    {% block analyze_audio_page_section %}
-        {% include 'transcription/partials/analyze-audio-page-section.html' %}
-    {% endblock %}
 {% endblock %}
 
 {% block extra_scripts %}
