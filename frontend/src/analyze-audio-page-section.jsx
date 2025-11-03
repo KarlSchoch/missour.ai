@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ReactDOM from 'react-dom/client';
 import { getCsrfToken } from "./utils/csrf";
 
@@ -11,7 +11,17 @@ function App() {
     const init = React.useMemo(getInitialData, []);
     const [conductAnalysis, setConductAnalysis] = useState(false);
     const [selected, setSelected] = useState(() => new Set([]))
+    const hiddenRef = useRef(null);
 
+    // Keep value of hiddenRef in line with the selected
+    useEffect(() => {
+        if (hiddenRef.current) {
+            hiddenRef.current.value = JSON.stringify(Array.from(selected));
+        }
+    })
+
+
+    // Replace with selections from DB
     const options = [
         {value: "Workforce Training", label: "Workforce Training"},
         {value: "Information Technology", label: "Information Technology"},
@@ -39,6 +49,7 @@ function App() {
                             setSelected(() => new Set([]));
                         }}
                     />
+                    <input ref={hiddenRef} type="hidden" name="topics" value="[]" />
                 </label>
             </div>
             <br />
@@ -58,7 +69,7 @@ function App() {
                     { options.map(opt => {
                         const checked = selected.has(opt.value);
                         return (
-                            <div>
+                            <span>
                                 <label key={opt.value} role="option">
                                     <input 
                                         type="checkbox"
@@ -67,7 +78,7 @@ function App() {
                                     />
                                     <span>{opt.label}</span>
                                 </label>
-                            </div>
+                            </span>
                         )
                     })}
                 </fieldset>
