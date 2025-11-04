@@ -7,7 +7,7 @@ function getInitialData() {
 
 export default function TopicSelector({ hidden }) {
     const init = React.useMemo(getInitialData, []);
-    console.log(`init (inner): ${init}`)
+    console.log(`init: ${init}`)
     const [selected, setSelected] = useState(() => new Set([]))
     const hiddenRef = useRef(null);
 
