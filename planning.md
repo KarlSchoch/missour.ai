@@ -147,12 +147,15 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
 - [x] Bring the react component into the Django page
 
 ## Step 2: Create "Topic Drop Down Menu" UI Element
-### UI Components
 - [x] Provide data from the React Component to the Django form
     > Put <input type="hidden" name="component_json" id="component_json"> in the form.
     > In React, whenever state changes (or on submit), document.getElementById('component_json').value = JSON.stringify(state).
     > In the Django view: data = json.loads(request.POST['component_json']).
-- [ ] Abstract multi-select from Page section into its own component
+- [x] Abstract multi-select from Page section into its own component
+- [x] Create Topic Data Model and populate
+    - topic, description
+- [ ] Populate options based on DB entries
+
 ## Step 3: Create Transcript Tags section to Transcript page
 - [ ] Create Tagging Data Model
     - Long (transcript_id, chunk_id, topic, topic_present) is probably better than wide (column for each topic)
@@ -160,8 +163,7 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
     - transcript_id, chunk_id, chunk_text
 
 ## Step 4: Create ability to flow through UI spaces
-- [ ] Create Topic Data Model
-    - [] Pre-populate data based on andy's recommendation
+- [ ] Get Andy's recommendations on topics
 - [ ] Populate with dummy data
 - [ ] Have pages pull off SQLite rather than dummy data
 - [ ] Add shell of `tag_data` capability

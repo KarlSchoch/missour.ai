@@ -1,6 +1,6 @@
 from django.contrib import admin
 
 # Register your models here.
-from .models import Transcript
+from .models import Transcript, Topic
 
-admin.site.register(Transcript)
+admin.site.register([Transcript, Topic])
