@@ -3,14 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { getCsrfToken } from "./utils/csrf";
 import TopicSelector from "./topic-selector";
 
-function getInitialData() {
-    const el = document.getElementById('initial-payload');
-    return el ? JSON.parse(el.textContent) : {};
-}
-
 function App() {
-    const init = React.useMemo(getInitialData, []);
-    console.log(`init (outer): ${init}`)
     const [conductAnalysis, setConductAnalysis] = useState(false);
 
     return (
