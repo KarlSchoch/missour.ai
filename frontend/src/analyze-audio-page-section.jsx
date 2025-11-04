@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import ReactDOM from 'react-dom/client';
 import { getCsrfToken } from "./utils/csrf";
+import TopicSelector from "./topic-selector";
 
 function getInitialData() {
     const el = document.getElementById('initial-payload');
@@ -10,30 +11,30 @@ function getInitialData() {
 function App() {
     const init = React.useMemo(getInitialData, []);
     const [conductAnalysis, setConductAnalysis] = useState(false);
-    const [selected, setSelected] = useState(() => new Set([]))
-    const hiddenRef = useRef(null);
+    // const [selected, setSelected] = useState(() => new Set([]))
+    // const hiddenRef = useRef(null);
 
-    // Keep value of hiddenRef in line with the selected
-    useEffect(() => {
-        if (hiddenRef.current) {
-            hiddenRef.current.value = JSON.stringify(Array.from(selected));
-        }
-    })
+    // // Keep value of hiddenRef in line with the selected
+    // useEffect(() => {
+    //     if (hiddenRef.current) {
+    //         hiddenRef.current.value = JSON.stringify(Array.from(selected));
+    //     }
+    // })
 
 
-    // Replace with selections from DB
-    const options = [
-        {value: "Workforce Training", label: "Workforce Training"},
-        {value: "Information Technology", label: "Information Technology"},
-    ]
+    // // Replace with selections from DB
+    // const options = [
+    //     {value: "Workforce Training", label: "Workforce Training"},
+    //     {value: "Information Technology", label: "Information Technology"},
+    // ]
 
-    const toggleOption = (val) => {
-        setSelected(prev => {
-            const next = new Set(prev);
-            next.has(val) ? next.delete(val) : next.add(val);
-            return next;
-        })
-    }
+    // const toggleOption = (val) => {
+    //     setSelected(prev => {
+    //         const next = new Set(prev);
+    //         next.has(val) ? next.delete(val) : next.add(val);
+    //         return next;
+    //     })
+    // }
 
 
     return (
@@ -46,26 +47,25 @@ function App() {
                         checked={conductAnalysis}
                         onChange={(e) => {
                             setConductAnalysis(e.target.checked);
-                            setSelected(() => new Set([]));
                         }}
                     />
-                    <input ref={hiddenRef} type="hidden" name="topics" value="[]" />
+                    {/* <input ref={hiddenRef} type="hidden" name="topics" value="[]" /> */}
                 </label>
             </div>
-            <br />
+            <TopicSelector />
             <div
                 hidden={!conductAnalysis}
             >
                 <div
                     id="topic-selection"
                 >
-                    { selected.size === 0 ? (
+                    {/* { selected.size === 0 ? (
                         <span>No Topics Selected</span>
                     ) : (
                         `Selected Topics: ${Array.from(selected).join(', ')}`
-                    )}
+                    )} */}
                 </div>
-                <fieldset role="listbox">
+                {/* <fieldset role="listbox">
                     { options.map(opt => {
                         const checked = selected.has(opt.value);
                         return (
@@ -81,7 +81,7 @@ function App() {
                             </span>
                         )
                     })}
-                </fieldset>
+                </fieldset> */}
             </div>
         </div>
     )
