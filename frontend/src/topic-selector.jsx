@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 
-export default function TopicSelector(hidden) {
+export default function TopicSelector({ hidden }) {
 
     const [selected, setSelected] = useState(() => new Set([]))
     const hiddenRef = useRef(null);
@@ -11,10 +11,19 @@ export default function TopicSelector(hidden) {
         {value: "Information Technology", label: "Information Technology"},
     ]
 
+    // Clear out the selected array when user hides the list of options
+    useEffect(() => {
+        setSelected(() => new Set([]));
+    }, [hidden])
+
     // Keep value of hiddenRef in line with the selected
     useEffect(() => {
         if (hiddenRef.current) {
-            hiddenRef.current.value = JSON.stringify(Array.from(selected));
+            if (hidden) {
+                hiddenRef.current.value = JSON.stringify([]);
+            } else {
+                hiddenRef.current.value = JSON.stringify(Array.from(selected));
+            }
         }
     })
     
@@ -30,15 +39,9 @@ export default function TopicSelector(hidden) {
     return (
         <div 
             id="topic-selection"
-            hidden={!hidden}
+            hidden={hidden}
         >
-            { 
-                selected.size === 0 ? (
-                    <span>No Topics Selected</span>
-                ) : (
-                    <p>`Selected Topics: ${Array.from(selected).join(', ')}`</p>
-                )
-            }
+            <p>Select Topics</p>
             <input ref={hiddenRef} type="hidden" name="topics" value="[]" />
             <fieldset role="listbox">
                 { options.map(opt => {
