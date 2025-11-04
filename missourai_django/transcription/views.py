@@ -89,14 +89,14 @@ def dashboard(request):
 
 @login_required
 def analyze_audio_page_section(request):
-    payload = {
-        "apiUrls": {
-            "topics": "api/topics/",
-        }
-    }
+    # payload = {
+    #     "apiUrls": {
+    #         "topics": "api/topics/",
+    #     }
+    # }
 
     return render(
         request,
         "transcription/partials/analyze-audio-page-section.html",
-        {"initial_payload": payload}
+        # {"initial_payload": payload}
     )
