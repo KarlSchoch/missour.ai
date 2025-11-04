@@ -97,6 +97,6 @@ def analyze_audio_page_section(request):
 
     return render(
         request,
-        "transcription/partials/missourai_django/transcription/templates/transcription/partials/analyze-audio-page-section.html",
+        "transcription/partials/analyze-audio-page-section.html",
         {"initial_payload": payload}
     )
