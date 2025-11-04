@@ -1,7 +1,13 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+
+function getInitialData() {
+    const el = document.getElementById('initial-payload');
+    return el ? JSON.parse(el.textContent) : {};
+}
 
 export default function TopicSelector({ hidden }) {
-
+    const init = React.useMemo(getInitialData, []);
+    console.log(`init (inner): ${init}`)
     const [selected, setSelected] = useState(() => new Set([]))
     const hiddenRef = useRef(null);
 
