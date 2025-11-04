@@ -10,6 +10,7 @@ function getInitialData() {
 
 function App() {
     const init = React.useMemo(getInitialData, []);
+    console.log(`init (outer): ${init}`)
     const [conductAnalysis, setConductAnalysis] = useState(false);
 
     return (
