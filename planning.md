@@ -155,8 +155,8 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
 - [x] Create Topic Data Model and populate
     - topic, description
 - [x] Populate options based on DB entries
-    - Add query of DB to view and pass as initial_payload
-    - Pull in topics/options from the initial_payload element
+    - [x] Add query of DB to view and pass as initial_payload
+    - [x] Pull in topics/options from the initial_payload element
 - [] Document How to do a partial
 
 ## Step 3: Create module to associate tags with a records

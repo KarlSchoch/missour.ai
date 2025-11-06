@@ -1,11 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import ReactDOM from 'react-dom/client';
 import { getCsrfToken } from "./utils/csrf";
 import TopicSelector from "./topic-selector";
 
+function getInitialData() {
+    const el = document.getElementById("initial-payload");
+    return el ? JSON.parse(el.textContent) : {};
+}
+
 function App() {
     const [conductAnalysis, setConductAnalysis] = useState(false);
-
+    const init = useMemo(getInitialData, []);
+    console.log("init", init)
     return (
         <div>
             <label>
@@ -18,7 +24,7 @@ function App() {
                     }}
                 />
             </label>
-            <TopicSelector hidden={!conductAnalysis} />
+            <TopicSelector hidden={!conductAnalysis} options={init.topics ?? []}/>
         </div>
     )
 }
