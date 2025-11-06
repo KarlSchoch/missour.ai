@@ -19,7 +19,6 @@ export default function TopicSelector({ hidden, options = [] }) {
             }
         }
     })
-    
 
     const toggleOption = (val) => {
         setSelected(prev => {

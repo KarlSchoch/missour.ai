@@ -186,13 +186,42 @@ You can follow the instructions for creating the view from [Step 1](#step-1---sc
 Sometimes, you may need to integrate a react component within an existing Django page, and this section covers some of the key considerations for doing that 
 
 **General Pattern**
-1. Partial Template: Place the template for your partial witin `templates/transcription/partials`.  This template should be VERY mininimal and only include a div that your react component will populate and a reference to the `initial_payload`.  This is important because the react component will reach out to the initial component to get values.
-```html
-<div id="analyze-audio-page-section-root"></div>
-{{ initial_payload|json_script:"initial-payload"}}
-```
-2. Updating Parent Template: 
-3. 
+1. Partial Template: Place the template for your partial witin `templates/transcription/partials`.  This template should be VERY mininimal and only include a div that your react component will populate and a reference to the `initial_payload`.  This is important because the react component will reach out to the initial component to get values and provides the React component with a connection to the underlying database.
+   ```html
+   <div id="analyze-audio-page-section-root"></div>
+   {{ initial_payload|json_script:"initial-payload"}}
+   ```
+2. Register Tag: The `{% include 'transcription/partials/<your-partial>.html' %}` pattern that we are using to pull the partial into the parent page (covered later in the section) does not allow for context/data to be pulled into the partial due to the capabilities of `include`.  To deal with this, we registed `inclusion_tag`s that can pass in context.  Examples of this are contained within `missourai_django/transcription/templatetags/transcription_tags.py`, and the general concept is that this is one of the layers of connective tissue between your database and the react component. Ensure that the return value of that function follows the pattern below, as that will allow it to connect to the `{{ initial_payload|json_script:"initial-payload"}}` that you set in the previous step.
+   ```python
+   # Your logic to create a payload
+   return {'initial_payload': payload}
+   ```
+3. Updating Parent Template: Within the parent template, you will need to first create a `{% block %}` that your partial can integrate into, then call the template tag you registered in the previous step, and finally use `{% include %}` to point to your partial
+   ```html
+   <form method="POST" enctype="multipart/form-data">
+         {% csrf_token %}
+         {{ form.as_p }}
+         {% block analyze_audio_page_section %}
+               {% <template-tag-function> %}
+               {% include 'transcription/partials/your-partial-template.html' %}
+         {% endblock %}
+         <button type="submit">Upload</button>
+   </form>
+   ```
+4. Access Django Data from your React Component: To utilize the data that has been passed from your database through Django to the page within the `initial-payload` element as a JSON, use the pattern below where you define a function that selects the `inital-payload` element and parses the JSON present there and then call that function within the context of `useMemo` to ensure that it only populates once per mount.
+   ```javascript
+   function getInitialData() {
+      const el = document.getElementById("initial-payload");
+      return el ? JSON.parse(el.textContent) : {};
+   }
+
+   function YourComponent() {
+      const init = useMemo(getInitialData, []);
+   }
+
+   ```
+5. Pass Inputs from React Partial to Django: 
+> (Special Consideration) Passing Data from your Partial to a Form: Doing this consists of two components.  First, you need to provide the Django form data from your partial.  This is fairly simply achieved by ensuring that the `{% block %}` containing your partial is placed within the parent template's <form> tags!  Second, you need to access the data from the Django view where it is processed, which you can do but using `request.POST.get()` on the tag where  
 
 ## ML Environment
 To use the ML Experiments environment, do the following
