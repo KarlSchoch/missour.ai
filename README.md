@@ -183,7 +183,16 @@ You can follow the instructions for creating the view from [Step 1](#step-1---sc
 
 #### Notes
 ##### Partials
-Sometimes, you may need to integrate
+Sometimes, you may need to integrate a react component within an existing Django page, and this section covers some of the key considerations for doing that 
+
+**General Pattern**
+1. Partial Template: Place the template for your partial witin `templates/transcription/partials`.  This template should be VERY mininimal and only include a div that your react component will populate and a reference to the `initial_payload`.  This is important because the react component will reach out to the initial component to get values.
+```html
+<div id="analyze-audio-page-section-root"></div>
+{{ initial_payload|json_script:"initial-payload"}}
+```
+2. Updating Parent Template: 
+3. 
 
 ## ML Environment
 To use the ML Experiments environment, do the following

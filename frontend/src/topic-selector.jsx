@@ -1,21 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
-function getInitialData() {
-    const el = document.getElementById('initial-payload');
-    return el ? JSON.parse(el.textContent) : {};
-}
-
-export default function TopicSelector({ hidden }) {
-    const init = React.useMemo(getInitialData, []);
-    console.log(`init: ${init}`)
+export default function TopicSelector({ hidden, options = [] }) {
     const [selected, setSelected] = useState(() => new Set([]))
     const hiddenRef = useRef(null);
-
-    // TO DO: Replace with selections from DB
-    const options = [
-        {value: "Workforce Training", label: "Workforce Training"},
-        {value: "Information Technology", label: "Information Technology"},
-    ]
 
     // Clear out the selected array when user hides the list of options
     useEffect(() => {
