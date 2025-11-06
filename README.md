@@ -181,6 +181,10 @@ Given that all of the "management" tasks are handled within the parent file, the
 #### Step 4: Create Django view for React template
 You can follow the instructions for creating the view from [Step 1](#step-1---scaffold-the-django-view-and-template) of the process for creating an entirely React-based page.
 
+#### Notes
+##### Partials
+Sometimes, you may need to integrate
+
 ## ML Environment
 To use the ML Experiments environment, do the following
 1. Go into the `ml_env` directory.
