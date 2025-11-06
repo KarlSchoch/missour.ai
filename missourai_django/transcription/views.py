@@ -10,6 +10,7 @@ from .models import Transcript
 from .transcription_utils.transcription_manager import TranscriptionManager
 import os
 import logging
+import json
 import tempfile
 
 def process_audio(file_path:str) -> str:
@@ -43,6 +44,12 @@ def upload_audio(request):
         if form.is_valid():
             name = form.cleaned_data['name']
             audio_file = form.cleaned_data['audio_file']
+            # Extract Selected Topics
+            topics_raw = request.POST.get('topics', '[]')
+            try:
+                selected_topics = json.loads(topics_raw)
+            except json.JSONDecodeError:
+                selected_topics = []
 
             # Save audio file to a temporary location
             with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
@@ -89,14 +96,8 @@ def dashboard(request):
 
 @login_required
 def analyze_audio_page_section(request):
-    # payload = {
-    #     "apiUrls": {
-    #         "topics": "api/topics/",
-    #     }
-    # }
 
     return render(
         request,
         "transcription/partials/analyze-audio-page-section.html",
-        # {"initial_payload": payload}
     )

@@ -154,9 +154,13 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
 - [x] Abstract multi-select from Page section into its own component
 - [x] Create Topic Data Model and populate
     - topic, description
-- [ ] Populate options based on DB entries
+- [x] Populate options based on DB entries
     - Add query of DB to view and pass as initial_payload
     - Pull in topics/options from the initial_payload element
+- [] Document How to do a partial
+
+## Step 3: Create module to associate tags with a records
+
 
 ## Step 3: Create Transcript Tags section to Transcript page
 - [ ] Create Tagging Data Model
