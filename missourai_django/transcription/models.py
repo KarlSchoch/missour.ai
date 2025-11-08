@@ -9,3 +9,7 @@ class Transcript(models.Model):
 class Topic(models.Model):
     topic = models.CharField(max_length=100)
     description = models.CharField(max_length=255, default='', blank=True)
+
+class Chunk(models.model):
+    transcript = models.ForeignKey(Transcript, on_delete=models.CASCADE)
+    chunk_text = models.TextField(default='')
