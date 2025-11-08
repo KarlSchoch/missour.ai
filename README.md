@@ -35,7 +35,51 @@ The web application combines a Django backend that exposes APIs and serves the H
 **Production**
 - TBD - production build and deployment process for the web application is still being defined.
 
-### Data Models
+### Data Model/Schema
+```mermaid
+   classDiagram
+   class Transcript {
+      +id: AutoField (PK)
+      +name: CharField(255)
+      +transcript_text: TextField
+      +created_at: DateTime(auto_now_add)
+   }
+
+   class Topic {
+      +id: AutoField (PK)
+      +topic: CharField(100)
+      +description: CharField(255, blank=True, default="")
+   }
+
+   class Chunk {
+      +id: AutoField (PK)
+      +transcript_id: FK -> Transcript
+      +chunk_text: TextField
+      +topics: ManyToMany(Topic) through Tag
+   }
+
+   class Tag {
+      +id: AutoField (PK)
+      +chunk_id: FK -> Chunk
+      +topic_id: FK -> Topic
+      +topic_present: BooleanField
+      +relevant_section: TextField
+      +user_validation: BooleanField
+      <<UniqueConstraint("chunk","topic")>>
+   }
+
+   %% Core relationships
+   Transcript "1" --> "*" Chunk : has many
+   Chunk "*" --> "1" Transcript : FK
+
+   %% Join table connections
+   Tag "*" --> "1" Transcript : FK
+   Tag "*" --> "1" Chunk : FK
+   Tag "*" --> "1" Topic : FK
+
+   %% M2M facade (via through)
+   Chunk "*" -- "*" Topic : ManyToMany (through Tag)
+```
 
 ### Key Configurations
 
