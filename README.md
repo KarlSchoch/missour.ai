@@ -68,7 +68,7 @@ The web application combines a Django backend that exposes APIs and serves the H
       <<UniqueConstraint("chunk","topic")>>
    }
 
-   %% Core relationships
+   %% Core relationships   
    Transcript "1" --> "*" Chunk : has many
    Chunk "*" --> "1" Transcript : FK
 
