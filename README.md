@@ -220,8 +220,47 @@ Sometimes, you may need to integrate a react component within an existing Django
    }
 
    ```
-5. Pass Inputs from React Partial to Django: 
-> (Special Consideration) Passing Data from your Partial to a Form: Doing this consists of two components.  First, you need to provide the Django form data from your partial.  This is fairly simply achieved by ensuring that the `{% block %}` containing your partial is placed within the parent template's <form> tags!  Second, you need to access the data from the Django view where it is processed, which you can do but using `request.POST.get()` on the tag where  
+
+> *(Special Consideration)* **Passing Data from your Partial to a Form**
+> Occasionally, you will need to utilize data captured in your partial to Django via a form to enable some backend computation.  Doing this requires completing two steps: passing the data to your form and then accessing the form data within the view.  
+> To pass the data to your form (and thus to the backend), you need to place the `{% block %}` containing your partial within the parent template's <form> tags (i.e. `<form> {% block %} your content {% block %} </form>`).  This partial needs to contain an HTML element with the requisite form data since Django cannot access React's state.  You can achieve this by creating a hidden input tag using the code template below that contains the data from your React partial that you want to pass to the View for processing.
+>  ```javascript
+>  import React, { useRef, useEffect } from "react";
+>  export default function YourComponent() {
+>     // variable to hold data to pass to the <input> field
+>     const hiddenRef = useRef(null);
+>     // Ensure hiddenRef is populated by relevant data from Component
+>     useEffect(() => {
+>         if (hiddenRef.current) {
+>             if (hidden) {
+>                 hiddenRef.current.value = JSON.stringify([]);
+>             } else {
+>                 hiddenRef.current.value = JSON.stringify(Array.from(someVariable));
+>             }
+>         }
+>     })
+>     // More logic...
+>     // Within your HTML, create a hidden <input> element containing your hiddenRef
+>     return (
+>        <!-- HTML code -->
+>        <input ref={hiddenRef} type="hidden" name="someName" value="[]" />
+>        <!-- More HTML code -->
+>     )
+>  }
+>  ```
+> To access your your React partial's data within your **view** after submitting the form, you can use the template provided below to access 
+>  ```python
+>  # Some logic within your Django view...
+>  # Extract the stringified JSON data from your hidden <input element>
+>  variable_raw = request.POST.get('someName', '[]')
+>  try:
+>      variable_processed = json.loads(topics_raw)
+>  except json.JSONDecodeError:
+>      variable_processed = []
+>  # Some more logic using the data from your frontend!..
+>  ```
+
+Doing this consists of two components.  First, you need to provide the Django form data from your partial.  This is fairly simply achieved by ensuring that the `{% block %}` containing your partial is placed within the parent template's <form> tags!  Second, you need to access the data from the Django view where it is processed, which you can do but using `request.POST.get()` on the tag where  
 
 ## ML Environment
 To use the ML Experiments environment, do the following
