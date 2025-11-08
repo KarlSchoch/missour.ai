@@ -165,13 +165,12 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
         - [x] chunk_id <Primary Key> (automatically handled by Django ORM)
         - [x] transcript_id <Foreign Key>
         - [x] chunk_text
-    - [ ] Create Taggs Data Model
-        - transcript_id <Foreign Key>
-        - chunk_id <Primary Key>
-        - topic_id <Foreign Key>
-        - topic_present
-        - relevant_section
-        - user_validation: Boolean (input from user as to whether the topic is present in the chunk)
+    - [x] Create Taggs Data Model
+        - [x] chunk_id <Foreign Key> (automatically associates the transcript id)
+        - [X] topic_id <Foreign Key>
+        - [X] topic_present
+        - [X] relevant_section
+        - [X] user_validation: Boolean (input from user as to whether the topic is present in the chunk)
 - Populate data models with sample data
     - Create test SQLite DB
     - Add topics to SQLite topics table
