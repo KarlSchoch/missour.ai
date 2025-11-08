@@ -35,6 +35,8 @@ The web application combines a Django backend that exposes APIs and serves the H
 **Production**
 - TBD - production build and deployment process for the web application is still being defined.
 
+### Data Models
+
 ### Key Configurations
 
 - **Django owns the HTML shell.** Every UI page extends `missourai_django/transcription/templates/transcription/base.html` so that the global navigation, fonts, and `static/transcription/css/style.css` styling are always present.
