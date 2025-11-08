@@ -16,8 +16,8 @@ class Chunk(models.Model):
     topics = models.ManyToManyField(Topic, through="Tag", related_name="chunks")
 
 class Tag(models.Model):
-    transcript = models.ForeignKey(
-        Transcript,
+    topic = models.ForeignKey(
+        Topic,
         on_delete=models.CASCADE,
         related_name="tags"
     )
@@ -26,9 +26,9 @@ class Tag(models.Model):
         on_delete=models.CASCADE,
         related_name="tags"
     )
-    topic_present = models.BooleanField()
+    topic_present = models.BooleanField(default=False)
     relevant_section = models.TextField(default='')
-    user_validation = models.BooleanField()
+    user_validation = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
