@@ -260,8 +260,6 @@ Sometimes, you may need to integrate a react component within an existing Django
 >  # Some more logic using the data from your frontend!..
 >  ```
 
-Doing this consists of two components.  First, you need to provide the Django form data from your partial.  This is fairly simply achieved by ensuring that the `{% block %}` containing your partial is placed within the parent template's <form> tags!  Second, you need to access the data from the Django view where it is processed, which you can do but using `request.POST.get()` on the tag where  
-
 ## ML Environment
 To use the ML Experiments environment, do the following
 1. Go into the `ml_env` directory.
