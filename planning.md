@@ -157,24 +157,59 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
 - [x] Populate options based on DB entries
     - [x] Add query of DB to view and pass as initial_payload
     - [x] Pull in topics/options from the initial_payload element
-- [] Document How to do a partial
+- [x] Document How to do a partial
 
-## Step 3: Create module to associate tags with a records
+## Step 3: Create module(s) to associate tags with a records
+- Create Data Models
+    - [x] Create Chunk data model
+        - [x] chunk_id <Primary Key> (automatically handled by Django ORM)
+        - [x] transcript_id <Foreign Key>
+        - [x] chunk_text
+    - [ ] Create Taggs Data Model
+        - transcript_id <Foreign Key>
+        - chunk_id <Primary Key>
+        - topic_id <Foreign Key>
+        - topic_present
+        - relevant_section
+        - user_validation: Boolean (input from user as to whether the topic is present in the chunk)
+- Populate data models with sample data
+    - Create test SQLite DB
+    - Add topics to SQLite topics table
+        - Workforce Training
+        - Information Technology
+    - Add transcript to SQLite transcript table (use to test the Chunking module and the Tagging module's `tag_transcript()` method)
+        - Transcript needs to be ~ 1k words so that we produce two chunks
+        - Transcript needs to have first 500 words devoted to Workforce Training and the second 500 words related to Information Technology
+    - Add Chunk to 
+- Create the test infrastructure
+    - Create the empty SQLite database with the correct schemas
+    - Direct queries to this testing SQLite database
+    - Create the shell modules
+    - Create ability to "mock" calls to LLM when we are doing the tagging (probably exists within the **Tag** module's `tag_chunk()` method)
+    - `test_chunk.py`
+        - Populate SQLite with transcript
+    - `test_tag.py`
+        - Populate SQLite with single chunk
+- Create Modules
+    - Chunking Module (Input: Transcript/Transcript ID; Output: 1:M records in the **Chunk** table)
+    - Tagging Module 
+        - `tag_chunk` method (Input: Chunk/Chunk ID; Output: 1:M records in the **Chunk Tag** table)
+        - `tag_transcript` (Input: Transcript/Transcript ID; Output: 1:M records in the **Chunk** table AND 1:M records in the **Chunk Tag** table)
+- Utilize modules in the view
+    - Create a "dev" flag that allows you to bypass the various calls out 
+        - Generating transcript with `process_audio()` 
+        - Tagging the chunk with `tag_chunk()`
+
+## Step 4: Create Transcript Tags section to Transcript page
 
 
-## Step 3: Create Transcript Tags section to Transcript page
-- [ ] Create Tagging Data Model
-    - Long (transcript_id, chunk_id, topic, topic_present) is probably better than wide (column for each topic)
-- [ ] Create Chunk data model
-    - transcript_id, chunk_id, chunk_text
-
-## Step 4: Create ability to flow through UI spaces
+## Step 5: Create ability to flow through UI spaces
 - [ ] Get Andy's recommendations on topics
 - [ ] Populate with dummy data
 - [ ] Have pages pull off SQLite rather than dummy data
 - [ ] Add shell of `tag_data` capability
 
-# Step 4. Add in actual tagging code
+# Step 6. Add in actual tagging code
 
 
 # N. Allow user to tag a transcript rather than just an audio file
