@@ -49,8 +49,14 @@ class TaggingTests(TestCase):
         cls.chunk_wf = Chunk.objects.create(
             transcript = cls.transcript,
             chunk_text = WF_VOCAB,
-            topics = 
         )
+        # Tag.objects.create(
+        #     chunk=cls.chunk_wf, 
+        #     topic=cls.topic_wf,
+        #     topic_present = True,
+        #     relevant_section = WF_VOCAB[:50],
+        #     user_validation = False,
+        # )
 
     def test_chunk(self):
         # Validate that the chunks are actually in the database
@@ -64,7 +70,7 @@ class TaggingTests(TestCase):
         self.assertGreater(after, before)
         ## Validate that the correct number of records were created
         self.assertEqual(after, before + len(created_chunks))
-        ## Validate that the chunks are in the database
+        ## Validate that the specific chunks are in the database
         print("created_chunks")
         for chunk in created_chunks:
             print(chunk)
@@ -72,7 +78,48 @@ class TaggingTests(TestCase):
         #                         chunk__transcript=self.transcript)
         #                 .values_list("pk", flat=True))
         # self.assertSetEqual(db_pks, {t.pk for t in created_chunks})
+        ## Validate that the length of the text is ~500 words
 
     def test_tag_chunk(self):
-        # Validate that tags are actually created
+        before = Tag.objects.count()
         blah = TaggingManager(os.getenv('OPENAI_API_KEY'))
+        created_tags = blah.tag_chunk()
+        after = Tag.objects.count()
+        
+        # Validate that tags are actually created
+        self.assertGreater(after, before)
+        ## Validate that the correct number of records were created
+        self.assertEqual(after, before + len(created_tags))
+        ## Validate that the specific chunks are in the database
+        print("created_tags")
+        for tag in created_tags:
+            print(tag)
+
+    def test_tag_transcript(self):
+        # Count initial number of Tags and Chunks associated with the transcript
+        chunk_ct_initial = Chunk.objects.filter(transcript=self.transcript).count()
+        # related_chunk = Chunk.objects.filter(transcript__name="Dummy Transcript")[:1]
+        tag_ct_initial = Tag.objects.filter(chunk__transcript__name="Dummy Transcript").count()
+
+        # Run the transcription manager
+        blah = TaggingManager(os.getenv('OPENAI_API_KEY'))
+        created_records = blah.tag_transcript()
+        print("created_records")
+        for record in created_records:
+            print(record)
+
+        # Count final number of Tags and Chunks associated the transcript
+        chunk_ct_final = Chunk.objects.filter(transcript=self.transcript).count()
+        # related_chunks = Chunk.objects.filter(transcript__name="Dummy Transcript")
+        tag_ct_final = Tag.objects.filter(chunk__transcript__name="Dummy Transcript").count()
+
+        # Ensure tags and chunks are actually created
+        self.assertGreater(chunk_ct_initial, chunk_ct_final)
+        self.assertGreater(tag_ct_initial, tag_ct_final)
+
+        # Ensure the correct number of records are created
+        # TO DO: Understand how to filter created_recrods into tags and chunks
+        # self.assertEqual(chunk_ct_final, chunk_ct_initial + len(???))
+        # self.assertEqual(tag_ct_final, tag_ct_initial + len(???))
+
+        # Ensure the specific chunks and tags are in the database
