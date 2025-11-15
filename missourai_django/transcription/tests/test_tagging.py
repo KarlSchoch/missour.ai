@@ -69,7 +69,6 @@ class TaggingTests(TestCase):
         ## Validate that the correct number of records were created
         self.assertEqual(after, before + len(created_chunks))
         ## Validate that the specific chunks are in the database
-        print("created_chunks")
         db_pks = set(
             Chunk.objects.filter(transcript=self.transcript)\
                 .values_list("id", flat=True)
@@ -80,7 +79,12 @@ class TaggingTests(TestCase):
 
     def test_tag_chunk(self):
         before = Tag.objects.count()
-        blah = TaggingManager(os.getenv('OPENAI_API_KEY'))
+        blah = TaggingManager(
+            os.getenv('OPENAI_API_KEY'),
+            transcript = self.transcript,
+            topics = [self.topic_it, self.topic_wf]
+        )
+        created_chunks = blah.chunk()
         created_tags = blah.tag_chunk()
         after = Tag.objects.count()
         

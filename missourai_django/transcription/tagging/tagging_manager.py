@@ -1,44 +1,85 @@
 from openai import OpenAI
-from transcription.models import Transcript, Chunk
+from transcription.models import Transcript, Chunk, Topic, Tag
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from typing import List
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chat_models import init_chat_model
+from pydantic import BaseModel, Field
 
 class TaggingManager:
     """
     For an individual transcript, manages chunking and tagging
 
-    Allows for defining LLM clients and chunking methods
+    Allows for defining multiple elements of chunking and tagging approaches
     """
     def __init__(
             self, 
             api_key:str, 
             transcript:Transcript = None,
+            topics:list[Topic] = [],
             chunk_size:int = 500,
             chunk_overlap:int = 50,
+            tagging_model:str = 'gpt-4.1.-mini',
+            model_provider:str = 'openai'
         ):
         self.client = OpenAI(api_key=api_key)
+        self.model_provider = model_provider
+        self.tagging_model = tagging_model
         self.transcript = transcript
         self.chunker = RecursiveCharacterTextSplitter(
             chunk_size = chunk_size,
             chunk_overlap = chunk_overlap
         )
+        self.chunks = []
+        self.topics = topics
+        self.tagging_prompt = ChatPromptTemplate.from_template(
+            """
+            Determine whether the following passage contains a reference to the provided topic.
+            
+            If you are unsure, assume the passage covers the topic as false negatives are more impactful than false positives
+
+            Provide the properties mentioned in the 'Classification' function.
+
+            Topic:
+            {topic}
+            
+            Passage:
+            {passage}
+            """
+        )
 
     def chunk(self) -> List[Chunk]:
+        # Use chunker to create langchain "docs"
         self.docs = self.chunker.create_documents([self.transcript.transcript_text])
 
-        chunks = []
-
+        # Save the chunks to the db and the TaggingManager class
         for doc in self.docs:
             chunk_obj = Chunk(
                 transcript = self.transcript,
                 chunk_text = doc.page_content,
             )
             chunk_obj.save()
-            chunks.append(chunk_obj)
+            self.chunks.append(chunk_obj)
 
-        return chunks
+        return self.chunks
     
-    def tag_chunk(self):
+    def tag_chunk(self, chunk:Chunk = None, topic:Topic = None) -> List[Tag]:
+        # Set up LLM to enable tagging
+        class Classification(BaseModel):
+            tag:bool = Field(description="whether the topic is covered in the passage")
+            relevant_section:str = Field(
+                description="if you tagged the passage as containing the topic, extract the portion of the passage that led you to this conclusion"
+            )
+        llm = init_chat_model(
+            self.tagging_model,
+            model_provider=self.model_provider
+        )
+        llm = llm.with_structured_output(Classification)
+
+        # iterate through each tag and topic
+        for topic in self.topics:
+            print(f"* topic: {topic}")
+        
         return ""
     
     def tag_transcript(self):
