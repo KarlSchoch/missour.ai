@@ -188,8 +188,12 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
             - `tag_chunk` method (Input: Chunk/Chunk ID; Output: 1:M records in the **Chunk Tag** table)
             - `tag_transcript` (Input: Transcript/Transcript ID; Output: 1:M records in the **Chunk** table AND 1:M records in the **Chunk Tag** table)
     - [ ] Create ability to "mock" calls to LLM when we are doing the tagging (probably exists within the **Tag** module's `tag_chunk()` method)
-- [ ] Create failing tests
-    - [ ] test_chunk
+- [x] Create failing tests
+    - [x] test_chunk
+    - [x] test_tag_chunk
+    - [x] test_tag_transcript
+- [ ] Implement modules to pass tests
+    - [x] test_chunk
     - [ ] test_tag_chunk
     - [ ] test_tag_transcript
 
