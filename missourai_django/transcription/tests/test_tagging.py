@@ -61,10 +61,8 @@ class TaggingTests(TestCase):
     def test_chunk(self):
         # Validate that the chunks are actually in the database
         before = Chunk.objects.count()
-        blah = TaggingManager(os.getenv('OPENAI_API_KEY'))
-        created_chunks = blah.chunk(
-            transcript = self.transcript
-        )
+        blah = TaggingManager(os.getenv('OPENAI_API_KEY'), self.transcript)
+        created_chunks = blah.chunk()
         after = Chunk.objects.count()
         ## Validate that some records were created
         self.assertGreater(after, before)
@@ -72,13 +70,13 @@ class TaggingTests(TestCase):
         self.assertEqual(after, before + len(created_chunks))
         ## Validate that the specific chunks are in the database
         print("created_chunks")
-        for chunk in created_chunks:
-            print(chunk)
-        # db_pks = set(Tag.objects.filter(topic=self.topic_gamma,
-        #                         chunk__transcript=self.transcript)
-        #                 .values_list("pk", flat=True))
-        # self.assertSetEqual(db_pks, {t.pk for t in created_chunks})
-        ## Validate that the length of the text is ~500 words
+        db_pks = set(
+            Chunk.objects.filter(transcript=self.transcript)\
+                .values_list("id", flat=True)
+        )
+        self.assertTrue(
+            {c.pk for c in created_chunks}.issubset(db_pks)
+        )
 
     def test_tag_chunk(self):
         before = Tag.objects.count()

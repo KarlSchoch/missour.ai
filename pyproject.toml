@@ -15,6 +15,7 @@ djangorestframework = "^3.16.1"
 django-cors-headers = "^4.7.0"
 whitenoise = "^6.9.0"
 dotenv = "^0.9.9"
+langchain = "^1.0.7"
 
 
 [build-system]
