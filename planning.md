@@ -196,6 +196,7 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
     - [x] test_chunk
     - [ ] test_tag_chunk
     - [ ] test_tag_transcript
+- [ ] Add in logging to module and provide method for integrating logging into the webapp
 
 - Utilize modules in the view
     - Create a "dev" flag that allows you to bypass the various calls out 
