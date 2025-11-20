@@ -99,7 +99,7 @@ class TaggingManager:
 
             # result is langchain_core.messages.base.BaseMessage
             result = llm.invoke(prompt)
-            assert isinstance(result, BaseMessage)
+            assert isinstance(result, Classification)
             assert hasattr(result, "tag")
             assert hasattr(result, "relevant_section")
 
