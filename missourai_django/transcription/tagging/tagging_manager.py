@@ -7,6 +7,12 @@ from langchain_core.messages.base import BaseMessage
 from langchain.chat_models import init_chat_model
 from pydantic import BaseModel, Field
 
+class Classification(BaseModel):
+    tag:bool = Field(description="whether the topic is covered in the passage")
+    relevant_section:str = Field(
+        description="if you tagged the passage as containing the topic, extract the portion of the passage that led you to this conclusion"
+    )
+
 class TaggingManager:
     """
     For an individual transcript, manages chunking and tagging
@@ -57,12 +63,7 @@ class TaggingManager:
         if not topics:
             topics = self.topics
 
-        # Set up LLM to enable tagging
-        class Classification(BaseModel):
-            tag:bool = Field(description="whether the topic is covered in the passage")
-            relevant_section:str = Field(
-                description="if you tagged the passage as containing the topic, extract the portion of the passage that led you to this conclusion"
-            )
+        # Set up LLM to enable tagging        
         # llm is langchain_core.language_models.chat_models.BaseChatModel
         llm = init_chat_model(
             self.tagging_model,
@@ -73,8 +74,6 @@ class TaggingManager:
 
         # iterate through each tag and topic
         for topic in topics:
-            print(f"* topic: {topic}")
-
             # tagging_prompt is ChatPromptTemplate class
             tagging_prompt = ChatPromptTemplate.from_template(
                 """
@@ -105,7 +104,7 @@ class TaggingManager:
 
             # Create the Tag object
             tag_obj = Tag(
-                topic = self.transcript,
+                topic = topic,
                 chunk = chunk,
                 topic_present = result.tag,
                 relevant_section = result.relevant_section
