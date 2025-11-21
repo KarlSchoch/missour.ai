@@ -1,7 +1,8 @@
 import os
 from django.test import TestCase
 from transcription.models import Transcript, Chunk, Topic, Tag
-from transcription.tagging.tagging_manager import TaggingManager
+from transcription.tagging.tagging_manager import TaggingManager, Classification
+from unittest.mock import patch
 
 IT_VOCAB = """
 cloud computing microservices kubernetes containers orchestration devops ci cd
@@ -29,6 +30,21 @@ digital literacy inclusion accessibility universal design adult learning
 andragogy evaluation kirkpatrick outcomes placement employability internship
 apprentice stipend scholarship outreach recruitment retention scalability
 """
+
+class FakeLLM:
+    def __init__(self, scripted_results):
+        self.scripted_results = scripted_results
+        self.invocations = []
+
+    def with_structured_output(self, _schema):
+        return self
+    
+    def invoke(self, prompt):
+        self.invocations.append(prompt)
+        try:
+            return self.scripted_results.pop(0)
+        except IndexError:
+            raise AssertionError("FakeLLm ran out of scripted responses")
 
 # Create your tests here.
 class TaggingTests(TestCase):
@@ -77,7 +93,15 @@ class TaggingTests(TestCase):
             {c.pk for c in created_chunks}.issubset(db_pks)
         )
 
-    def test_tag_chunk(self):
+    @patch("transcription.tagging.tagging_manager.init_chat_model")
+    def test_tag_chunk(self, mock_init):
+        # Define mock used by init_chat_model
+        fake_responses = [
+            Classification(tag=True, relevant_section="cloud computing microservices kubernetes"),
+            Classification(tag=False, relevant_section="")
+        ]
+        mock_init.return_value = FakeLLM(fake_responses)
+
         before = Tag.objects.count()
         blah = TaggingManager(
             os.getenv('OPENAI_API_KEY'),
@@ -85,17 +109,22 @@ class TaggingTests(TestCase):
             topics = [self.topic_it, self.topic_wf]
         )
         created_chunks = blah.chunk()
-        created_tags = blah.tag_chunk()
+        tgt_chunk = created_chunks[0]
+        created_tags = blah.tag_chunk(tgt_chunk)
         after = Tag.objects.count()
         
         # Validate that tags are actually created
         self.assertGreater(after, before)
         ## Validate that the correct number of records were created
         self.assertEqual(after, before + len(created_tags))
-        ## Validate that the specific chunks are in the database
-        print("created_tags")
-        for tag in created_tags:
-            print(tag)
+        ## Validate that the specific tags are in the database
+        db_pks = set(
+            Tag.objects.filter(chunk=tgt_chunk)\
+                .values_list("id", flat=True)
+        )
+        self.assertTrue(
+            {c.pk for c in created_tags}.issubset(db_pks)
+        )
 
     def test_tag_transcript(self):
         # Count initial number of Tags and Chunks associated with the transcript
