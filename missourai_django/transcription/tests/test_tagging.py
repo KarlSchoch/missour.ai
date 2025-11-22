@@ -133,11 +133,12 @@ class TaggingTests(TestCase):
         tag_ct_initial = Tag.objects.filter(chunk__transcript__name="Dummy Transcript").count()
 
         # Run the transcription manager
-        blah = TaggingManager(os.getenv('OPENAI_API_KEY'))
+        blah = TaggingManager(
+            os.getenv('OPENAI_API_KEY'),
+            transcript = self.transcript,
+            topics = [self.topic_it, self.topic_wf]
+        )
         created_records = blah.tag_transcript()
-        print("created_records")
-        for record in created_records:
-            print(record)
 
         # Count final number of Tags and Chunks associated the transcript
         chunk_ct_final = Chunk.objects.filter(transcript=self.transcript).count()
@@ -145,8 +146,8 @@ class TaggingTests(TestCase):
         tag_ct_final = Tag.objects.filter(chunk__transcript__name="Dummy Transcript").count()
 
         # Ensure tags and chunks are actually created
-        self.assertGreater(chunk_ct_initial, chunk_ct_final)
-        self.assertGreater(tag_ct_initial, tag_ct_final)
+        self.assertGreater(chunk_ct_final, chunk_ct_initial)
+        self.assertGreater(tag_ct_final, tag_ct_initial)
 
         # Ensure the correct number of records are created
         # TO DO: Understand how to filter created_recrods into tags and chunks
