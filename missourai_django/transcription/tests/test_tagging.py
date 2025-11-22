@@ -48,6 +48,23 @@ class FakeLLM:
 
 # Create your tests here.
 class TaggingTests(TestCase):
+    def setUp(self):
+        # Call TestCase's setUp() 
+        super().setUp()
+
+        # Create responses
+        fake_responses = [
+            'blah' for i in range(len(IT_VOCAB + WF_VOCAB)/450)
+        ]
+
+        fake_responses = [
+            Classification(tag=True, relevant_section=IT_VOCAB[:]),
+            Classification(tag=False, relevant_section="")
+        ]
+
+
+        return 
+
     @classmethod
     def setUpTestData(cls):
         cls.transcript = Transcript.objects.create(
