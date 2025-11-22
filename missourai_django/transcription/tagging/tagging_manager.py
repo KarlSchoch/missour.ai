@@ -22,11 +22,11 @@ class TaggingManager:
     def __init__(
             self, 
             api_key:str, 
-            transcript:Transcript = None,
+            transcript:Transcript,
             topics:list[Topic] = [],
             chunk_size:int = 500,
             chunk_overlap:int = 50,
-            tagging_model:str = 'gpt-4.1.-mini',
+            tagging_model:str = 'gpt-4.1-mini',
             model_provider:str = 'openai'
         ):
         self.client = OpenAI(api_key=api_key)
@@ -114,9 +114,21 @@ class TaggingManager:
 
         return self.tags
     
-    def tag_transcript(self):
+    def tag_transcript(self, topics:List[Topic] = None) -> List[Tag]:
         """
         Wraps the other functions to chunk then tag a full transcript
         """
-        return ""
+        # Data Validation
+        ## If there are no topics, fall back onto self.topics
+        if not topics:
+            topics = self.topics
+
+        # Chunk the transcript provided when initialized
+        self.chunk()
+        
+        # Iterate over each chunk, calling the tag_chunk() method
+        for chunk in self.chunks:
+            self.tag_chunk(chunk, topics)
+
+        return self.tags
     
