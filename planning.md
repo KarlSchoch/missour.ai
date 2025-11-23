@@ -179,7 +179,7 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
     - [x] Add transcript to SQLite transcript table (use to test the Chunking module and the Tagging module's `tag_transcript()` method)
         - Transcript needs to be ~ 1k words so that we produce two chunks
         - Transcript needs to have first 500 words devoted to Workforce Training and the second 500 words related to Information Technology
-- [ ] Create the test infrastructure
+- [x] Create the test infrastructure
     - [x] Create the empty SQLite database with the correct schemas: OBE due to Django's testing infrastructure
     - [x] Direct queries within the test to this testing SQLite database: OBE due to Django's testing infrastructure
     - [x] Create the shell Tagging Manager
@@ -187,7 +187,7 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
         - Tagging Module 
             - `tag_chunk` method (Input: Chunk/Chunk ID; Output: 1:M records in the **Chunk Tag** table)
             - `tag_transcript` (Input: Transcript/Transcript ID; Output: 1:M records in the **Chunk** table AND 1:M records in the **Chunk Tag** table)
-    - [ ] Create ability to "mock" calls to LLM when we are doing the tagging (probably exists within the **Tag** module's `tag_chunk()` method)
+    - [x] Create ability to "mock" calls to LLM when we are doing the tagging (probably exists within the **Tag** module's `tag_chunk()` method)
 - [x] Create failing tests
     - [x] test_chunk
     - [x] test_tag_chunk
@@ -203,7 +203,7 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
         - Generating transcript with `process_audio()` 
         - Tagging the chunk with `tag_chunk()`
 
-## Step 4: Create Transcript Tags section to Transcript page
+## Step 4: Create Transcript Tags section within Transcript page
 
 
 ## Step 5: Create ability to flow through UI spaces
