@@ -170,8 +170,12 @@ class TaggingTests(TestCase):
         self.assertGreater(tag_ct_final, tag_ct_initial)
 
         # Ensure the correct number of records are created
-        # TO DO: Understand how to filter created_recrods into tags and chunks
-        # self.assertEqual(chunk_ct_final, chunk_ct_initial + len(???))
-        # self.assertEqual(tag_ct_final, tag_ct_initial + len(???))
-
-        # Ensure the specific chunks and tags are in the database
+        # Tags: 8 (4 for Information Technology, 4 for Workforce Training)
+        wf_tng_tags = Tag.objects.filter(
+            chunk__transcript__name="Dummy Transcript", topic__topic="Workforce Training"
+        )
+        self.assertEqual(4, len(wf_tng_tags))
+        it_tags = Tag.objects.filter(
+            chunk__transcript__name="Dummy Transcript", topic__topic="Information Technology"
+        )
+        self.assertEqual(4, len(it_tags))
