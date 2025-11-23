@@ -52,18 +52,26 @@ class TaggingTests(TestCase):
         # Call TestCase's setUp() 
         super().setUp()
 
-        # Create responses
+        # Create fakeLLM with 8 fake responses
         fake_responses = [
-            'blah' for i in range(len(IT_VOCAB + WF_VOCAB)/450)
+            Classification(tag=True, relevant_section=IT_VOCAB[:25]),
+            Classification(tag=False, relevant_section=""),
+            Classification(tag=True, relevant_section=IT_VOCAB[len(IT_VOCAB) - 25:]),
+            Classification(tag=False, relevant_section=""),
+            Classification(tag=False, relevant_section=""),
+            Classification(tag=True, relevant_section=WF_VOCAB[:25]),
+            Classification(tag=False, relevant_section=""),
+            Classification(tag=True, relevant_section=WF_VOCAB[len(WF_VOCAB) - 25:]),
         ]
+        self.fake_llm = FakeLLM(fake_responses)
 
-        fake_responses = [
-            Classification(tag=True, relevant_section=IT_VOCAB[:]),
-            Classification(tag=False, relevant_section="")
-        ]
-
-
-        return 
+        # Assocate LLM to patch
+        patcher = patch(
+            "transcription.tagging.tagging_manager.init_chat_model",
+            return_value=self.fake_llm
+        )
+        self.addCleanup(patcher.stop)
+        self.mock_init = patcher.start()
 
     @classmethod
     def setUpTestData(cls):
@@ -83,13 +91,6 @@ class TaggingTests(TestCase):
             transcript = cls.transcript,
             chunk_text = WF_VOCAB,
         )
-        # Tag.objects.create(
-        #     chunk=cls.chunk_wf, 
-        #     topic=cls.topic_wf,
-        #     topic_present = True,
-        #     relevant_section = WF_VOCAB[:50],
-        #     user_validation = False,
-        # )
 
     def test_chunk(self):
         # Validate that the chunks are actually in the database
@@ -110,14 +111,12 @@ class TaggingTests(TestCase):
             {c.pk for c in created_chunks}.issubset(db_pks)
         )
 
-    @patch("transcription.tagging.tagging_manager.init_chat_model")
-    def test_tag_chunk(self, mock_init):
+    def test_tag_chunk(self):
         # Define mock used by init_chat_model
         fake_responses = [
             Classification(tag=True, relevant_section="cloud computing microservices kubernetes"),
             Classification(tag=False, relevant_section="")
         ]
-        mock_init.return_value = FakeLLM(fake_responses)
 
         before = Tag.objects.count()
         blah = TaggingManager(
@@ -128,6 +127,8 @@ class TaggingTests(TestCase):
         created_chunks = blah.chunk()
         tgt_chunk = created_chunks[0]
         created_tags = blah.tag_chunk(tgt_chunk)
+        # Validated that you did not reach out to the API
+        self.mock_init.assert_called()
         after = Tag.objects.count()
         
         # Validate that tags are actually created
@@ -156,6 +157,8 @@ class TaggingTests(TestCase):
             topics = [self.topic_it, self.topic_wf]
         )
         created_records = blah.tag_transcript()
+        # Validated that you did not reach out to the API
+        self.mock_init.assert_called()
 
         # Count final number of Tags and Chunks associated the transcript
         chunk_ct_final = Chunk.objects.filter(transcript=self.transcript).count()
