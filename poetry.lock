@@ -550,6 +550,20 @@ tenacity = ">=8.1.0,<8.4.0 || >8.4.0,<10.0.0"
 typing-extensions = ">=4.7.0,<5.0.0"
 
 [[package]]
+name = "langchain-text-splitters"
+version = "1.0.0"
+description = "LangChain text splitting utilities"
+optional = false
+python-versions = "<4.0.0,>=3.10.0"
+files = [
+    {file = "langchain_text_splitters-1.0.0-py3-none-any.whl", hash = "sha256:f00c8219d3468f2c5bd951b708b6a7dd9bc3c62d0cfb83124c377f7170f33b2e"},
+    {file = "langchain_text_splitters-1.0.0.tar.gz", hash = "sha256:d8580a20ad7ed10b432feb273e5758b2cc0902d094919629cec0e1ad691a6744"},
+]
+
+[package.dependencies]
+langchain-core = ">=1.0.0,<2.0.0"
+
+[[package]]
 name = "langgraph"
 version = "1.0.3"
 description = "Building stateful, multi-actor applications with LLMs"
@@ -1506,4 +1520,4 @@ cffi = ["cffi (>=1.17,<2.0)", "cffi (>=2.0.0b)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4.0"
-content-hash = "004aab9c3b986e064c314d8d7c7f0f221a1f742208b57200baee5f1f509e0790"
+content-hash = "bfa308c8d96751924791477101f7e9872d89281e8e6ea4241d34b1085ef6a306"
