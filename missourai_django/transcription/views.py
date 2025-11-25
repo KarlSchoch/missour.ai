@@ -60,18 +60,19 @@ def upload_audio(request):
                 tmp_file_path = tmp_file.name
 
             # Check for the model_env
-            if os.getenv("MODEL_ENV") == "dev":
-                print("MODEL_ENV is DEV.  Bypassing external API calls")
-                print("selected_topics", selected_topics)
-                return redirect('transcription:transcripts')
-            elif os.getenv("MODEL_ENV") in ["test", "prod"]:
-                print("MODEL_ENV is TEST/PROD.  Making external API calls")
-                return redirect('transcription:transcripts')
-            else:
-                print("Enter valid value for MODEL_ENV: DEV, TEST, or PROD.")
-                print(f"Current value: {os.getenv('MODEL_ENV')}")
-                return redirect('transcription:transcripts')
+            # if os.getenv("MODEL_ENV") == "dev":
+            #     print("MODEL_ENV is DEV.  Bypassing external API calls")
+            #     print("selected_topics", selected_topics)
+            #     return redirect('transcription:transcripts')
+            # elif os.getenv("MODEL_ENV") in ["test", "prod"]:
+            #     print("MODEL_ENV is TEST/PROD.  Making external API calls")
+            #     return redirect('transcription:transcripts')
+            # else:
+            #     print("Enter valid value for MODEL_ENV: DEV, TEST, or PROD.")
+            #     print(f"Current value: {os.getenv('MODEL_ENV')}")
+            #     return redirect('transcription:transcripts')
 
+            
             # Generate transcript
             transcript_text = process_audio(tmp_file_path)
 
@@ -82,11 +83,11 @@ def upload_audio(request):
             )
             transcript_obj.save()
 
-            TaggingManager(
-                api_key = os.getenv('OPENAI_API_KEY'),
-                transcript=transcript_obj,
-                topics = selected_topics
-            )
+            # TaggingManager(
+            #     api_key = os.getenv('OPENAI_API_KEY'),
+            #     transcript=transcript_obj,
+            #     topics = selected_topics
+            # )
 
             # Remove the temporary file
             os.remove(tmp_file_path)
