@@ -16,6 +16,7 @@ django-cors-headers = "^4.7.0"
 whitenoise = "^6.9.0"
 dotenv = "^0.9.9"
 langchain = "^1.0.7"
+langchain-text-splitters = "^1.0.0"
 
 
 [build-system]
