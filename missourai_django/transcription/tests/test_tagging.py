@@ -3,6 +3,7 @@ from django.test import TestCase
 from transcription.models import Transcript, Chunk, Topic, Tag
 from transcription.tagging.tagging_manager import TaggingManager, Classification
 from unittest.mock import patch
+from test_utils import FakeLLM
 
 IT_VOCAB = """
 cloud computing microservices kubernetes containers orchestration devops ci cd
@@ -30,21 +31,6 @@ digital literacy inclusion accessibility universal design adult learning
 andragogy evaluation kirkpatrick outcomes placement employability internship
 apprentice stipend scholarship outreach recruitment retention scalability
 """
-
-class FakeLLM:
-    def __init__(self, scripted_results):
-        self.scripted_results = scripted_results
-        self.invocations = []
-
-    def with_structured_output(self, _schema):
-        return self
-    
-    def invoke(self, prompt):
-        self.invocations.append(prompt)
-        try:
-            return self.scripted_results.pop(0)
-        except IndexError:
-            raise AssertionError("FakeLLm ran out of scripted responses")
 
 # Create your tests here.
 class TaggingTests(TestCase):

@@ -2,10 +2,12 @@ from openai import OpenAI
 from transcription.models import Transcript, Chunk, Topic, Tag
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from typing import List
+import os
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages.base import BaseMessage
 from langchain.chat_models import init_chat_model
 from pydantic import BaseModel, Field
+from ..tests.test_utils import FakeLLM
 
 class Classification(BaseModel):
     tag:bool = Field(description="whether the topic is covered in the passage")
@@ -63,14 +65,32 @@ class TaggingManager:
         if not topics:
             topics = self.topics
 
-        # Set up LLM to enable tagging        
-        # llm is langchain_core.language_models.chat_models.BaseChatModel
-        llm = init_chat_model(
-            self.tagging_model,
-            model_provider=self.model_provider
-        )
-        # llm is now langchain_core.runnables.base.Runnable
-        llm = llm.with_structured_output(Classification)
+        # Set up LLM to enable tagging
+        fake_responses = [
+            Classification(tag=True, relevant_section="Some random text"),
+            Classification(tag=False, relevant_section="Some random text"),
+            Classification(tag=True, relevant_section="Some random text"),
+            Classification(tag=False, relevant_section="Some random text"),
+            Classification(tag=True, relevant_section="Some random text"),
+            Classification(tag=False, relevant_section="Some random text"),
+            Classification(tag=True, relevant_section="Some random text"),
+            Classification(tag=False, relevant_section="Some random text"),
+            Classification(tag=True, relevant_section="Some random text"),
+        ]
+        if os.getenv("MODEL_ENV") == "dev":
+            print("MODEL_ENV is DEV.  Instantiating FakeLLM")
+            llm = FakeLLM(fake_responses)
+        elif os.getenv("MODEL_ENV") in ["test", "prod"]:
+            llm = init_chat_model(
+                self.tagging_model,
+                model_provider=self.model_provider
+            )
+            llm = llm.with_structured_output(Classification)
+        else:
+            print("Enter valid value for MODEL_ENV: DEV, TEST, or PROD.")
+            print(f"Current value: {os.getenv('MODEL_ENV')}")
+            print("Instantiating FakeLLM")
+            llm = FakeLLM(fake_responses)
 
         # iterate through each tag and topic
         for topic in topics:
