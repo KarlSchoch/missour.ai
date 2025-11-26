@@ -6,7 +6,7 @@ from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from .forms import TranscriptForm
-from .models import Transcript
+from .models import Transcript, Topic
 from .transcription_utils.transcription_manager import TranscriptionManager
 from .tagging.tagging_manager import TaggingManager
 
@@ -75,6 +75,7 @@ def upload_audio(request):
             
             # Generate transcript
             transcript_text = process_audio(tmp_file_path)
+            print("transcript_text", transcript_text)
 
             # Save the transcript text
             transcript_obj = Transcript(
@@ -83,14 +84,27 @@ def upload_audio(request):
             )
             transcript_obj.save()
 
-            # TaggingManager(
-            #     api_key = os.getenv('OPENAI_API_KEY'),
-            #     transcript=transcript_obj,
-            #     topics = selected_topics
-            # )
-
             # Remove the temporary file
             os.remove(tmp_file_path)
+            
+            # Translate selected_topics into Topic objects
+            selected_topics = [
+                Topic(topic = x) for x in selected_topics
+            ]
+
+            # Tag the transcript based on selected topics
+            tagging_manager = TaggingManager(
+                api_key = os.getenv('OPENAI_API_KEY'),
+                transcript=transcript_obj,
+                topics = selected_topics
+            )
+            chunks = tagging_manager.chunk()
+            print("Chunks created by tagging_manager.chunk()")
+            print(chunks)
+            tags = tagging_manager.tag_chunk(chunks[0])
+            print("Tags created by tagging_manager.tag_chunk()")
+            print(tags)
+
 
             # Redirect to transcripts page
             return redirect('transcription:transcripts')
