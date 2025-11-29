@@ -202,9 +202,10 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
         - Ensure that chunks get created
         - Ensure that tags are creation for each chunk/topic combination
             - i.e. if there are n chunks, ensure there are a total of 2n tags (n for IT, n for workforce training)
-    - Create a "dev" flag that allows you to bypass the various calls out ("testing" flag will be for when Andy is using it)
-        - Generating transcript with `process_audio()` 
-        - Tagging the chunk with `tag_chunk()`
+    - [ ] Create a "dev" flag that allows you to bypass the various calls out ("testing" flag will be for when Andy is using it)
+        - [x] Generating transcript with `process_audio()` 
+        - [x] Tagging the chunk with `tag_chunk()`
+        - [ ] Update documentation around the model flag
 
 ## Step 4: Create Transcript Tags section within Transcript page
 

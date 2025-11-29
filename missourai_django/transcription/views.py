@@ -58,20 +58,6 @@ def upload_audio(request):
                 for chunk in audio_file.chunks():
                     tmp_file.write(chunk)
                 tmp_file_path = tmp_file.name
-
-            # Check for the model_env
-            # if os.getenv("MODEL_ENV") == "dev":
-            #     print("MODEL_ENV is DEV.  Bypassing external API calls")
-            #     print("selected_topics", selected_topics)
-            #     return redirect('transcription:transcripts')
-            # elif os.getenv("MODEL_ENV") in ["test", "prod"]:
-            #     print("MODEL_ENV is TEST/PROD.  Making external API calls")
-            #     return redirect('transcription:transcripts')
-            # else:
-            #     print("Enter valid value for MODEL_ENV: DEV, TEST, or PROD.")
-            #     print(f"Current value: {os.getenv('MODEL_ENV')}")
-            #     return redirect('transcription:transcripts')
-
             
             # Generate transcript
             transcript_text = process_audio(tmp_file_path)
@@ -88,9 +74,14 @@ def upload_audio(request):
             os.remove(tmp_file_path)
             
             # Translate selected_topics into Topic objects
-            selected_topics = [
-                Topic(topic = x) for x in selected_topics
-            ]
+            selected_topics_ct = len(selected_topics)
+            selected_topics = list(
+                Topic.objects.filter(topic__in=selected_topics)
+            )
+            assert len(selected_topics) == selected_topics_ct
+            assert isinstance(selected_topics, list)
+            for topic in selected_topics:
+                assert isinstance(topic, Topic)
 
             # Tag the transcript based on selected topics
             tagging_manager = TaggingManager(
@@ -98,13 +89,7 @@ def upload_audio(request):
                 transcript=transcript_obj,
                 topics = selected_topics
             )
-            chunks = tagging_manager.chunk()
-            print("Chunks created by tagging_manager.chunk()")
-            print(chunks)
-            tags = tagging_manager.tag_chunk(chunks[0])
-            print("Tags created by tagging_manager.tag_chunk()")
-            print(tags)
-
+            tags = tagging_manager.tag_transcript()
 
             # Redirect to transcripts page
             return redirect('transcription:transcripts')
