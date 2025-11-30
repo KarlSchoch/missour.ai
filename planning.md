@@ -197,27 +197,25 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
     - [x] test_tag_chunk
     - [x] test_tag_transcript
 - Utilize modules in the view
-    - Validate that the functionality works when calling out to the API
+    - [x] Validate that the functionality works when calling out to the API
         - Run a transcript through the UI
         - Ensure that chunks get created
         - Ensure that tags are creation for each chunk/topic combination
             - i.e. if there are n chunks, ensure there are a total of 2n tags (n for IT, n for workforce training)
-    - [ ] Create a "dev" flag that allows you to bypass the various calls out ("testing" flag will be for when Andy is using it)
+    - [x] Create a "dev" flag that allows you to bypass the various calls out ("testing" flag will be for when Andy is using it)
         - [x] Generating transcript with `process_audio()` 
         - [x] Tagging the chunk with `tag_chunk()`
-        - [ ] Update documentation around the model flag
+        - [x] Update documentation around the model flag
 
-## Step 4: Create Transcript Tags section within Transcript page
+## Step 4: Add in actual tagging code
 
 
-## Step 5: Create ability to flow through UI spaces
+## Step 5: Create Transcript Tags section within Transcript page
+Create ability to flow through UI spaces
 - [ ] Get Andy's recommendations on topics
 - [ ] Populate with dummy data
 - [ ] Have pages pull off SQLite rather than dummy data
 - [ ] Add shell of `tag_data` capability
-
-# Step 6. Add in actual tagging code
-
 
 # N. Allow user to tag a transcript rather than just an audio file
 
