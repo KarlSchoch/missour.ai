@@ -3,7 +3,7 @@ from django.test import TestCase
 from transcription.models import Transcript, Chunk, Topic, Tag
 from transcription.tagging.tagging_manager import TaggingManager, Classification
 from unittest.mock import patch
-from test_utils import FakeLLM
+from transcription.tests.test_utils import FakeLLM
 
 IT_VOCAB = """
 cloud computing microservices kubernetes containers orchestration devops ci cd
