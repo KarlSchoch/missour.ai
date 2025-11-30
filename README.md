@@ -35,6 +35,11 @@ The web application combines a Django backend that exposes APIs and serves the H
 **Production**
 - TBD - production build and deployment process for the web application is still being defined.
 
+**Testing**
+- _Django tests_: Place tests within `missourai_django/transcription/tests/` directory and run them with executing `poetry run manage.py tests transcription`
+- _React/Frontend Tests_: TBD
+- _Language Model Mocking_: Since this project requires reaching out to external APIs, we mock these API calls to avoid incurring charges from third party model providers.
+
 ### Data Model/Schema
 ```mermaid
    classDiagram
@@ -88,6 +93,7 @@ The web application combines a Django backend that exposes APIs and serves the H
 - **Dev traffic proxies through Django.** The Vite dev server proxies `'/api'` to `http://localhost:8000/` to reuse Django's session and CSRF cookies while developing React apps (`frontend/vite.config.js` -> `server.proxy`).
 - **Initial payloads come from Django views.** Each page view returns an `initial_payload` dictionary that gets serialized with `{{ initial_payload|json_script:"initial-payload" }}` and can be read by React via `document.getElementById('initial-payload')`.  This `initial_payload ` is generated from the view
 - **CSRF stays consistent across fetches.** Frontend code imports `getCsrfToken` from `frontend/src/utils/csrf.js`, ensuring POST/PUT/PATCH requests include the same `csrftoken` cookie Django issued.
+- **Model Environment**: Since this project relies upon calls to external APIs, we have created the infrastructure to bypass these calls and thus incur inference costs.  To do this, we have created `Manager` Classes that encompass the various AI functionalities (currently only a [`TranscriptionManager`](/missourai_django/transcription/transcription_utils/transcription_manager.py) and  [`TaggingManager`](/missourai_django/transcription/tagging/tagging_manager.py), possibly more capabilities eventually).  This allows us to centralize any AI calls within one location within the code base, thus simplifying maintenance and mocking.  While building out initial capabilities, set the `MODEL_ENV` variable within your `.env` file to `dev` to take advantage of mocked responses.  When you want to do more integration-testing and ensure that your code works well with the model and eventually put the application into production, you can set the `MODEL_ENV` variable to `test` or `prod`
 
 ### Creating New Pages
 
