@@ -82,7 +82,7 @@ class TranscriptionManager:
         with open(f"{self.chunk_path}", "rb") as audio_file:
             try:
                 transcript = self.client.audio.transcriptions.create(
-                    model="whisper-1",
+                    model="gpt-4o-mini-transcribe",
                     file=audio_file
                 )
             except openai.BadRequestError as e:
