@@ -211,6 +211,16 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
 
 
 ## Step 5: Create Transcript Tags section within Transcript page
+- [ ] Add in shell of Transcript tags section to transcript page
+    - Follow the instructions in the README
+- [ ] Within the view, return all of the tags associated with the transcript
+    - [] Build out the tests:
+- [ ] Within the frontend logic
+    - [ ] Have a dropdown section so that you can see the tags section/not
+    - [ ] filter the tags so that you see the ones for the selected topic (have a "view all" option)
+    - [ ] Filter the frontend so that you only see the "present" topics (i.e. the `topic_present` field is `True`)
+- [ ] Update the redirect within the "Upload Audio" Page to go to the page for that specific transcript
+
 Create ability to flow through UI spaces
 - [ ] Get Andy's recommendations on topics
 - [ ] Populate with dummy data
