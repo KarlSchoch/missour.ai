@@ -1,4 +1,5 @@
 {% extends "transcription/base.html" %}
+{% load django_vite vite_extras transcription_tags %}
 
 {% block title %}View Transcript - missour.ai{% endblock %}
 
@@ -8,5 +9,11 @@
     <a href="{% url 'transcription:transcripts' %}">Back to Transcripts</a>
     <h2>{{ transcript.name }}</h2>
 </div>
+<p>
+    {% block view_transcript_chunks_page_section %}
+        {% render_view_transcript_chunks_section %}
+        {% include 'transcription/partials/view-transcript-chunks-page-section.html' %}
+    {% endblock %}
+</p>
 <p>{{ transcript.transcript_text }}</p>
 {% endblock %}
