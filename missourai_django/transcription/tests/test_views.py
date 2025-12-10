@@ -70,10 +70,12 @@ class ViewTranscriptTests(TestCase):
         self.assertTemplateUsed(response, 'transcription/view_transcript.html')
 
         # Contains the correct HTML elements
-        ## analyze-audio-page-section-root
         self.assertContains(response, 'id="view-transcript-chunks-page-section-root"')
         self.assertContains(response, 'id="initial-payload"')
 
         # Initial Payload contains the Correct Data
-        ## Only Dummy Transcript One
-        ## Only tags for a single transcript
+        initial_payload = response.context["initial_payload"]
+        ## Tags contain chunks from single transcript (Dummy Transcript One)
+        # transcripts = [x['chunk']['transcript'] for x in initial_payload]
+        self.assertEqual(len(initial_payload), 1)
+        self.assertEqual(initial_payload[0]['name'], self.transcript_one.name)
