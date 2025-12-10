@@ -18,3 +18,10 @@ def render_analyze_audio_section(context):
     }
 
     return {'initial_payload': payload}
+
+@register.inclusion_tag(
+    'transcription/partials/view-transcript-chunks-page-section.html',
+    takes_context=True
+)
+def render_view_transcript_chunks_section(context):
+    return { 'initial_payload': { 'key': 'value' } }
