@@ -72,7 +72,7 @@ class ViewTranscriptTests(TestCase):
         # Contains the correct HTML elements
         ## analyze-audio-page-section-root
         self.assertContains(response, 'id="view-transcript-chunks-page-section-root"')
-        self.assertContains(response, 'id="view-transcript-chunks-page-section-root"')
+        self.assertContains(response, 'id="initial-payload"')
 
         # Initial Payload contains the Correct Data
         ## Only Dummy Transcript One
