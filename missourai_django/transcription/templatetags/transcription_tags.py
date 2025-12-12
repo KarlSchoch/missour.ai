@@ -1,5 +1,5 @@
 from django import template
-from ..models import Topic, Tag
+from ..models import Topic, Tag, Chunk
 
 register = template.Library()
 
@@ -24,9 +24,9 @@ def render_analyze_audio_section(context):
     takes_context=True
 )
 def render_view_transcript_chunks_section(context):
-    # Planned structure for initial_payload contents
-    # { 'initial_payload': [Tag] }
-    print("transcript", context.get('transcript'))
-    tags = Tag.objects.all()
+    # Pull the transcript out of the context
+    transcript = context.get('transcript')
+    # Use that transcript to filer for tags related to that transcript
+    tags = Tag.objects.filter(chunk__transcript__pk = transcript.pk)
 
-    return { 'initial_payload': { 'key': 'value' } }
+    return { 'initial_payload': list(tags.values()) }
