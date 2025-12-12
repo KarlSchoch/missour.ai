@@ -75,7 +75,12 @@ class ViewTranscriptTests(TestCase):
 
         # Initial Payload contains the Correct Data
         initial_payload = response.context["initial_payload"]
+
         ## Tags contain chunks from single transcript (Dummy Transcript One)
-        # transcripts = [x['chunk']['transcript'] for x in initial_payload]
-        self.assertEqual(len(initial_payload), 1)
-        self.assertEqual(initial_payload[0]['name'], self.transcript_one.name)
+        chunks = list( { x['chunk_id'] for x in initial_payload } )
+        transcripts = Chunk.objects.filter(pk__in = chunks).values()
+        self.assertEqual(len(transcripts), 1)
+        trancript_name = Transcript.objects.filter(
+            pk = transcripts[0]['transcript_id']
+        ).values('name')
+        self.assertEqual(trancript_name[0]['name'], self.transcript_one.name)
