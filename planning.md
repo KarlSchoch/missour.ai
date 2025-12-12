@@ -211,11 +211,12 @@ Branching strategy: Main branch is `feat/transcript-tagging` and branches refere
 
 
 ## Step 5: Create Transcript Tags section within Transcript page
-- [ ] Add in shell of Transcript tags section to transcript page
+- [x] Add in shell of Transcript tags section to transcript page
     - Follow the instructions in the README
-- [ ] Within the view, return all of the tags associated with the transcript
-    - [] Build out the tests:
+- [x] Within the view, return all of the tags associated with the transcript
+- [ ] Within the view, return all of the topics associated with those tags. This will facilitate pulling the topics into the table
 - [ ] Within the frontend logic
+    - [ ] Need a table.  Intent is for each chunk to be a row, the columns are the topics, and the cell is whether that topic exists within the that chunk
     - [ ] Have a dropdown section so that you can see the tags section/not
     - [ ] filter the tags so that you see the ones for the selected topic (have a "view all" option)
     - [ ] Filter the frontend so that you only see the "present" topics (i.e. the `topic_present` field is `True`)
