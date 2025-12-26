@@ -17,3 +17,9 @@
 </p>
 <p>{{ transcript.transcript_text }}</p>
 {% endblock %}
+
+{% block extra_scripts %}
+    {% vite_react_refresh %}
+    {% vite_hmr_client %}
+    {% vite_asset 'src/view-transcript-chunk-page-section.jsx' %}
+{% endblock %}

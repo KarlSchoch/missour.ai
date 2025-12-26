@@ -10,6 +10,8 @@ function getInitialData() {
 function App() {
     const [conductAnalysis, setConductAnalysis] = useState(false);
     const init = useMemo(getInitialData, []);
+    console.log("initial data")
+    console.log(init)
     
     return (
         <div>
