@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import ReactDOM from 'react-dom/client';
 import { getCsrfToken } from "./utils/csrf";
 
@@ -8,16 +8,34 @@ function getInitialData() {
 }
 
 function App() {
-    const [conductAnalysis, setConductAnalysis] = useState(false);
     const init = useMemo(getInitialData, []);
-    console.log("initial data")
-    console.log(init)
-    // Create ability to only show tagged sections
-    // Create the ability to show all or only true tags
+    const [rows, setRows] = useState(init.rows);
+    const [showAllChunks, setShowAllChunks] = useState(true);
+
+    useEffect(() => {
+        if (showAllChunks) {
+            let filteredRows = init.rows.filter(row => {
+                return Object.values(row.cells).map((cell) => cell.length > 0).includes(true)
+            })
+            setRows(filteredRows);
+        } else {
+            console.log("Show all chunks")
+            setRows(init.rows);
+        }
+
+    }, [showAllChunks])
     
     return (
         <div>
             <h3>Transcript Tags</h3>
+            <span>Show Only Tagged Chunks</span>
+            <input
+                type="checkbox"
+                checked={showAllChunks}
+                onChange={(e) => {
+                    setShowAllChunks(e.target.checked)
+                }}
+            />
             <table>
                 <thead>
                     <tr>
@@ -33,7 +51,7 @@ function App() {
                 </thead>
                 <tbody>
                     {
-                        init.rows.map((row) => (
+                        rows.map((row) => (
                             <tr key={row.chunk_id}>
                                 <td>{row.text}</td>
                                 {
