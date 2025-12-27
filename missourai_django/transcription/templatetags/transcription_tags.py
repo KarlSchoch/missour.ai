@@ -72,7 +72,8 @@ def render_view_transcript_chunks_section(context):
 
     # 5) fill cells based on tag_rows
     for tr in tag_rows:
-        val = tr["relevant_section"] if tr["topic_present"] else ""
+        # val = tr["relevant_section"] if tr["topic_present"] else ""
+        val = "Topic Present" if tr["topic_present"] else ""
         rows_by_chunk[tr["chunk_id"]]["cells"][tr["topic_id"]] = val
 
     payload = {"topics": topics, "rows": list(rows_by_chunk.values())}
