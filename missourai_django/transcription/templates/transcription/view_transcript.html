@@ -7,7 +7,7 @@
 <div class="transcript-header">
     <br />
     <a href="{% url 'transcription:transcripts' %}">Back to Transcripts</a>
-    <h2>{{ transcript.name }}</h2>
+    <h3>{{ transcript.name }}</h3>
 </div>
 <p>
     {% block view_transcript_chunks_page_section %}
@@ -15,6 +15,7 @@
         {% include 'transcription/partials/view-transcript-chunks-page-section.html' %}
     {% endblock %}
 </p>
+<h3>Trancript Text</h3>
 <p>{{ transcript.transcript_text }}</p>
 {% endblock %}
 
