@@ -15,6 +15,9 @@
         {% include 'transcription/partials/view-transcript-chunks-page-section.html' %}
     {% endblock %}
 </p>
+{% block analyze_transcript_page_section %}
+    {% render_analyze_audio_section %}
+{% endblock %}
 <h3>Trancript Text</h3>
 <p>{{ transcript.transcript_text }}</p>
 {% endblock %}
@@ -23,4 +26,5 @@
     {% vite_react_refresh %}
     {% vite_hmr_client %}
     {% vite_asset 'src/view-transcript-chunk-page-section.jsx' %}
+    {% vite_asset 'src/analyze-audio-page-section.jsx' %}
 {% endblock %}

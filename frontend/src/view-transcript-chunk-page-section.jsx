@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { getCsrfToken } from "./utils/csrf";
 
 function getInitialData() {
-    const el = document.getElementById("initial-payload");
+    const el = document.getElementById("initial-payload-view-transcript-chunks-page-section");
     return el ? JSON.parse(el.textContent) : {};
 }
 
