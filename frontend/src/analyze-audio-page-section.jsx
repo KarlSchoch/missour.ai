@@ -4,7 +4,7 @@ import { getCsrfToken } from "./utils/csrf";
 import TopicSelector from "./topic-selector";
 
 function getInitialData() {
-    const el = document.getElementById("initial-payload");
+    const el = document.getElementById("initial-payload-analyze-audio-page-section");
     return el ? JSON.parse(el.textContent) : {};
 }
 
