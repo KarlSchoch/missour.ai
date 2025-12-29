@@ -127,6 +127,14 @@ details:hover {
     color: #D4AF37; /* Gold Wheat for hover effect */
 }
 
+/* Transcript Tags */
+.transcript-tags-details {
+    color: black;
+}
+.transcript-tags-details:hover {
+    color: black;
+}
+
 /* Hide responsive elements as default */
 .nav-menu-details {
     display: none;

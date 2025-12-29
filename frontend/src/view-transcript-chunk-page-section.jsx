@@ -26,8 +26,10 @@ function App() {
     }, [showAllChunks])
     
     return (
-        <div>
-            <h3>Transcript Tags</h3>
+        <details className="transcript-tags-details">
+            {/* <h3>Transcript Tags</h3> */}
+            <summary>Transcript Tags (click to expand)</summary>
+            <br />
             <span>Show Only Tagged Chunks</span>
             <input
                 type="checkbox"
@@ -64,7 +66,7 @@ function App() {
                     }
                 </tbody>
             </table>
-        </div>
+        </details>
     )
 }
 
