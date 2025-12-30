@@ -135,7 +135,6 @@ For reference, the *Dashboard* page provides an example for the process describe
       {% vite_asset 'src/reports.jsx' %} # Pulls in React Component
    {% endblock %}
    ```
-3. **Checkpoint:** Run the backend (`docker run ...` command in the Development section) and visit the new route - the navigation and base styling should render, even though the React area is empty.
 
 #### Step 2 - Register the UI route
 1. Add a path to `missourai_django/transcription/ui_urls.py`, e.g. `path('<some-name>/', views.<some-name>, name='<some-name>')`.
@@ -311,6 +310,16 @@ Sometimes, you may need to integrate a react component within an existing Django
 >      variable_processed = []
 >  # Some more logic using the data from your frontend!..
 >  ```
+
+### Security Considerations
+#### CSRF Tokens
+- Case 1: Pure Django
+- Case 2: Django with React Partial
+- Case 3: Pure React
+
+#### Authentication
+- Django Pages/Views:
+- Django REST Framework: Requiring Login is set as the default behavior within [setting.py](./missourai_django/missourai_web_app/settings.py) (reference the `REST_FRAMEWORK.DEFAULT_PERMISSIONS_CLASSES` setting).
 
 ## ML Environment
 To use the ML Experiments environment, do the following

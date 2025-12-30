@@ -149,6 +149,19 @@ def dashboard(request):
     return render(request, "transcription/dashboard.html", {"initial_payload": payload})
 
 @login_required
+def view_topics(request):
+    payload = {
+        "apiUrls": {
+            "topics": "/api/topics/"
+        }
+    }
+
+    return render(
+        request, "transcription/view_topics.html", 
+        {"initial_payload": payload}
+    )
+
+@login_required
 def analyze_audio_page_section(request):
 
     return render(
