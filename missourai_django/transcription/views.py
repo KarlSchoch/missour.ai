@@ -101,6 +101,39 @@ def upload_audio(request):
 @login_required
 def view_transcript(request, transcript_id):
     transcript = get_object_or_404(Transcript, id=transcript_id)
+    if request.method == 'POST':
+        # 1. Pull the tags out of the frontned
+        topics_raw = request.POST.get('topics', '[]')
+        try:
+            topics_processed = json.loads(topics_raw)
+        except json.JSONDecodeError:
+            topics_processed = []
+        # 2. TO DO: Conduct Data Validation
+        # validate that you aren't getting an empty list of topics
+        # if len(topics_processed) == 0:
+        #     print("Please select valid topics")
+        # Validate that you aren't getting duplicate topics
+        # validate all your topics match 1:1 with topics in the DB
+
+        # 3. Translate topics_processed into list[Topic]
+        selected_topics = [
+            x for x in Topic.objects.filter(topic__in=topics_processed)
+        ]
+
+        # 4. Tag the transcript based on selected topics
+        tagging_manager = TaggingManager(
+            api_key = os.getenv('OPENAI_API_KEY'),
+            transcript = transcript,
+            topics = selected_topics
+        )
+        tags = tagging_manager.tag_transcript()
+
+        return render(
+            request,
+            'transcription/view_transcript.html',
+            {'transcript': transcript}
+        )
+
     return render(request, 'transcription/view_transcript.html', {'transcript': transcript})
 
 @login_required

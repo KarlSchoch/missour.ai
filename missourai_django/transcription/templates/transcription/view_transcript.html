@@ -15,9 +15,13 @@
         {% include 'transcription/partials/view-transcript-chunks-page-section.html' %}
     {% endblock %}
 </p>
-{% block analyze_transcript_page_section %}
-    {% render_analyze_audio_section %}
-{% endblock %}
+<form method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% block analyze_transcript_page_section %}
+        {% render_analyze_audio_section %}
+    {% endblock %}
+    <button type="submit">Analyze</button>
+</form>
 <h3>Trancript Text</h3>
 <p>{{ transcript.transcript_text }}</p>
 {% endblock %}
