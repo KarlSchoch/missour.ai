@@ -10,17 +10,6 @@ function getInitialData() {
 function App() {
   const init = React.useMemo(getInitialData, [])
   const [topics, setTopics] = React.useState(null)
-  // const [items, setItems] = React.useState([])
-
-  // React.useEffect(() => {
-  //   const url = init?.apiUrls?.topics // Update name of url
-  //   if (!url) return
-  //   fetch(url, { credentials: 'include' })
-  //     .then(r => r.json())
-  //     .then(console.log(r))
-  //     .then(setTopics)
-  //     .catch(e => console.error('topics failed:', e))
-  // }, [init?.apiUrls?.topics])
 
   const reloadTopics = React.useCallback(async () => {
     const url = init?.apiUrls?.topics
@@ -30,7 +19,7 @@ function App() {
     setTopics(data)
   }, [init?.apiUrls?.topics])
 
-  // console.log("topics", topics)
+  console.log("topics", topics)
 
   React.useEffect(() => { reloadTopics() }, [reloadTopics])
 
@@ -51,14 +40,18 @@ function App() {
 
   return (
     <div>
-      <h1>View Topics</h1>
+      <h1>Topics</h1>
+      <h2>Current Topics</h2>
       <ul>
         {
           (topics || []).map(t => 
-            <li key={t.id ?? t.topic}>{t.topic ?? JSON.stringify(t)}</li>
+            <li key={t.id ?? t.topic}>
+              {t.topic ?? JSON.stringify(t)}{t.description ?? `: ${t.description}`}
+            </li>
           )
         }
       </ul>
+      <h2>Add Topic</h2>
     </div>
   )
 }

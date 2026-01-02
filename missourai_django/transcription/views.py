@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
+from django.urls import reverse
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
@@ -141,8 +142,8 @@ def dashboard(request):
     payload = {
         "username": "Karl", # request.user.get_username(),
         "apiUrls": {
-            "ping": "/api/ping/",
-            "items": "/api/items/",
+            "ping": reverse("api:ping"),
+            "items": reverse("api:items"),
         }
     }
 
@@ -152,7 +153,7 @@ def dashboard(request):
 def view_topics(request):
     payload = {
         "apiUrls": {
-            "topics": "/api/topics/"
+            "topics": reverse("api:topic-list")
         }
     }
 
