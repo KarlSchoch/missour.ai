@@ -138,18 +138,6 @@ def view_transcript(request, transcript_id):
     return render(request, 'transcription/view_transcript.html', {'transcript': transcript})
 
 @login_required
-def dashboard(request):
-    payload = {
-        "username": "Karl", # request.user.get_username(),
-        "apiUrls": {
-            "ping": reverse("api:ping"),
-            "items": reverse("api:items"),
-        }
-    }
-
-    return render(request, "transcription/dashboard.html", {"initial_payload": payload})
-
-@login_required
 def view_topics(request):
     payload = {
         "apiUrls": {

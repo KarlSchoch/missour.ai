@@ -96,9 +96,9 @@ The web application combines a Django backend that exposes APIs and serves the H
 - **Model Environment**: Since this project relies upon calls to external APIs, we have created the infrastructure to bypass these calls and thus incur inference costs.  To do this, we have created `Manager` Classes that encompass the various AI functionalities (currently only a [`TranscriptionManager`](/missourai_django/transcription/transcription_utils/transcription_manager.py) and  [`TaggingManager`](/missourai_django/transcription/tagging/tagging_manager.py), possibly more capabilities eventually).  This allows us to centralize any AI calls within one location within the code base, thus simplifying maintenance and mocking.  While building out initial capabilities, set the `MODEL_ENV` variable within your `.env` file to `dev` to take advantage of mocked responses.  When you want to do more integration-testing and ensure that your code works well with the model and eventually put the application into production, you can set the `MODEL_ENV` variable to `test` or `prod`
 
 ### Creating New Pages
+This process is still accurate, but will be superseded by a more traditional backend/frontend breakdown using DRF and Next JS while maintaining the Django Admin Panel for User/DB management.
 
 **Overview**
-For reference, the *Dashboard* page provides an example for the process described below.
 1. Create or update a Django view that prepares any data the page needs and renders a template extending the shared base.
 2. Register a URL in `missourai_django/transcription/ui_urls.py` that points to the view so Django can serve the page.
 3. Add a new React entry file in `frontend/src` and load it from the template with `{% vite_asset %}`.
