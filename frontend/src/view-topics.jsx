@@ -7,9 +7,28 @@ function getInitialData() {
   return el ? JSON.parse(el.textContent) : {}
 }
 
+const blankTopic = () => ({ name: "", description: "" });
+
 function App() {
+  // Extract initial data that contains information on relevant APIs
   const init = React.useMemo(getInitialData, [])
+  // Instantiate existing Topics
   const [topics, setTopics] = React.useState(null)
+  // Instantiate array of new topics to be created
+  const [newTopics, setNewTopics] = useState([blankTopic()])
+
+  // Function for adding new topic fields to form
+  function addTopic() {
+    setNewTopics((prev) => [...prev, blankTopic()]);
+  }
+
+  // Function for updating elements of newTopics array based on user input
+  function updateTopic(index, field, value) {
+    setNewTopics((prev) => 
+      prev.map((t, i) => (i === index ? { ...t, [field]: value } : t))
+    );
+  }
+  
 
   const reloadTopics = React.useCallback(async () => {
     const url = init?.apiUrls?.topics
@@ -20,6 +39,7 @@ function App() {
   }, [init?.apiUrls?.topics])
 
   console.log("topics", topics)
+  console.log("newTopics", newTopics)
 
   React.useEffect(() => { reloadTopics() }, [reloadTopics])
 
@@ -51,7 +71,42 @@ function App() {
           )
         }
       </ul>
-      <h2>Add Topic</h2>
+      <h2>Create New Topics</h2>
+      <form>
+        {newTopics.map((t, idx) => (
+          <div key={idx}>
+            <div>
+              <label>
+                Name:
+                <input
+                  value={t.name}
+                  onChange={(e) => updateTopic(idx, "name", e.target.value)}
+                  placeholder="e.g., Supply Chain Risk"
+                />
+              </label>
+            </div>
+
+            <div>
+              <label>
+                Description:
+                <textarea
+                  value={t.description}
+                  onChange={(e) => updateTopic(idx, "description", e.target.value)}
+                  placeholder="Optional description..."
+                />
+              </label>
+            </div>
+            <hr />
+          </div>
+        ))}
+        <div>
+          <button type="button" onClick={addTopic}>
+            + Add another topic
+          </button>
+          <br />
+          <button type='submit'>Submit</button>
+        </div>
+      </form>
     </div>
   )
 }
