@@ -28,6 +28,14 @@ function App() {
       prev.map((t, i) => (i === index ? { ...t, [field]: value } : t))
     );
   }
+
+  // Function for removing topics
+  function removeNewTopic(index) {
+    setNewTopics((prev) => {
+      if (prev.length === 1) return prev 
+      return prev.filter((_, i) => i !== index);
+    });
+  }
   
 
   const reloadTopics = React.useCallback(async () => {
@@ -96,6 +104,10 @@ function App() {
                 />
               </label>
             </div>
+
+            <button type="button" onClick={() => removeNewTopic(idx)}>
+              Remove
+            </button>
             <hr />
           </div>
         ))}
