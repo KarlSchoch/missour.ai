@@ -46,9 +46,6 @@ function App() {
     setTopics(data)
   }, [init?.apiUrls?.topics])
 
-  console.log("topics", topics)
-  console.log("newTopics", newTopics)
-
   React.useEffect(() => { reloadTopics() }, [reloadTopics])
 
   // async function addItem() {
@@ -79,7 +76,7 @@ function App() {
           )
         }
       </ul>
-      <h2>Create New Topics</h2>
+      <h2>Create New Topic(s)</h2>
       <form>
         {newTopics.map((t, idx) => (
           <div key={idx}>

@@ -23,6 +23,7 @@
                     <details class="nav-menu-details">
                         <summary>Menu</summary>
                         <li class="nav-menu-link-details-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}"><a href="{% url 'transcription:transcripts' %}">Transcripts</a></li>
+                        <li class="nav-menu-link-details-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}"><a href="{% url 'transcription:topics' %}">Topics</a></li>
                         <li class="nav-menu-link-details-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}"><a href="{% url 'transcription:upload_audio' %}">Upload Audio</a></li>
                         <li class="nav-menu-link-details-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}">
                             <form method="post" action="{% url 'logout' %}">
@@ -33,6 +34,7 @@
                     </details>
                     <!-- Large Screen -->
                     <li class="nav-menu-link-base-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}"><a href="{% url 'transcription:transcripts' %}">Transcripts</a></li>
+                    <li class="nav-menu-link-base-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}"><a href="{% url 'transcription:topics' %}">Topics</a></li>
                     <li class="nav-menu-link-base-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}"><a href="{% url 'transcription:upload_audio' %}">Upload Audio</a></li>
                     <li class="nav-menu-link-base-{% if user.is_authenticated %}logged-in{% else %}logged-out{% endif %}">
                         <form method="post" action="{% url 'logout' %}">
