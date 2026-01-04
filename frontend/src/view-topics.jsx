@@ -7,7 +7,7 @@ function getInitialData() {
   return el ? JSON.parse(el.textContent) : {}
 }
 
-const blankTopic = () => ({ name: "", description: "" });
+const blankTopic = () => ({ topic: "", description: "" });
 
 function App() {
   // Extract initial data that contains information on relevant APIs
@@ -16,6 +16,9 @@ function App() {
   const [topics, setTopics] = React.useState(null)
   // Instantiate array of new topics to be created
   const [newTopics, setNewTopics] = useState([blankTopic()])
+  // Create state variables for providing user feedback
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   // Function for adding new topic fields to form
   function addTopic() {
@@ -36,7 +39,6 @@ function App() {
       return prev.filter((_, i) => i !== index);
     });
   }
-  
 
   const reloadTopics = React.useCallback(async () => {
     const url = init?.apiUrls?.topics
@@ -48,20 +50,58 @@ function App() {
 
   React.useEffect(() => { reloadTopics() }, [reloadTopics])
 
-  // async function addItem() {
-  //   const url = init?.apiUrls?.items
-  //   if (!url) return
-  //   await fetch(url, {
-  //     method: 'POST',
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //       'X-CSRFToken': getCsrfToken(),
-  //     },
-  //     credentials: 'include',
-  //     body: JSON.stringify({ name: `Item ${Date.now()}` }),
-  //   })
-  //   reloadItems()
-  // }
+  async function onSubmit(e) {
+    e.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    const url = init?.apiUrls?.topics
+    if (!url) return
+
+    // Ensure new topics are valid
+    const payloadTopics = newTopics.filter((t) => t.topic.length > 0)
+    if (payloadTopics.length === 0) {
+      setError("Add at least one topic before submitting.");
+      setIsSubmitting(false);
+      return;
+    }
+    
+    // Iterate through newTopics (backend TopicSerializer accepts only a single topic)
+    for (const t of payloadTopics) {
+      // Create payload
+      const payload = { 
+        topic: t.topic.trim(),
+        description: t.description.trim()
+      }
+
+      // Call backend create API
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+          },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        })
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || "Request failed");
+        }
+        if (res.ok) {
+          // Reload the list of topics show on the page and set up a new form
+          setNewTopics([blankTopic()]);
+        }
+      } catch (err) {
+        setError(err.message || "Something went wrong.");
+      } finally {
+        setIsSubmitting(false);
+        await reloadTopics();
+      }
+    }
+  }
 
   return (
     <div>
@@ -84,8 +124,8 @@ function App() {
               <label>
                 Name:
                 <input
-                  value={t.name}
-                  onChange={(e) => updateTopic(idx, "name", e.target.value)}
+                  value={t.topic}
+                  onChange={(e) => updateTopic(idx, "topic", e.target.value)}
                   placeholder="e.g., Supply Chain Risk"
                 />
               </label>
@@ -97,7 +137,7 @@ function App() {
                 <textarea
                   value={t.description}
                   onChange={(e) => updateTopic(idx, "description", e.target.value)}
-                  placeholder="Optional description..."
+                  placeholder="Optional description of the topic..."
                 />
               </label>
             </div>
@@ -112,9 +152,12 @@ function App() {
           <button type="button" onClick={addTopic}>
             + Add another topic
           </button>
-          <br />
-          <button type='submit'>Submit</button>
+          <hr />
+          <button type='submit' onClick={onSubmit} disabled={isSubmitting} >
+            {isSubmitting ? "Submitting..." : "Submit"}
+          </button>
         </div>
+        {error && <p style={{ color: "crimson" }}>{error}</p>}
       </form>
     </div>
   )
