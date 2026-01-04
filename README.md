@@ -96,9 +96,9 @@ The web application combines a Django backend that exposes APIs and serves the H
 - **Model Environment**: Since this project relies upon calls to external APIs, we have created the infrastructure to bypass these calls and thus incur inference costs.  To do this, we have created `Manager` Classes that encompass the various AI functionalities (currently only a [`TranscriptionManager`](/missourai_django/transcription/transcription_utils/transcription_manager.py) and  [`TaggingManager`](/missourai_django/transcription/tagging/tagging_manager.py), possibly more capabilities eventually).  This allows us to centralize any AI calls within one location within the code base, thus simplifying maintenance and mocking.  While building out initial capabilities, set the `MODEL_ENV` variable within your `.env` file to `dev` to take advantage of mocked responses.  When you want to do more integration-testing and ensure that your code works well with the model and eventually put the application into production, you can set the `MODEL_ENV` variable to `test` or `prod`
 
 ### Creating New Pages
+This process is still accurate, but will be superseded by a more traditional backend/frontend breakdown using DRF and Next JS while maintaining the Django Admin Panel for User/DB management.
 
 **Overview**
-For reference, the *Dashboard* page provides an example for the process described below.
 1. Create or update a Django view that prepares any data the page needs and renders a template extending the shared base.
 2. Register a URL in `missourai_django/transcription/ui_urls.py` that points to the view so Django can serve the page.
 3. Add a new React entry file in `frontend/src` and load it from the template with `{% vite_asset %}`.
@@ -135,7 +135,6 @@ For reference, the *Dashboard* page provides an example for the process describe
       {% vite_asset 'src/reports.jsx' %} # Pulls in React Component
    {% endblock %}
    ```
-3. **Checkpoint:** Run the backend (`docker run ...` command in the Development section) and visit the new route - the navigation and base styling should render, even though the React area is empty.
 
 #### Step 2 - Register the UI route
 1. Add a path to `missourai_django/transcription/ui_urls.py`, e.g. `path('<some-name>/', views.<some-name>, name='<some-name>')`.
@@ -311,6 +310,16 @@ Sometimes, you may need to integrate a react component within an existing Django
 >      variable_processed = []
 >  # Some more logic using the data from your frontend!..
 >  ```
+
+### Security Considerations
+#### CSRF Tokens
+- Case 1: Pure Django
+- Case 2: Django with React Partial
+- Case 3: Pure React
+
+#### Authentication
+- Django Pages/Views:
+- Django REST Framework: Requiring Login is set as the default behavior within [setting.py](./missourai_django/missourai_web_app/settings.py) (reference the `REST_FRAMEWORK.DEFAULT_PERMISSIONS_CLASSES` setting).
 
 ## ML Environment
 To use the ML Experiments environment, do the following

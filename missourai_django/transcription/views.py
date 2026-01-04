@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
+from django.urls import reverse
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
@@ -137,16 +138,17 @@ def view_transcript(request, transcript_id):
     return render(request, 'transcription/view_transcript.html', {'transcript': transcript})
 
 @login_required
-def dashboard(request):
+def view_topics(request):
     payload = {
-        "username": "Karl", # request.user.get_username(),
         "apiUrls": {
-            "ping": "/api/ping/",
-            "items": "/api/items/",
+            "topics": reverse("api:topic-list")
         }
     }
 
-    return render(request, "transcription/dashboard.html", {"initial_payload": payload})
+    return render(
+        request, "transcription/view_topics.html", 
+        {"initial_payload": payload}
+    )
 
 @login_required
 def analyze_audio_page_section(request):

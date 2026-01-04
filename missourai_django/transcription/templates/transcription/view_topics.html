@@ -1,15 +1,15 @@
 {% extends "transcription/base.html" %}
 {% load django_vite vite_extras %}
 
-{% block title %}Dashboard - missour.ai{% endblock %}
+{% block title %}Topics - missour.ai{% endblock %}
 
 {% block content %}
-<div id="dashboard-root"></div>
+<div id="view-topics-root"></div>
 {{ initial_payload|json_script:"initial-payload" }}
 {% endblock %}
 
 {% block extra_scripts %}
     {% vite_react_refresh %}
     {% vite_hmr_client %}
-    {% vite_asset 'src/dashboard.jsx' %}
+    {% vite_asset 'src/view-topics.jsx' %}
 {% endblock %}
