@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -20,7 +21,17 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     outDir: 'dist',
-    manifest: true,
+    // Write manifest at dist/manifest.json (not hidden) so Django collects it
+    manifest: 'manifest.json',
     emptyOutDir: true,
+    rollupOptions: {
+      // Explicit multi-entry build so Django can load per-page bundles via django-vite
+      input: {
+        'src/analyze-audio-page-section.jsx': resolve(__dirname, 'src/analyze-audio-page-section.jsx'),
+        'src/view-topics.jsx': resolve(__dirname, 'src/view-topics.jsx'),
+        'src/view-transcript-chunk-page-section.jsx': resolve(__dirname, 'src/view-transcript-chunk-page-section.jsx'),
+        'src/topic-selector.jsx': resolve(__dirname, 'src/topic-selector.jsx'),
+      },
+    },
   }
 }))

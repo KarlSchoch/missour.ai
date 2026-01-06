@@ -19,21 +19,21 @@ Get OpenAI API Key and store in `.env` file as `OPENAI_API_KEY` (ensure that thi
 The web application combines a Django backend that exposes APIs and serves the HTML shell with a React frontend built with Vite. Django runs inside a container, while Vite handles hot-reload and asset delivery during development.
 
 **Development**
-1. Build the backend image (first time or after Dockerfile changes): `docker build -f backend-dev.Dockerfile -t missourai-backend:dev .`
-2. Start the backend container from the repository root:
-   `docker run --rm --env-file .env -it -p 8000:8000 -e DJANGO_VITE_DEV=1 -v "${PWD}:/app" -w /app/missourai_django missourai-backend:dev`
-   - In Windows PowerShell, `${PWD.Path}` expands to the current directory; adjust the flag to `-v "${PWD.Path}:/app"` if needed for your shell.
-   - The bind mount keeps Django in sync with local template and code changes.
-3. In another terminal, run the React/Vite dev server:
-   ```
-   cd frontend
-   npm install
-   npm run dev
-   ```
-4. Open `http://localhost:8000/transcription/dashboard/` to see the integrated React dashboard backed by Django APIs.
+1) Copy env template and fill secrets: `cp .env.example .env` then set `SECRET_KEY`, `OPENAI_API_KEY`, etc.
+2) Start dev stack with hot reload (Django + Vite):  
+   `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`  
+   - Binds the whole repo into the container for live code/template changes.  
+   - Runs Django `runserver` on 8000 and Vite dev server on 5173.  
+   - `DJANGO_VITE_DEV=true` ensures HMR; APIs are proxied via the dev server.
+3) Stop with `docker compose down` (add `-v` if you want to drop the dev SQLite/media data).
 
 **Production**
-- TBD - production build and deployment process for the web application is still being defined.
+- Build + run the single image: `docker compose up --build` (uses `docker-compose.yml`).  
+  - Runs `manage.py migrate` on startup, then uvicorn serving ASGI.  
+  - Binds `missourai_django/db.sqlite3` and `missourai_django/media` for persistence; adjust to Postgres/remote storage if desired.  
+  - Static assets are prebuilt by Vite during the image build and served via WhiteNoise from `staticfiles`.
+- If you prefer a manual run: `docker build -t missourai-web .` then  
+  `docker run -p 8000:8000 --env-file .env missourai-web`.
 
 **Testing**
 - _Django tests_: Place tests within `missourai_django/transcription/tests/` directory and run them with executing `poetry run manage.py tests transcription`
@@ -46,21 +46,21 @@ The web application combines a Django backend that exposes APIs and serves the H
    class Transcript {
       +id: AutoField (PK)
       +name: CharField(255)
-      +transcript_text: TextField
+      +transcript_text: TextField(default="")
       +created_at: DateTime(auto_now_add)
    }
 
    class Topic {
       +id: AutoField (PK)
-      +topic: CharField(100)
+      +topic: CharField(100, unique?)
       +description: CharField(255, blank=True, default="")
    }
 
    class Chunk {
       +id: AutoField (PK)
       +transcript_id: FK -> Transcript
-      +chunk_text: TextField
-      +topics: ManyToMany(Topic) through Tag
+      +chunk_text: TextField(default="")
+      +topics: ManyToMany(Topic) through Tag (related_name="chunks")
    }
 
    class Tag {
