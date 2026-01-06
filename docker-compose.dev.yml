@@ -7,6 +7,7 @@ services:
     environment:
       DJANGO_VITE_DEV: "true"
       DEBUG: "True"
+      MODEL_ENV: "dev"
     volumes:
       - .:/app
       - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
