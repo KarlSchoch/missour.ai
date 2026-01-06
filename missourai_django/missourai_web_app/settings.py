@@ -133,6 +133,8 @@ REST_FRAMEWORK = {
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# Include built frontend assets so collectstatic copies manifest.json and bundles
+STATICFILES_DIRS = [BASE_DIR.parent / "frontend" / "dist"]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

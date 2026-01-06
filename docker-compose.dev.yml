@@ -1,0 +1,25 @@
+version: "3.9"
+services:
+  web:
+    build: .
+    command: ["/app/.venv/bin/python", "manage.py", "runserver", "0.0.0.0:8000"]
+    env_file: .env
+    environment:
+      DJANGO_VITE_DEV: "true"
+      DEBUG: "True"
+      MODEL_ENV: "dev"
+    volumes:
+      - .:/app
+      - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
+      - ./missourai_django/media:/app/missourai_django/media
+    ports:
+      - "8000:8000"
+
+  frontend:
+    image: node:20-slim
+    working_dir: /app/frontend
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+    volumes:
+      - ./frontend:/app/frontend
+    ports:
+      - "5173:5173"
