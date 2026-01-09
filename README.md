@@ -28,12 +28,15 @@ The web application combines a Django backend that exposes APIs and serves the H
 3) Stop with `docker compose down` (add `-v` if you want to drop the dev SQLite/media data).
 
 **Production**
-- Build + run the single image: `docker compose up --build` (uses `docker-compose.yml`).  
-  - Runs `manage.py migrate` on startup, then uvicorn serving ASGI.  
-  - Binds `missourai_django/db.sqlite3` and `missourai_django/media` for persistence; adjust to Postgres/remote storage if desired.  
-  - Static assets are prebuilt by Vite during the image build and served via WhiteNoise from `staticfiles`.
-- If you prefer a manual run: `docker build -t missourai-web .` then  
-  `docker run -p 8000:8000 --env-file .env missourai-web`.
+- Build and run the app behind Nginx (HTTPS, clean URLs):  
+  `docker compose up --build`
+  - Runs `manage.py migrate` on startup, then uvicorn serving ASGI (internally on `web:8000`).  
+  - Nginx terminates TLS and proxies requests to the Django container.  
+  - `missourai_django/db.sqlite3` and `missourai_django/media` are bind-mounted for persistence.
+- First-time cert issuance (once per server):  
+  `docker compose run --rm certbot certonly --webroot -w /var/www/certbot -d missour.ai -d www.missour.ai --email you@example.com --agree-tos --no-eff-email`
+  - After issuance, restart Nginx so it picks up the certs: `docker compose restart nginx`.
+- Ensure `.env` includes `DJANGO_ALLOWED_HOSTS=missour.ai,www.missour.ai` and `CSRF_TRUSTED_ORIGINS=https://missour.ai,https://www.missour.ai`.
 
 **Testing**
 - _Django tests_: Place tests within `missourai_django/transcription/tests/` directory and run them with executing `poetry run manage.py tests transcription`
@@ -94,6 +97,12 @@ The web application combines a Django backend that exposes APIs and serves the H
 - **Initial payloads come from Django views.** Each page view returns an `initial_payload` dictionary that gets serialized with `{{ initial_payload|json_script:"initial-payload" }}` and can be read by React via `document.getElementById('initial-payload')`.  This `initial_payload ` is generated from the view
 - **CSRF stays consistent across fetches.** Frontend code imports `getCsrfToken` from `frontend/src/utils/csrf.js`, ensuring POST/PUT/PATCH requests include the same `csrftoken` cookie Django issued.
 - **Model Environment**: Since this project relies upon calls to external APIs, we have created the infrastructure to bypass these calls and thus incur inference costs.  To do this, we have created `Manager` Classes that encompass the various AI functionalities (currently only a [`TranscriptionManager`](/missourai_django/transcription/transcription_utils/transcription_manager.py) and  [`TaggingManager`](/missourai_django/transcription/tagging/tagging_manager.py), possibly more capabilities eventually).  This allows us to centralize any AI calls within one location within the code base, thus simplifying maintenance and mocking.  While building out initial capabilities, set the `MODEL_ENV` variable within your `.env` file to `dev` to take advantage of mocked responses.  When you want to do more integration-testing and ensure that your code works well with the model and eventually put the application into production, you can set the `MODEL_ENV` variable to `test` or `prod`
+
+### Nginx + Certbot
+- The production compose file includes Nginx and Certbot containers with shared volumes for `/etc/letsencrypt` and the webroot challenge.
+- The first cert issuance uses the production ACME endpoint (no staging flag). If you want to test without rate limits, add `--staging` to the certbot command.
+- Certbot runs a renewal loop inside the container (`certbot renew` every 12h). Restart Nginx after renewals if you change certs manually.
+- Certificates persist in Docker volumes (`certbot-etc`, `certbot-var`) on the host; containers mount them at runtime.
 
 ### Creating New Pages
 This process is still accurate, but will be superseded by a more traditional backend/frontend breakdown using DRF and Next JS while maintaining the Django Admin Panel for User/DB management.
