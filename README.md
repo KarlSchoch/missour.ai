@@ -18,6 +18,24 @@ Get OpenAI API Key and store in `.env` file as `OPENAI_API_KEY` (ensure that thi
 ## Web Application
 The web application combines a Django backend that exposes APIs and serves the HTML shell with a React frontend built with Vite. Django runs inside a container, while Vite handles hot-reload and asset delivery during development.
 
+### Server Setup
+1) Clone the repo on the server:
+   - `git clone https://github.com/KarlSchoch/missour.ai.git`
+   - `cd missour.ai`
+2) On a new Ubuntu 24.04 LTS server, run the setup script:
+   - `chmod +x server-setup.sh`
+   - `sudo ./server-setup.sh`
+3) Copy data from the old droplet to the new one (two options):
+   - Pull from the old server:
+      - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" root@OLD_IP:~/missour.ai/.env ./missour.ai/`
+      - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" root@OLD_IP:~/missour.ai/missourai_django/db.sqlite3 ./missour.ai/missourai_django/`
+      - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" root@OLD_IP:~/missour.ai/missourai_django/media/ ./missour.ai/missourai_django/media/`
+   - Push to the new server:
+      - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" ./missour.ai/.env root@NEW_IP:~/missour.ai/`
+      - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" ./missour.ai/missourai_django/db.sqlite3 root@NEW_IP:~/missour.ai/missourai_django/`
+      - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" ./missour.ai/missourai_django/media/ root@NEW_IP:~/missour.ai/missourai_django/media/`
+   - `rsync` uses SSH for transport; authenticate with a key in `~/.ssh/authorized_keys` on each droplet (agent forwarding avoids copying private keys to servers).
+
 **Development**
 1) Copy env template and fill secrets: `cp .env.example .env` then set `SECRET_KEY`, `OPENAI_API_KEY`, etc.
 2) Start dev stack with hot reload (Django + Vite):  
@@ -34,8 +52,9 @@ The web application combines a Django backend that exposes APIs and serves the H
   - Nginx terminates TLS and proxies requests to the Django container.  
   - `missourai_django/db.sqlite3` and `missourai_django/media` are bind-mounted for persistence.
 - First-time cert issuance (once per server):  
-  `docker compose run --rm certbot certonly --webroot -w /var/www/certbot -d missour.ai -d www.missour.ai --email you@example.com --agree-tos --no-eff-email`
-  - After issuance, restart Nginx so it picks up the certs: `docker compose restart nginx`.
+  - Comment out port 443 portion of nginx `default.conf` (container will fail due to cert not existing)
+  - Create cert: `docker compose run --rm --entrypoint certbot certbot certonly --webroot -w /var/www/certbot -d missour.ai -d www.missour.ai --email you@example.com --agree-tos --no-eff-email`
+  - After issuance, comment nginx 443 block within `default.conf` and restart Nginx so it picks up the certs: `docker compose restart nginx`.
 - Ensure `.env` includes `DJANGO_ALLOWED_HOSTS=missour.ai,www.missour.ai` and `CSRF_TRUSTED_ORIGINS=https://missour.ai,https://www.missour.ai`.
 
 **Testing**
