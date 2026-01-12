@@ -1,40 +1,40 @@
-#Use an official Python image as the base image
-FROM python:3.11-slim
+# Stage 1: build frontend assets with Vite
+FROM node:20-slim AS node-build
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend ./
+RUN npm run build
 
-# Set the working directory inside the container
-WORKDIR /app
-
-# Install curl, ntpdate, ffmpeg, and libavcodec-extra for extra codec support
-RUN apt-get update && \
-    apt-get install -y apt-transport-https curl ffmpeg libavcodec-extra && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Poetry
+# Stage 2: install Python deps with Poetry
+FROM python:3.12-slim AS python-build
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    POETRY_VIRTUALENVS_IN_PROJECT=true
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential curl ffmpeg libavcodec-extra && rm -rf /var/lib/apt/lists/*
 RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="/root/.local/bin:${PATH}"
+WORKDIR /app
+COPY pyproject.toml poetry.lock* ./
+RUN poetry install --only main --no-root
+COPY . .
+COPY --from=node-build /frontend/dist ./frontend/dist
+RUN ./.venv/bin/python missourai_django/manage.py collectstatic --noinput
 
-# Ensure Poetry is available in the PATH
-ENV PATH="/root/.local/bin:$PATH"
-
-# Configure Poetry to not use a virtual environment
-RUN poetry config virtualenvs.create false
-
-# Copy only the poetry files to leverage Docker cache if dependencies don't change
-COPY pyproject.toml poetry.lock* /app/
-
-# Install dependencies defined in the Poetry files
-RUN poetry lock
-RUN poetry install --no-interaction --no-ansi
-
-# Copy the rest of the project
-COPY . /app
-
-# Set the working directory to the django app
-# Maintaining the /src/ side for logic on executing transcription, but will be integrated into the django app
+# Stage 3: runtime image
+FROM python:3.12-slim AS runtime
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_VITE_DEV=false \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg libavcodec-extra && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/missourai_django
-
-# Migrate the database
-CMD ["poetry", "run", "python", "manage.py", "makemigrations"]
-CMD ["poetry", "run", "python", "manage.py", "migrate"]
-
-# Run the web app
-CMD ["poetry", "run", "python", "manage.py", "runserver", "0.0.0.0:8000", "--reload"]
+COPY --from=python-build /app /app
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+EXPOSE 8000
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/app/.venv/bin/uvicorn", "missourai_web_app.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

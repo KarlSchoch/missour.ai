@@ -15,6 +15,7 @@ langchain-experimental = "^0.3.4"
 langchain-openai = "^0.3.27"
 python-dotenv = "^1.1.1"
 pandas = "^2.3.1"
+pydantic = "^2.11.7"
 
 
 [build-system]

@@ -10,6 +10,14 @@ python = ">=3.10,<4.0"
 openai = "^1.45.1"
 django = "^5.1.2"
 uvicorn = "^0.34.0"
+django-vite = "^3.1.0"
+djangorestframework = "^3.16.1"
+django-cors-headers = "^4.7.0"
+whitenoise = "^6.9.0"
+dotenv = "^0.9.9"
+langchain = "^1.0.7"
+langchain-text-splitters = "^1.0.0"
+langchain-openai = "^1.1.0"
 
 
 [build-system]

@@ -1,12 +1,22 @@
 {% extends "transcription/base.html" %}
+{% load django_vite vite_extras transcription_tags %}
 
 {% block title %}Upload Audio - missour.ai{% endblock %}
 
 {% block content %}
-<h1>Upload Audio Files for Transcription</h1>
-<form method="POST" enctype="multipart/form-data">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Upload</button>
-</form>
+    <h1>Upload Audio Files for Transcription</h1>
+    <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.as_p }}
+        {% block analyze_audio_page_section %}
+            {% render_analyze_audio_section %}
+        {% endblock %}
+        <button type="submit">Upload</button>
+    </form>
+{% endblock %}
+
+{% block extra_scripts %}
+    {% vite_react_refresh %}
+    {% vite_hmr_client %}
+    {% vite_asset 'src/analyze-audio-page-section.jsx' %}
 {% endblock %}

@@ -1,23 +1,43 @@
-version: '3'
+version: "3.9"
 services:
-  app:
+  web:
     build: .
-    volumes:
-      - .:/app  # Mounts the current directory to the /app directory in the container
-    ports:
-      - "8000:8000"
+    env_file: .env
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ENV=${ENV}
-      - DEBUG=${DEBUG}
-      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
-    stdin_open: true  # Keep the container open for interactive commands
-    tty: true         # Enable terminal support
-    # Run the web server
+      DJANGO_VITE_DEV: "false"
+      MODEL_ENV: "prod"
+      DEBUG: "False"
+    expose:
+      - "8000"
+    volumes:
+      - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
+      - ./missourai_django/media:/app/missourai_django/media
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/www/certbot
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/www/certbot
+    entrypoint: /bin/sh -c
     command: >
-      sh -c "
-      if [ '$ENV' = 'development' ]; then
-        poetry run python manage.py runserver 0.0.0.0:8000;
-      else
-        poetry run uvicorn missourai_web_app.asgi:application --host 0.0.0.0 --port 8000;
-      fi"
+      "trap exit TERM;
+      while :; do
+        certbot renew --webroot -w /var/www/certbot;
+        sleep 12h & wait $${!};
+      done"
+
+volumes:
+  certbot-etc:
+  certbot-var:

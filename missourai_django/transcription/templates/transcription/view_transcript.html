@@ -1,4 +1,5 @@
 {% extends "transcription/base.html" %}
+{% load django_vite vite_extras transcription_tags %}
 
 {% block title %}View Transcript - missour.ai{% endblock %}
 
@@ -6,7 +7,28 @@
 <div class="transcript-header">
     <br />
     <a href="{% url 'transcription:transcripts' %}">Back to Transcripts</a>
-    <h2>{{ transcript.name }}</h2>
+    <h3>{{ transcript.name }}</h3>
 </div>
+<p>
+    {% block view_transcript_chunks_page_section %}
+        {% render_view_transcript_chunks_section %}
+        {% include 'transcription/partials/view-transcript-chunks-page-section.html' %}
+    {% endblock %}
+</p>
+<form method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% block analyze_transcript_page_section %}
+        {% render_analyze_audio_section %}
+    {% endblock %}
+    <button type="submit">Analyze</button>
+</form>
+<h3>Trancript Text</h3>
 <p>{{ transcript.transcript_text }}</p>
+{% endblock %}
+
+{% block extra_scripts %}
+    {% vite_react_refresh %}
+    {% vite_hmr_client %}
+    {% vite_asset 'src/view-transcript-chunk-page-section.jsx' %}
+    {% vite_asset 'src/analyze-audio-page-section.jsx' %}
 {% endblock %}

@@ -127,6 +127,14 @@ details:hover {
     color: #D4AF37; /* Gold Wheat for hover effect */
 }
 
+/* Transcript Tags */
+.transcript-tags-details {
+    color: black;
+}
+.transcript-tags-details:hover {
+    color: black;
+}
+
 /* Hide responsive elements as default */
 .nav-menu-details {
     display: none;
@@ -197,6 +205,11 @@ input[type="file"]::file-selector-button:hover {
 table {
     width: 100%;
     border-collapse: collapse;
+}
+
+/* React dashboard mount */
+#dashboard-root {
+    padding: 1rem;
 }
 thead th {
     background-color: #f9f9f9;

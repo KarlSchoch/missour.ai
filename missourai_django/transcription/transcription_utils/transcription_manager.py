@@ -74,10 +74,15 @@ class TranscriptionManager:
     
 
     def _transcribe_chunk(self) -> str:
+        # Check for the model_env
+        if os.getenv("MODEL_ENV") == "dev":
+            print("MODEL_ENV is DEV.  Bypassing external API calls")
+            return "Short transcript text resembling actual API output."
+            
         with open(f"{self.chunk_path}", "rb") as audio_file:
             try:
                 transcript = self.client.audio.transcriptions.create(
-                    model="whisper-1",
+                    model="gpt-4o-mini-transcribe",
                     file=audio_file
                 )
             except openai.BadRequestError as e:
