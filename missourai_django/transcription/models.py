@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 
 # Create your models here.
 class Transcript(models.Model):
@@ -43,5 +44,34 @@ class Tag(models.Model):
             models.UniqueConstraint(
                 fields=["chunk", "topic"],
                 name="uniq_chunk_topic",
+            )
+        ]
+
+class Summary(models.Model):
+    class SummaryType(models.TextChoices):
+        GENERAL = "general", "General"
+        TOPIC = "topic", "Topic"
+    
+    summary_type = models.CharField(
+        max_length=20,
+        choices=SummaryType.choices,
+        default=SummaryType.GENERAL
+    )
+    topic = models.ForeignKey(
+        Topic,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="summaries"
+    )
+    text = models.TextField()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                name="summary_topic_required_for_topic_type",
+                check=(
+                    Q(summary_type=SummaryType.GENERAL, topic__isnull=True) | Q(summary_type=SummaryType.TOPIC, topic__isnull=False)
+                )
             )
         ]
