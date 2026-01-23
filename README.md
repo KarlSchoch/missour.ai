@@ -44,6 +44,10 @@ The web application combines a Django backend that exposes APIs and serves the H
    - Runs Django `runserver` on 8000 and Vite dev server on 5173.  
    - `DJANGO_VITE_DEV=true` ensures HMR; APIs are proxied via the dev server.
 3) Stop with `docker compose down` (add `-v` if you want to drop the dev SQLite/media data).
+4) Dependencies and volumes (dev):
+   - Python deps (`pyproject.toml`/`poetry.lock`): restart the dev container; the dev entrypoint runs `poetry install` on startup. If the venv gets stale, remove the `venv` volume.
+   - System deps or Dockerfile changes: rebuild with `docker compose -f docker-compose.dev.yml up --build`.
+   - Frontend deps (`frontend/package.json`): run `docker compose -f docker-compose.dev.yml run --rm frontend npm install`. If you see Rollup optional-deps errors, remove `frontend/node_modules` on the host before reinstalling.
 
 **Production**
 - Build and run the app behind Nginx (HTTPS, clean URLs):  
