@@ -8,7 +8,10 @@ class Transcript(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 class Topic(models.Model):
-    topic = models.CharField(max_length=100)
+    topic = models.CharField(
+        max_length=100,
+        unique=True
+    )
     description = models.CharField(max_length=255, default='', blank=True)
 
     def __str__(self):
@@ -52,6 +55,11 @@ class Summary(models.Model):
         GENERAL = "general", "General"
         TOPIC = "topic", "Topic"
     
+    transcript = models.ForeignKey(
+        Transcript,
+        on_delete=models.CASCADE,
+        related_name="summaries"
+    )
     summary_type = models.CharField(
         max_length=20,
         choices=SummaryType.choices,
@@ -61,17 +69,20 @@ class Summary(models.Model):
         Topic,
         null=True,
         blank=True,
-        on_delete=models.SET_NULL,
+        on_delete=models.CASCADE,
         related_name="summaries"
     )
-    text = models.TextField()
+    text = models.TextField(
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         constraints = [
             models.CheckConstraint(
                 name="summary_topic_required_for_topic_type",
-                check=(
-                    Q(summary_type=SummaryType.GENERAL, topic__isnull=True) | Q(summary_type=SummaryType.TOPIC, topic__isnull=False)
+                condition=(
+                    Q(summary_type="general", topic__isnull=True) | Q(summary_type="topic", topic__isnull=False)
                 )
             )
         ]

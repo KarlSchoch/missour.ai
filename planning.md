@@ -95,9 +95,17 @@ flowchart TD
     - Test Set up
         - MSW: 
             - `GET` `/topics/` and `/summaries/`: Return Topics and Summaries by default
+                - Filtering summaries for a specific topic
         - Provide override for no summaries
 2. Create Individual React Components
-    - 
+3. Create Django Template
+    - [] Create Django template and include it within the View Transcripts page
+    - [] Create view that exposes API Endpoints
+4. Create barebones DRF Components (model -> serializer -> ModelViewSet -> Route (api_urls.py))
+    - [x] Summaries Serializer (serializers.py)
+    - [x] ViewSet that allows for filtering (api_views.py)
+    - [X] Route in api_urls.py
+    - [] Create test that shows the ability to pull out a summary for an existing transcript
 ## Celery infrastructure and API Integration
     - [ ] Deal with external API call failures
     - [ ] Mock external API calls
