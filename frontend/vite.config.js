@@ -15,6 +15,11 @@ export default defineConfig(({ mode }) => ({
     },
     react({ fastRefresh: false }),
   ],
+  resolve: {
+    alias: {
+      '@fixtures': resolve(__dirname, '../test/fixtures'),
+    },
+  },
   server: {
     port: 5173,
     proxy: { '/api': 'http://localhost:8000/' },

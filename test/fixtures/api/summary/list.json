@@ -1,0 +1,14 @@
+[
+  {
+    "transcript": 1,
+    "summary_type": "general",
+    "topic": null,
+    "text": "Overall summary of the transcript."
+  },
+  {
+    "transcript": 1,
+    "summary_type": "topic",
+    "topic": 1,
+    "text": "Summary focused on AI discussion."
+  }
+]

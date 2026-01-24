@@ -68,9 +68,9 @@ flowchart TD
     end
 ```
 - [ ] Create `GenerateReport` component nested within Django template
-    - [ ] API Dependencies
-        - [ ] **Summaries** API Endpoint that returns records from the Summaries Table _for a specific transcript_ and then passes that down as props *only to `UpdateExistingReport` component*
-        - [ ] **Topics** API Endpoint that returns all topics and passes them to both `UpdateExistingReport` and `CreateNewReport`
+    - [x] API Dependencies
+        - [x] **Summaries** API Endpoint that returns records from the Summaries Table _for a specific transcript_ and then passes that down as props *only to `UpdateExistingReport` component*
+        - [x] **Topics** API Endpoint that returns all topics and passes them to both `UpdateExistingReport` and `CreateNewReport`
     - [ ] Create separate `UpdateExistingReport` and `CreateNewReport` Components
         - [ ] Conditionally render based on whether the transcript has any related summaries (`UpdateExistingReport` if there are summaries, `CreateNewReport` if there aren't)
             - **Unit Test**: Mock response with no records vs. some records and ensure that the correct component renders
@@ -81,7 +81,7 @@ flowchart TD
     - [ ] Create `ExistingReportContents` component that is based on the data from the **Summaries** API Endpoint
 - [ ] Refactor [view_topics.jsx](./frontend/src/view-topics.jsx)
     - [ ] Split out the add topics into a new component that can be imported
-- [ ] Create API Endpoint for Summaries
+- [x] Create API Endpoint for Summaries
     - GET: Fairly straightforward
     - POST: Create the initial summary with only the Transcript, Summary Type, and Topic Fields; exclude the Summary Text field
     - PATCH: Add the Summary Text field
@@ -105,7 +105,21 @@ flowchart TD
     - [x] Summaries Serializer (serializers.py)
     - [x] ViewSet that allows for filtering (api_views.py)
     - [X] Route in api_urls.py
-    - [] Create test that shows the ability to pull out a summary for an existing transcript
+    - [] Create test for API that shows the ability to pull out a summary for an existing transcript as well as ability to return none for a non-existent transcript.  What should this do in terms of error handling?
+        - non-existent transcript check needs to look at both a transcript that doesn't exist (error handling) AND a transcript that does not have a summary
+            - transcript that doesn't exist: `{ "transcript": [ "Select a valid choice. That choice is not one of the available choices." ] }`
+            - transcript that does not have a summary: `[]`
+        - transcript exists and has a summary:
+            ```json
+            [
+                {
+                    "transcript": 96,
+                    "summary_type": "general",
+                    "topic": null,
+                    "text": "High level summary of a very engaging and in-depth committee hearing."
+                }
+            ]
+            ```
 ## Celery infrastructure and API Integration
     - [ ] Deal with external API call failures
     - [ ] Mock external API calls
