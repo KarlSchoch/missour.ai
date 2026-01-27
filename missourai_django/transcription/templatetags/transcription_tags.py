@@ -79,3 +79,11 @@ def render_view_transcript_chunks_section(context):
     payload = {"topics": topics, "rows": list(rows_by_chunk.values())}
 
     return { 'initial_payload': payload}
+
+@register.inclusion_tag(
+    'transcription/partials/generate-report-page-section.html',
+    takes_context=True,
+)
+def render_generate_report_page_section(context):
+
+    return {'initial_payload': {"key": "value"}}

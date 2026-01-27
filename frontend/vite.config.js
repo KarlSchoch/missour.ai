@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => ({
         console.log(`[vite] mode=${config.mode} base=${config.base}`)
       },
     },
-    react({ fastRefresh: false }),
+    react({ fastRefresh: true }),
   ],
   resolve: {
     alias: {
@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 5173,
     proxy: { '/api': 'http://localhost:8000/' },
+    watch: { usePolling: true, interval: 100 },
   },
   build: {
     outDir: 'dist',
@@ -36,6 +37,7 @@ export default defineConfig(({ mode }) => ({
         'src/view-topics.jsx': resolve(__dirname, 'src/view-topics.jsx'),
         'src/view-transcript-chunk-page-section.jsx': resolve(__dirname, 'src/view-transcript-chunk-page-section.jsx'),
         'src/topic-selector.jsx': resolve(__dirname, 'src/topic-selector.jsx'),
+        'src/generate-report-page-section.jsx': resolve(__dirname, 'src/generate-report-page-section.jsx'),
       },
     },
   }

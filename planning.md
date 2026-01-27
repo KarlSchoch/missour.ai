@@ -105,7 +105,7 @@ flowchart TD
     - [x] Summaries Serializer (serializers.py)
     - [x] ViewSet that allows for filtering (api_views.py)
     - [X] Route in api_urls.py
-    - [] Create test for API that shows the ability to pull out a summary for an existing transcript as well as ability to return none for a non-existent transcript.  What should this do in terms of error handling?
+    - [x] Create test for API that shows the ability to pull out a summary for an existing transcript as well as ability to return none for a non-existent transcript.  What should this do in terms of error handling?
         - non-existent transcript check needs to look at both a transcript that doesn't exist (error handling) AND a transcript that does not have a summary
             - transcript that doesn't exist: `{ "transcript": [ "Select a valid choice. That choice is not one of the available choices." ] }`
             - transcript that does not have a summary: `[]`
