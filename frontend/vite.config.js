@@ -20,6 +20,10 @@ export default defineConfig(({ mode }) => ({
       '@fixtures': resolve(__dirname, '../test/fixtures'),
     },
   },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.js'],
+  },
   server: {
     port: 5173,
     proxy: { '/api': 'http://localhost:8000/' },

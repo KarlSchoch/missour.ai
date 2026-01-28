@@ -1,13 +1,11 @@
 import React from "react";
 import ReactDOM from 'react-dom/client';
 
-function App() {
+export default function GenerateReportPageSection() {
     return (
-        <>
-            Generate Report Now!!!
-        </>
+        <h3>Generate Report Now!!!</h3>
     )
 }
 
 const mount = document.getElementById('generate-report-page-section-root');
-if (mount) ReactDOM.createRoot(mount).render(<App />);
+if (mount) ReactDOM.createRoot(mount).render(<GenerateReportPageSection />);
