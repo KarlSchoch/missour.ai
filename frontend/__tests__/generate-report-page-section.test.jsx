@@ -35,12 +35,20 @@ test('Handles Summaries API call failure', async () => {
 test('displays CreateNewReport when no Summaries', async () => {
   // Arrange
   render(<GenerateReportPageSection />)
-  
+
   // Act
+  await screen.findByRole('heading')
+
   // Assert
+  expect(screen.findAllByTestId('create-new-report')).toBeInTheDocument()
 })
 test('displays UpdateExistingReport when Summaries returned', async () => {
   // Arrange
+  render(<GenerateReportPageSection />)
+
   // Act
+  await screen.findByRole('heading')
+
   // Assert
+  expect(screen.findAllByTestId('update-existing-report')).toBeInTheDocument()
 })

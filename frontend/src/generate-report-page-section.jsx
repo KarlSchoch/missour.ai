@@ -3,43 +3,61 @@ import ReactDOM from 'react-dom/client';
 import { getInitialData } from './utils/getInitialData'
 import { getCsrfToken } from "./utils/csrf";
 
-export default async function GenerateReportPageSection() {
+export default function GenerateReportPageSection() {
     const init = useMemo(
         () => getInitialData('initial-payload-generate-report-page-section'),
         []
     )
-    console.log("init", init);
-    const [summaries, setSummaries] = useState({});
-    useEffect(() => {
-        // Need to have error handling
+    const [summaries, setSummaries] = useState([])
+
+    async function getSummaries(init) {
+        // Set up URL with query string
         const params = {
             transcript: init?.transcript_id
         }
         const queryString = new URLSearchParams(params).toString();
         const baseUrl = init?.apiUrls?.summaries;
         const url = queryString ? `${baseUrl}?${queryString}` : baseUrl;
-        // try {
-            // let url
-            // if (!url) return
-            // console.log("url", url + '/?')
+        // Fetch summaries, filter by transcript
         const resp = await fetch(url, {
+            method: 'GET',
             headers: {
-                method: 'GET',
                 headers: {
                     'X-CSRFToken': getCsrfToken(),
                 },
                 credentials: 'include',
             }
         });
-        // } catch {
+        // Handle response
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(text || "Request failed");
+        }
+        if (resp.ok) {
+            const data = await resp.json()
+            setSummaries(data)
+        }
+    }
 
-        // }
-        
+    useEffect(() => {
+        getSummaries(init)
     }, [init?.apiUrls?.summaries])
 
-
     return (
-        <h3>Generate Report Now!!!</h3>
+        <>
+            <h3>Generate Report Now!!!</h3>
+            {
+                summaries.length === 0 ? (
+                    <div data-testid="create-new-report">
+                        Create New Report
+                    </div>
+                ) : (
+                    <div data-testid="update-existing-report">
+                        Update Existing Report
+                    </div>
+                )
+            }
+        </> 
     )
 }
 
