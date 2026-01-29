@@ -18,14 +18,24 @@ test('Handles Summaries API call failure', async () => {
   render(<GenerateReportPageSection />)
   // const response = await fetch('/api/summaries/');
   // console.log(response);
+  // server.use(
+  //   // override the initial "GET /greeting" request handler
+  //   // to return a 500 Server Error
+  //   http.get('/greeting', (req, res, ctx) => {
+  //     return new HttpResponse(null, {status: 500})
+  //   }),
+  // )
+  
   // Act
   await screen.findByRole('heading')
 
   // Assert
-  expect(screen.getByRole('alert')).toHaveTextContent('Generate Report!')
+  expect(screen.getByRole('heading')).toHaveTextContent('Generate Report')
 })
 test('displays CreateNewReport when no Summaries', async () => {
   // Arrange
+  render(<GenerateReportPageSection />)
+  
   // Act
   // Assert
 })

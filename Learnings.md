@@ -1,0 +1,2 @@
+- What exactly the different parts of the testing are
+- 
