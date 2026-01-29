@@ -34,21 +34,33 @@ test('Handles Summaries API call failure', async () => {
 })
 test('displays CreateNewReport when no Summaries', async () => {
   // Arrange
+  document.body.innerHTML = `
+    <div id="generate-report-page-section-root"></div>
+    <script id="initial-payload-generate-report-page-section" type="application/json">
+      {"transcript_id":2,"apiUrls":{"summaries":"/api/summaries/"}}
+    </script>
+  `
   render(<GenerateReportPageSection />)
 
   // Act
   await screen.findByRole('heading')
 
   // Assert
-  expect(screen.findAllByTestId('create-new-report')).toBeInTheDocument()
+  expect(await screen.findByTestId('create-new-report')).toBeInTheDocument()
 })
 test('displays UpdateExistingReport when Summaries returned', async () => {
   // Arrange
+  document.body.innerHTML = `
+    <div id="generate-report-page-section-root"></div>
+    <script id="initial-payload-generate-report-page-section" type="application/json">
+      {"transcript_id":1,"apiUrls":{"summaries":"/api/summaries/"}}
+    </script>
+  `
   render(<GenerateReportPageSection />)
 
   // Act
   await screen.findByRole('heading')
 
   // Assert
-  expect(screen.findAllByTestId('update-existing-report')).toBeInTheDocument()
+  expect(await screen.findByTestId('update-existing-report')).toBeInTheDocument()
 })
