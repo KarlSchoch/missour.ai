@@ -2,6 +2,8 @@ import React, { useMemo, useState, useEffect } from "react";
 import ReactDOM from 'react-dom/client';
 import { getInitialData } from './utils/getInitialData'
 import { getCsrfToken } from "./utils/csrf";
+import UpdateExistingReport from "./update-existing-report";
+import CreateNewReport from "./create-new-report";
 
 export default function GenerateReportPageSection() {
     const init = useMemo(
@@ -67,15 +69,7 @@ export default function GenerateReportPageSection() {
             }
             {
                 !error && (
-                    summaries.length === 0 ? (
-                        <div data-testid="create-new-report">
-                            Create New Report
-                        </div>
-                    ) : (
-                        <div data-testid="update-existing-report">
-                            Update Existing Report
-                        </div>
-                    )
+                    summaries.length === 0 ? ( <CreateNewReport /> ) : ( <UpdateExistingReport /> )
                 )
             }
         </> 

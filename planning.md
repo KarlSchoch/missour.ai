@@ -68,13 +68,14 @@ flowchart TD
     end
 ```
 - [ ] Create `GenerateReport` component nested within Django template
+    - [x] Create component and associated Django Infrastructure
     - [x] API Dependencies
         - [x] **Summaries** API Endpoint that returns records from the Summaries Table _for a specific transcript_ and then passes that down as props *only to `UpdateExistingReport` component*
         - [x] **Topics** API Endpoint that returns all topics and passes them to both `UpdateExistingReport` and `CreateNewReport`
     - [ ] Create separate `UpdateExistingReport` and `CreateNewReport` Components
         - [ ] Conditionally render based on whether the transcript has any related summaries (`UpdateExistingReport` if there are summaries, `CreateNewReport` if there aren't)
-            - **Unit Test**: Mock response with no records vs. some records and ensure that the correct component renders
-            - **Integration Test**: Mock DB with summaries for a single transcript and ensure when the frontend passes in the matching transcript id you get the `UpdateExistingReport` and when the id does not match you get `CreateNewReport` 
+            - [x] **Unit Test**: Mock response with no records vs. some records and ensure that the correct component renders
+            - [x] **Integration Test**: Mock DB with summaries for a single transcript and ensure when the frontend passes in the matching transcript id you get the `UpdateExistingReport` and when the id does not match you get `CreateNewReport` 
     - [ ] Both use the same `NewReportContents` component (naming TBD)
         - [ ] "New Contents" section component gets passed down the summaries (can be null) and, for the `UpdateExistingReport` component, removes the topics that are already in the summary from the list of topics that can be added
         - [ ] All of the elements from the new `AddTopics` component
@@ -86,7 +87,7 @@ flowchart TD
     - POST: Create the initial summary with only the Transcript, Summary Type, and Topic Fields; exclude the Summary Text field
     - PATCH: Add the Summary Text field
 - [ ] Frontend Testing
-    - [ ] Create Mock Service Worker using React Testing Library
+    - [x] Create Mock Service Worker using React Testing Library
 ### Implementation Plan
 1. Create bare bones React Components
     - Test: 
@@ -99,12 +100,12 @@ flowchart TD
         - Provide override for no summaries
 2. Create Individual React Components
 3. Create Django Template
-    - [] Create Django template and include it within the View Transcripts page
-    - [] Create view that exposes API Endpoints
+    - [x] Create Django template and include it within the View Transcripts page
+    - [x] Create view that exposes API Endpoints
 4. Create barebones DRF Components (model -> serializer -> ModelViewSet -> Route (api_urls.py))
     - [x] Summaries Serializer (serializers.py)
     - [x] ViewSet that allows for filtering (api_views.py)
-    - [X] Route in api_urls.py
+    - [x] Route in api_urls.py
     - [x] Create test for API that shows the ability to pull out a summary for an existing transcript as well as ability to return none for a non-existent transcript.  What should this do in terms of error handling?
         - non-existent transcript check needs to look at both a transcript that doesn't exist (error handling) AND a transcript that does not have a summary
             - transcript that doesn't exist: `{ "transcript": [ "Select a valid choice. That choice is not one of the available choices." ] }`
@@ -120,6 +121,10 @@ flowchart TD
                 }
             ]
             ```
+5. Create Capabilities within the components
+    - [] `UpdateExistingReport`
+    - [] `CreateNewReport`
+    - [] Refactor `AddTopics`
 ## Celery infrastructure and API Integration
     - [ ] Deal with external API call failures
     - [ ] Mock external API calls
