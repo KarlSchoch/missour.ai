@@ -5,7 +5,9 @@ export const handlers = [
     http.get('/api/summaries/', ({ request }) => {
         const url = new URL(request.url);
         const transcriptId = url.searchParams.get('transcript');
-        const filtered = transcriptId ? summaries.filter((s) => s.transcript === transcriptId) : summaries
+        const filtered = transcriptId
+            ? summaries.filter((s) => String(s.transcript) === transcriptId)
+            : summaries
 
         return HttpResponse.json(filtered)
     })

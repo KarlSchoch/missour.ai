@@ -59,17 +59,23 @@ export default function GenerateReportPageSection() {
         <>
             <h3>Generate Report Now!!!</h3>
             {
-                error && <p data-testid='generate-report-page-section-error' style={{ color: "crimson" }}>{error}</p>
+                error && (
+                    <p data-testid='generate-report-page-section-error' style={{ color: "crimson" }}>
+                        {error}
+                    </p>
+                )
             }
             {
-                summaries.length === 0 ? (
-                    <div data-testid="create-new-report">
-                        Create New Report
-                    </div>
-                ) : (
-                    <div data-testid="update-existing-report">
-                        Update Existing Report
-                    </div>
+                !error && (
+                    summaries.length === 0 ? (
+                        <div data-testid="create-new-report">
+                            Create New Report
+                        </div>
+                    ) : (
+                        <div data-testid="update-existing-report">
+                            Update Existing Report
+                        </div>
+                    )
                 )
             }
         </> 

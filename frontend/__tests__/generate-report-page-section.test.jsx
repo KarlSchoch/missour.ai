@@ -4,7 +4,7 @@ import {test, expect} from 'vitest';
 
 // import API mocking utilities from Mock Service Worker
 import {http, HttpResponse} from 'msw'
-import {setupServer} from 'msw/node'
+import { server } from '../src/mocks/node';
 
 // import react-testing methods
 import {render, fireEvent, screen} from '@testing-library/react'
@@ -31,10 +31,13 @@ test('Handles Summaries API call failure', async () => {
   render(<GenerateReportPageSection />)
   
   // Act
-  // await screen.findByRole('heading')
 
-  // Assert
-  expect(await screen.findAllByTestId('generate-report-page-section-error')).toBeInTheDocument('Generate Report')
+  // Assert: If we get an error, we want to see
+  //  - On the page: error section
+  //  - Not on the page: create-new-report and update-existing-report sections
+  expect(await screen.findByTestId('generate-report-page-section-error')).toBeInTheDocument('Generate Report')
+  expect(screen.queryByTestId('update-existing-report')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('create-new-report')).not.toBeInTheDocument()
 })
 test('displays CreateNewReport when no Summaries', async () => {
   // Arrange
@@ -49,9 +52,12 @@ test('displays CreateNewReport when no Summaries', async () => {
   // Act
   // await screen.findByRole('heading')
 
-  // Assert
+  // Assert: If we get a successful API call we want to see
+  //  - On the page: create-new-report
+  //  - Not on the page: error section and update-existing-report
   expect(await screen.findByTestId('create-new-report')).toBeInTheDocument()
   expect(screen.queryByTestId('generate-report-page-section-error')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('update-existing-report')).not.toBeInTheDocument()
 })
 test('displays UpdateExistingReport when Summaries returned', async () => {
   // Arrange
@@ -68,4 +74,6 @@ test('displays UpdateExistingReport when Summaries returned', async () => {
 
   // Assert
   expect(await screen.findByTestId('update-existing-report')).toBeInTheDocument()
+  expect(screen.queryByTestId('generate-report-page-section-error')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('create-new-report')).not.toBeInTheDocument()
 })
