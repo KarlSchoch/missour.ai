@@ -72,8 +72,8 @@ flowchart TD
     - [x] API Dependencies
         - [x] **Summaries** API Endpoint that returns records from the Summaries Table _for a specific transcript_ and then passes that down as props *only to `UpdateExistingReport` component*
         - [x] **Topics** API Endpoint that returns all topics and passes them to both `UpdateExistingReport` and `CreateNewReport`
-    - [ ] Create separate `UpdateExistingReport` and `CreateNewReport` Components
-        - [ ] Conditionally render based on whether the transcript has any related summaries (`UpdateExistingReport` if there are summaries, `CreateNewReport` if there aren't)
+    - [x] Create separate `UpdateExistingReport` and `CreateNewReport` Components
+        - [x] Conditionally render based on whether the transcript has any related summaries (`UpdateExistingReport` if there are summaries, `CreateNewReport` if there aren't)
             - [x] **Unit Test**: Mock response with no records vs. some records and ensure that the correct component renders
             - [x] **Integration Test**: Mock DB with summaries for a single transcript and ensure when the frontend passes in the matching transcript id you get the `UpdateExistingReport` and when the id does not match you get `CreateNewReport` 
     - [ ] Both use the same `NewReportContents` component (naming TBD)
@@ -122,9 +122,25 @@ flowchart TD
             ]
             ```
 5. Create Capabilities within the components
+    - [] Additions to the `GenerateReportPageSection`
+        - Query for Topics and pass into child components as props
     - [] `UpdateExistingReport`
+        - Receives Summaries and Topics from parent
+        - Shows the Existing summaries
+            - General Summary: Show all the time
+            - Topics: Separate heading, always shows the topics that already have summaries but create a collapsible section to show the summary (mouseover?)
+        - Imports `NewReportContents` and passes down topics, filtering for topics that do not already have summaries
     - [] `CreateNewReport`
+        - Receives Topics from parent
+        - Imports `NewReportContents`
     - [] Refactor `AddTopics`
+        - [] Passes state around added topics "up" to the parent component where the "Submit" button will reside to allow for custom logic
+            - for the `view-topics.jsx`, use the existing `onSubmit`
+            - for the `NewReportContents`, nest within the logic of creating the summaries.  See comments about error handling.
+    - [] `NewReportContents` Component
+        - [] Allow user to select Topics using [Mantine UI MultiSelect](https://mantine.dev/core/multi-select/)
+        - [] Pulls in `AddTopics` to allow user to add topics that do not already exist
+        - [] Implement error handling
 ## Celery infrastructure and API Integration
     - [ ] Deal with external API call failures
     - [ ] Mock external API calls
