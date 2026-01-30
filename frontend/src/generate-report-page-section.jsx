@@ -9,33 +9,45 @@ export default function GenerateReportPageSection() {
         []
     )
     const [summaries, setSummaries] = useState([])
+    const [error, setError] = useState(null);
 
     async function getSummaries(init) {
+        setError(null);
         // Set up URL with query string
+        const transcriptId = init?.transcript_id;
+        const baseUrl = init?.apiUrls?.summaries;
+        if (!transcriptId || !baseUrl) {
+            setError('Unable to create URL for API')
+            return
+        }
         const params = {
-            transcript: init?.transcript_id
+            transcript: transcriptId
         }
         const queryString = new URLSearchParams(params).toString();
-        const baseUrl = init?.apiUrls?.summaries;
-        const url = queryString ? `${baseUrl}?${queryString}` : baseUrl;
+        const url = `${baseUrl}?${queryString}`;
         // Fetch summaries, filter by transcript
-        const resp = await fetch(url, {
-            method: 'GET',
-            headers: {
+        try {
+            const resp = await fetch(url, {
+                method: 'GET',
                 headers: {
-                    'X-CSRFToken': getCsrfToken(),
-                },
-                credentials: 'include',
+                    headers: {
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    credentials: 'include',
+                }
+            });
+            // Handle response
+            if (!resp.ok) {
+                const text = await resp.text();
+                setError(text || "Request to summaries API failed");
+                return
             }
-        });
-        // Handle response
-        if (!resp.ok) {
-          const text = await resp.text();
-          throw new Error(text || "Request failed");
-        }
-        if (resp.ok) {
-            const data = await resp.json()
-            setSummaries(data)
+            if (resp.ok) {
+                const data = await resp.json()
+                setSummaries(data)
+            }
+        } catch(e) {
+            setError(err?.message || "Request to summaries API failed")
         }
     }
 
@@ -46,6 +58,9 @@ export default function GenerateReportPageSection() {
     return (
         <>
             <h3>Generate Report Now!!!</h3>
+            {
+                error && <p data-testid='generate-report-page-section-error' style={{ color: "crimson" }}>{error}</p>
+            }
             {
                 summaries.length === 0 ? (
                     <div data-testid="create-new-report">

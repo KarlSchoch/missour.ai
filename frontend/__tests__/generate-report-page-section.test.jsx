@@ -15,22 +15,26 @@ import GenerateReportPageSection from '../src/generate-report-page-section'
 // Define Tests
 test('Handles Summaries API call failure', async () => {
   // Arrange
+  server.use(
+    // override the initial "GET /greeting" request handler
+    // to return a 500 Server Error
+    http.get('/api/summaries', (req, res, ctx) => {
+      return new HttpResponse(null, {status: 500})
+    }),
+  )
+  document.body.innerHTML = `
+    <div id="generate-report-page-section-root"></div>
+    <script id="initial-payload-generate-report-page-section" type="application/json">
+      {"transcript_id":2,"apiUrls":{"summaries":"/api/summaries/"}}
+    </script>
+  `
   render(<GenerateReportPageSection />)
-  // const response = await fetch('/api/summaries/');
-  // console.log(response);
-  // server.use(
-  //   // override the initial "GET /greeting" request handler
-  //   // to return a 500 Server Error
-  //   http.get('/greeting', (req, res, ctx) => {
-  //     return new HttpResponse(null, {status: 500})
-  //   }),
-  // )
   
   // Act
-  await screen.findByRole('heading')
+  // await screen.findByRole('heading')
 
   // Assert
-  expect(screen.getByRole('heading')).toHaveTextContent('Generate Report')
+  expect(await screen.findAllByTestId('generate-report-page-section-error')).toBeInTheDocument('Generate Report')
 })
 test('displays CreateNewReport when no Summaries', async () => {
   // Arrange
@@ -43,10 +47,11 @@ test('displays CreateNewReport when no Summaries', async () => {
   render(<GenerateReportPageSection />)
 
   // Act
-  await screen.findByRole('heading')
+  // await screen.findByRole('heading')
 
   // Assert
   expect(await screen.findByTestId('create-new-report')).toBeInTheDocument()
+  expect(screen.queryByTestId('generate-report-page-section-error')).not.toBeInTheDocument()
 })
 test('displays UpdateExistingReport when Summaries returned', async () => {
   // Arrange
