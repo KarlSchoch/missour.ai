@@ -10,8 +10,38 @@ export default function GenerateReportPageSection() {
         () => getInitialData('initial-payload-generate-report-page-section'),
         []
     )
-    const [summaries, setSummaries] = useState([])
+    const [summaries, setSummaries] = useState([]);
+    const [topics, setTopics] = useState([]);
     const [error, setError] = useState(null);
+
+    async function getTopics(init) {
+        setError(null)
+        const url = init?.apiUrls?.topics;
+        if (!url) {
+            setError('Unable to create URL for Topics API')
+            return
+        }
+        try {
+            const resp = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCsrfToken(),
+                },
+                credentials: 'include',
+            })
+            if (!resp.ok) {
+                const text = await resp.text()
+                setError(text || "Request to Topics API failed");
+                return
+            }
+            if (resp.ok) {
+                const data = await resp.json()
+                setTopics(data)
+            }
+        } catch(e) {
+            setError(e?.message || 'Request to Topics API failed')
+        }
+    }
 
     async function getSummaries(init) {
         setError(null);
@@ -19,7 +49,7 @@ export default function GenerateReportPageSection() {
         const transcriptId = init?.transcript_id;
         const baseUrl = init?.apiUrls?.summaries;
         if (!transcriptId || !baseUrl) {
-            setError('Unable to create URL for API')
+            setError('Unable to create URL for Summaries API')
             return
         }
         const params = {
@@ -32,11 +62,9 @@ export default function GenerateReportPageSection() {
             const resp = await fetch(url, {
                 method: 'GET',
                 headers: {
-                    headers: {
-                        'X-CSRFToken': getCsrfToken(),
-                    },
-                    credentials: 'include',
-                }
+                    'X-CSRFToken': getCsrfToken(),
+                },
+                credentials: 'include',
             });
             // Handle response
             if (!resp.ok) {
@@ -57,6 +85,10 @@ export default function GenerateReportPageSection() {
         getSummaries(init)
     }, [init?.apiUrls?.summaries])
 
+    useEffect(() => {
+        getTopics(init);
+    }, [init?.apiUrls?.topics])
+
     return (
         <>
             <h3>Generate Report Now!!!</h3>
@@ -69,7 +101,11 @@ export default function GenerateReportPageSection() {
             }
             {
                 !error && (
-                    summaries.length === 0 ? ( <CreateNewReport /> ) : ( <UpdateExistingReport /> )
+                    summaries.length === 0 ? ( 
+                        <CreateNewReport topics = {topics} /> 
+                    ) : ( 
+                        <UpdateExistingReport topics = {topics} summaries = {summaries}  /> 
+                    )
                 )
             }
         </> 

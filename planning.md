@@ -123,17 +123,17 @@ flowchart TD
             ```
 5. Create Capabilities within the components
     - [] Additions to the `GenerateReportPageSection`
-        - [] Query for Topics and pass into child components as props
-        - [] Add props to the `UpdateExistingReport` and `CreateNewReport` components
-            - [] `UpdateExistingReport`: Summaries and Topics
-            - [] `CreateNewReport`: Topics
+        - [x] Query for Topics and pass into child components as props
+        - [x] Add props to the `UpdateExistingReport` and `CreateNewReport` components
+            - [x] `UpdateExistingReport`: Summaries and Topics
+            - [x] `CreateNewReport`: Topics
         - Testing:
             - [] Ensure that if you get an error reaching out to the Topics API Endpoint the Error div shows up and that the other two subcomponents don't show up
             - Does not impact what shows up downstream as long as there is no error
                 - If you get no topics, you're still going to be able to create topic level summaries by adding to the topics in the `NewReportContents` section
                 - If you get topics, everything else shows up
     - [] `UpdateExistingReport`
-        - Receives Summaries and Topics from parent
+        - [x] Receives Summaries and Topics from parent
         - Shows the Existing summaries
             - General Summary: Show all the time
             - Topics: Separate heading, always shows the topics that already have summaries but create a collapsible section to show the summary (mouseover?)
