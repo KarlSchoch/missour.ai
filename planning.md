@@ -123,13 +123,27 @@ flowchart TD
             ```
 5. Create Capabilities within the components
     - [] Additions to the `GenerateReportPageSection`
-        - Query for Topics and pass into child components as props
+        - [] Query for Topics and pass into child components as props
+        - [] Add props to the `UpdateExistingReport` and `CreateNewReport` components
+            - [] `UpdateExistingReport`: Summaries and Topics
+            - [] `CreateNewReport`: Topics
+        - Testing:
+            - [] Ensure that if you get an error reaching out to the Topics API Endpoint the Error div shows up and that the other two subcomponents don't show up
+            - Does not impact what shows up downstream as long as there is no error
+                - If you get no topics, you're still going to be able to create topic level summaries by adding to the topics in the `NewReportContents` section
+                - If you get topics, everything else shows up
     - [] `UpdateExistingReport`
         - Receives Summaries and Topics from parent
         - Shows the Existing summaries
             - General Summary: Show all the time
             - Topics: Separate heading, always shows the topics that already have summaries but create a collapsible section to show the summary (mouseover?)
+                - If there are no topics, provide that information to the user.
         - Imports `NewReportContents` and passes down topics, filtering for topics that do not already have summaries
+        - Testing:
+            - [] Should see the General summaries and topics sections
+            - [] Within the Topics section, the number of sub-sections should equal the number of Topics level summaries for that transcript
+            - [] If there are no topics, create a message to the user letting them know
+            - [] Should have the `NewReportContents` component
     - [] `CreateNewReport`
         - Receives Topics from parent
         - Imports `NewReportContents`
@@ -140,6 +154,10 @@ flowchart TD
     - [] `NewReportContents` Component
         - [] Allow user to select Topics using [Mantine UI MultiSelect](https://mantine.dev/core/multi-select/)
         - [] Pulls in `AddTopics` to allow user to add topics that do not already exist
+        - [] API Call: This will ultimately be implemented in celery
+                - [] POST Call goes to Summaries
+                    - [] For Transcript with an existing Summary, only create topic level summaries
+                    - [] For Transcript without an existing summary, create general and topic level summaries
         - [] Implement error handling
 ## Celery infrastructure and API Integration
     - [ ] Deal with external API call failures
