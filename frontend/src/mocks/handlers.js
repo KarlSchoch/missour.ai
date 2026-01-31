@@ -1,5 +1,6 @@
 import { http, HttpResponse} from 'msw'
 import summaries from '@fixtures/api/summary/list.json'
+import topics from '@fixtures/api/topic/list.json'
 
 export const handlers = [
     http.get('/api/summaries/', ({ request }) => {
@@ -10,5 +11,8 @@ export const handlers = [
             : summaries
 
         return HttpResponse.json(filtered)
+    }),
+    http.get('/api/topics/', ({ request }) => {
+      return HttpResponse.json(topics)
     })
 ]
