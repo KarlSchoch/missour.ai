@@ -4,6 +4,7 @@ import { getInitialData } from './utils/getInitialData'
 import { getCsrfToken } from "./utils/csrf";
 import UpdateExistingReport from "./update-existing-report";
 import CreateNewReport from "./create-new-report";
+import { MantineProvider } from '@mantine/core'
 
 export default function GenerateReportPageSection() {
     const init = useMemo(
@@ -90,25 +91,29 @@ export default function GenerateReportPageSection() {
     }, [init?.apiUrls?.topics])
 
     return (
-        <>
-            <h3>Generate Report Now!!!</h3>
-            {
-                error && (
-                    <p data-testid='generate-report-page-section-error' style={{ color: "crimson" }}>
-                        {error}
-                    </p>
-                )
-            }
-            {
-                !error && (
-                    summaries.length === 0 ? ( 
-                        <CreateNewReport topics = {topics} /> 
-                    ) : ( 
-                        <UpdateExistingReport topics = {topics} summaries = {summaries}  /> 
-                    )
-                )
-            }
-        </> 
+        <MantineProvider>
+            <details className="transcript-tags-details">
+                <summary>Transcript Reports (click to expand)</summary>
+                <div style={{ paddingLeft: '4%' }}>
+                    {
+                        error && (
+                            <p data-testid='generate-report-page-section-error' style={{ color: "crimson" }}>
+                                {error}
+                            </p>
+                        )
+                    }
+                    {
+                        !error && (
+                            summaries.length === 0 ? ( 
+                                <CreateNewReport topics = {topics} /> 
+                            ) : ( 
+                                <UpdateExistingReport topics = {topics} summaries = {summaries}  /> 
+                            )
+                        )
+                    }
+                </div>
+            </details>
+        </MantineProvider>
     )
 }
 

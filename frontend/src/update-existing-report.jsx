@@ -2,17 +2,18 @@ import React, { useState, useEffect } from "react";
 import { getCsrfToken } from "./utils/csrf";
 
 export default function UpdateExistingReport({ summaries, topics }) {
+    const generalSummary = summaries.filter((summary) => summary.summary_type === 'general')
+    console.log('generalSummary', generalSummary);
     return (
         <div data-testid="update-existing-report">
-            Update Existing Report
-            <h4>Summaries</h4>
-            <ul>
+            <h4>General Transcript Summary</h4>
             {
-                summaries.map((summary) => (
-                    <li key={ summary.id }>{ summary.text }</li>
-                ))
+                generalSummary.length === 0 ? (
+                    <p>No general summary exists for this transcript currently</p>
+                ) : (
+                    <p>{ generalSummary[0].text }</p>
+                )
             }
-            </ul>
             <h4>Topics</h4>
             <ul>
             {

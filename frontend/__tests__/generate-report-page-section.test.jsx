@@ -1,5 +1,4 @@
 // import dependencies
-import React from 'react'
 import {test, expect} from 'vitest';
 
 // import API mocking utilities from Mock Service Worker
