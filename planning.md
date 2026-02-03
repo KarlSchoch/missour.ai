@@ -122,28 +122,48 @@ flowchart TD
             ]
             ```
 5. Create Capabilities within the components
-    - [] Additions to the `GenerateReportPageSection`
+    - [x] Additions to the `GenerateReportPageSection`
         - [x] Query for Topics and pass into child components as props
         - [x] Add props to the `UpdateExistingReport` and `CreateNewReport` components
             - [x] `UpdateExistingReport`: Summaries and Topics
             - [x] `CreateNewReport`: Topics
-        - Testing:
+        - Create transcript data
+        - [x] Testing:
             - [] Ensure that if you get an error reaching out to the Topics API Endpoint the Error div shows up and that the other two subcomponents don't show up
             - Does not impact what shows up downstream as long as there is no error
                 - If you get no topics, you're still going to be able to create topic level summaries by adding to the topics in the `NewReportContents` section
                 - If you get topics, everything else shows up
     - [] `UpdateExistingReport`
         - [x] Receives Summaries and Topics from parent
-        - Shows the Existing summaries
-            - General Summary: Show all the time
-            - Topics: Separate heading, always shows the topics that already have summaries but create a collapsible section to show the summary (mouseover?)
-                - If there are no topics, provide that information to the user.
+        - [x] Create database entries to enable UI validation
+            - [x] Summaries exist
+                - [x] General, no topic level (Transcript 96)
+                - [x] No General, 1 x topic level (Transcript 94)
+                - [x] General and multiple topic level (Transcript 93)
+            - [x] Summaries do not exist (Transcript 95)
+        - [x] Shows the Existing summaries
+            - [x] If there are no summaries for a given type, provide that information to the user
+            - [x] General Summary: Show all the time
+            - [x] Topics: Separate heading, always shows the topics that already have summaries but create a collapsible section to show the summary (mouseover?)
         - Imports `NewReportContents` and passes down topics, filtering for topics that do not already have summaries
+            - [] Section is visible when the user hits button.  Functionality implemented through [Mantine UI's Collapse](https://mantine.dev/core/collapse/)
         - Testing:
-            - [] Should see the General summaries and topics sections
-            - [] Within the Topics section, the number of sub-sections should equal the number of Topics level summaries for that transcript
-            - [] If there are no topics, create a message to the user letting them know
-            - [] Should have the `NewReportContents` component
+            - Cases
+                - [] Only general level summary
+                    - Shows general summary content ()
+                    - does not show general summary error message
+                    - Shows topic level summary error message
+                    - does not show topic level summary content
+                - [] Only topic level summary
+                    - does not show general summary content ()
+                    - Shows general summary error message
+                    - Shows topic level summary content
+                    - does not show topic level summary error message
+                    - number of topic level summary sections matches the number of topics in the response
+                - [] General and topic level summaries
+                    - Shows both general and topic level summary content
+                    - Does not show eitehr general or topic level error message
+            - [] Should have the `NewReportContents` component when the user selects that
     - [] `CreateNewReport`
         - Receives Topics from parent
         - Imports `NewReportContents`

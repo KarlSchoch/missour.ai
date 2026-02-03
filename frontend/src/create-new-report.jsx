@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { getCsrfToken } from "./utils/csrf";
 
 export default function CreateNewReport({ topics }) {
-    console.log("topics", topics);
     return (
         <div data-testid="create-new-report">
             Create New Report
