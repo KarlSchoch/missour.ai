@@ -1,5 +1,6 @@
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo } from "react";
 import { getCsrfToken } from "./utils/csrf";
+import NewReportContents from './new-report-contents';
 
 export default function UpdateExistingReport({ summaries, topics }) {
 
@@ -39,13 +40,14 @@ export default function UpdateExistingReport({ summaries, topics }) {
                     <p data-testid='update-existing-report-no-topic-summary' style={{color: 'orange'}}>No topic level summaries exists for this transcript currently</p>
                 ) : (
                     topicSummaries.map((topicSummary) => (
-                        <details key = { `${topicSummary.id}-detail` } className= 'transcript-tags-details'>
+                        <details data-testid = "topic-detail" key = { `${topicSummary.id}-detail` } className= 'transcript-tags-details'>
                             <summary>{ topicSummary.topic }</summary>
                             <p>{ topicSummary.text }</p>
                         </details>
                     ))
                 )
             }
+            <NewReportContents topics = {topics} />
         </div>
     )
 }

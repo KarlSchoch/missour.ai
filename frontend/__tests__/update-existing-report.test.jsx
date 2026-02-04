@@ -12,45 +12,91 @@ import {render, fireEvent, screen} from '@testing-library/react'
 import UpdateExistingReport from '../src/update-existing-report'
 
 // Define Tests
-test('Has populated General and Topic level Summary sections', async () => {
+test('Only general level summary', async () => {
   // Arrange
-  document.body.innerHTML = `
-    <div id="generate-report-page-section-root"></div>
-    <script id="initial-payload-generate-report-page-section" type="application/json">
-      {"transcript_id":2,"apiUrls":{"summaries":"/api/summaries/","topics":"/api/topics/"}}
-    </script>
-  `
-  render(<UpdateExistingReport />)
+  const summaries = [
+    {
+        "id": 1,
+        "transcript": 1,
+        "summary_type": "general",
+        "topic": null,
+        "text": "Overall summary of the transcript."
+    },
+  ]
+  render(<UpdateExistingReport summaries={summaries} topics={null}/>)
   
   // Act
 
   // Assert: 
-  // - The sections exist and have content
-  // - The number of topics summaries sections matches the number of topics summaries
+  // - Shows general summary content
+  expect(screen.queryByTestId('update-existing-report-general-summary')).toBeInTheDocument()
+  // - does not show general summary error message
+  expect(screen.queryByTestId('update-existing-report-no-general-summary')).not.toBeInTheDocument()
+  // - Shows topic level summary error message
+  expect(screen.queryByTestId('update-existing-report-no-topic-summary')).toBeInTheDocument()
+  // - does not show topic level summary content
+  expect(screen.queryByTestId('topic-detail')).not.toBeInTheDocument()
 })
-test('Message to user if there is no summary', async () => {
+test('Only topics level summary', async () => {
   // Arrange
-  document.body.innerHTML = `
-    <div id="generate-report-page-section-root"></div>
-    <script id="initial-payload-generate-report-page-section" type="application/json">
-      {"transcript_id":2,"apiUrls":{"summaries":"/api/summaries/","topics":"/api/topics/"}}
-    </script>
-  `
-  render(<UpdateExistingReport />)
+  const summaries = [
+    {
+        "id": 1,
+        "transcript": 1,
+        "summary_type": "topic",
+        "topic": 1,
+        "text": "Summary focused on AI discussion."
+    }
+  ]
+  render(<UpdateExistingReport summaries={summaries} topics={null}/>)
   
   // Act
 
   // Assert:
+  //  - does not show general summary content
+  expect(screen.queryByTestId('update-existing-report-general-summary')).not.toBeInTheDocument()
+  //  - Shows general summary error message
+  expect(screen.queryByTestId('update-existing-report-no-general-summary')).toBeInTheDocument()
+  //  - Shows topic level summary content
+  expect(screen.queryByTestId('topic-detail')).toBeInTheDocument()
+  //  - does not show topic level summary error message
+  expect(screen.queryByTestId('update-existing-report-no-topic-summary')).not.toBeInTheDocument()
+  //  - number of topic level summary sections matches the number of topics in the response
+  const topicSummaryElements = screen.queryAllByTestId('topic-detail')
+  expect(topicSummaryElements.length).toEqual(summaries.length)
+})
+test('General and topic level summaries', async () => {
+  // Arrange
+  const summaries = [
+    {
+        "transcript": 1,
+        "summary_type": "topic",
+        "topic": 1,
+        "text": "Summary focused on AI discussion."
+    },
+    {
+        "id": 1,
+        "transcript": 1,
+        "summary_type": "general",
+        "topic": null,
+        "text": "Overall summary of the transcript."
+    },
+  ]
+  render(<UpdateExistingReport summaries={summaries} topics={null} />)
+  
+  // Act
+
+  // Assert:
+  // - Shows both general and topic level summary content  
+  expect(screen.queryByTestId('update-existing-report-general-summary')).toBeInTheDocument()
+  expect(screen.queryByTestId('topic-detail')).toBeInTheDocument()
+  // - Does not show eitehr general or topic level error message
+  expect(screen.queryByTestId('update-existing-report-no-topic-summary')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('update-existing-report-no-general-summary')).not.toBeInTheDocument()
 })
 test('NewReportContents not visible on initial load', async () => {
   // Arrange
-  document.body.innerHTML = `
-    <div id="generate-report-page-section-root"></div>
-    <script id="initial-payload-generate-report-page-section" type="application/json">
-      {"transcript_id":2,"apiUrls":{"summaries":"/api/summaries/","topics":"/api/topics/"}}
-    </script>
-  `
-  render(<UpdateExistingReport />)
+  render(<UpdateExistingReport summaries={summaries} topics={null} />)
   
   // Act
 
@@ -58,13 +104,7 @@ test('NewReportContents not visible on initial load', async () => {
 })
 test('NewReportContents shows up on user selection', async () => {
   // Arrange
-  document.body.innerHTML = `
-    <div id="generate-report-page-section-root"></div>
-    <script id="initial-payload-generate-report-page-section" type="application/json">
-      {"transcript_id":2,"apiUrls":{"summaries":"/api/summaries/","topics":"/api/topics/"}}
-    </script>
-  `
-  render(<UpdateExistingReport />)
+  render(<UpdateExistingReport summaries={summaries} topics={null} />)
   
   // Act
 
