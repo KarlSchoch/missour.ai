@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { getCsrfToken } from "./utils/csrf";
 import NewReportContents from './new-report-contents';
+import { useDisclosure } from "@mantine/hooks";
 
 export default function UpdateExistingReport({ summaries, topics }) {
 
@@ -24,6 +25,9 @@ export default function UpdateExistingReport({ summaries, topics }) {
 
     const generalSummary = mappedSummaries.filter((summary) => summary.summary_type === "general");
     const topicSummaries = mappedSummaries.filter((summary) => summary.summary_type === "topic");
+
+    const [opened, { toggle }] = useDisclosure(false);
+
     return (
         <div data-testid="update-existing-report">
             <h4>General Transcript Summary</h4>
@@ -47,7 +51,10 @@ export default function UpdateExistingReport({ summaries, topics }) {
                     ))
                 )
             }
-            <NewReportContents topics = {topics} />
+            <button onClick={toggle}>Update Reports</button>
+            { 
+                opened && <NewReportContents data-testid='new-report-contents' topics = {topics} />
+            }
         </div>
     )
 }

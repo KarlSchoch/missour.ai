@@ -133,7 +133,7 @@ flowchart TD
             - Does not impact what shows up downstream as long as there is no error
                 - If you get no topics, you're still going to be able to create topic level summaries by adding to the topics in the `NewReportContents` section
                 - If you get topics, everything else shows up
-    - [] `UpdateExistingReport`
+    - [x] `UpdateExistingReport`
         - [x] Receives Summaries and Topics from parent
         - [x] Create database entries to enable UI validation
             - [x] Summaries exist
@@ -145,25 +145,25 @@ flowchart TD
             - [x] If there are no summaries for a given type, provide that information to the user
             - [x] General Summary: Show all the time
             - [x] Topics: Separate heading, always shows the topics that already have summaries but create a collapsible section to show the summary (mouseover?)
-        - Imports `NewReportContents` and passes down topics, filtering for topics that do not already have summaries
-            - [] Section is visible when the user hits button.  Functionality implemented through [Mantine UI's Collapse](https://mantine.dev/core/collapse/)
-        - Testing:
+        - [x] Imports `NewReportContents` and passes down topics, filtering for topics that do not already have summaries
+            - [x] Section is visible when the user hits button.  Functionality implemented through [Mantine UI's Collapse](https://mantine.dev/core/collapse/)
+        - [x] Testing:
             - Cases
-                - [] Only general level summary
-                    - Shows general summary content ()
+                - [x] Only general level summary
+                    - Shows general summary content
                     - does not show general summary error message
                     - Shows topic level summary error message
                     - does not show topic level summary content
-                - [] Only topic level summary
-                    - does not show general summary content ()
+                - [x] Only topic level summary
+                    - does not show general summary content
                     - Shows general summary error message
                     - Shows topic level summary content
                     - does not show topic level summary error message
                     - number of topic level summary sections matches the number of topics in the response
-                - [] General and topic level summaries
+                - [x] General and topic level summaries
                     - Shows both general and topic level summary content
                     - Does not show eitehr general or topic level error message
-            - [] Should have the `NewReportContents` component when the user selects that
+            - [x] Should have the `NewReportContents` component when the user selects that
     - [] `CreateNewReport`
         - Receives Topics from parent
         - Imports `NewReportContents`

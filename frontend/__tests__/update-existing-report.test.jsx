@@ -6,10 +6,18 @@ import {http, HttpResponse} from 'msw'
 import { server } from '../src/mocks/node';
 
 // import react-testing methods
-import {render, fireEvent, screen} from '@testing-library/react'
+import {render, screen} from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 // the component to test
 import UpdateExistingReport from '../src/update-existing-report'
+
+// import 
+import summaries from '../../test/fixtures/api/summary/list.json'
+import topics from '../../test/fixtures/api/topic/list.json'
+import { MantineProvider } from '@mantine/core';
+
+// const renderWithMantine = (ui) => render(<MantineProvider>{ui}</MantineProvider>);
 
 // Define Tests
 test('Only general level summary', async () => {
@@ -67,21 +75,6 @@ test('Only topics level summary', async () => {
 })
 test('General and topic level summaries', async () => {
   // Arrange
-  const summaries = [
-    {
-        "transcript": 1,
-        "summary_type": "topic",
-        "topic": 1,
-        "text": "Summary focused on AI discussion."
-    },
-    {
-        "id": 1,
-        "transcript": 1,
-        "summary_type": "general",
-        "topic": null,
-        "text": "Overall summary of the transcript."
-    },
-  ]
   render(<UpdateExistingReport summaries={summaries} topics={null} />)
   
   // Act
@@ -96,17 +89,20 @@ test('General and topic level summaries', async () => {
 })
 test('NewReportContents not visible on initial load', async () => {
   // Arrange
-  render(<UpdateExistingReport summaries={summaries} topics={null} />)
+  render(<UpdateExistingReport summaries={summaries} topics={topics} />)
   
   // Act
 
   // Assert:
+  expect(screen.queryByTestId('new-report-contents')).not.toBeInTheDocument()
 })
 test('NewReportContents shows up on user selection', async () => {
   // Arrange
-  render(<UpdateExistingReport summaries={summaries} topics={null} />)
+  render(<UpdateExistingReport summaries={summaries} topics={topics} />)
   
   // Act
+  await userEvent.click(screen.getByText('Update Reports'))
 
   // Assert:
+  expect(screen.queryByTestId('new-report-contents')).toBeInTheDocument()
 })
