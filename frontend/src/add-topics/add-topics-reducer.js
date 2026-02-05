@@ -1,10 +1,12 @@
+const blankTopic = () => ({
+    topic: "",
+    description: ""
+})
+
 export default function addTopicsReducer(newTopics, action) {
     switch (action.type) {
         case 'add': {
-            return [...newTopics, {
-                topic: "",
-                description: ""
-            }]
+            return [...newTopics, blankTopic()]
         }
         case 'remove': {
             if (newTopics.length === 1) return newTopics;
@@ -17,6 +19,9 @@ export default function addTopicsReducer(newTopics, action) {
                     [action.field]: action.value
                 } : newTopic
             ))
+        }
+        case 'reset': {
+            return [blankTopic()]
         }
         default: {
             throw Error('Unknown Action' + action.type)

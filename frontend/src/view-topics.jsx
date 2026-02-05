@@ -1,13 +1,14 @@
-import React, {useState, useReducer} from 'react'
+import React, {useState, useMemo, useReducer} from 'react'
 import ReactDOM from 'react-dom/client'
 import { getCsrfToken } from './utils/csrf'
 import AddTopics from './add-topics/add-topics';
 import addTopicsReducer from './add-topics/add-topics-reducer';
-import { 
-  handleAddTopic,
-  handleRemoveTopic,
-  handleUpdateTopic
- } from './add-topics/add-topics-event-handlers';
+// import { 
+//   handleAddTopic,
+//   handleRemoveTopic,
+//   handleUpdateTopic,
+//   handleResetNewTopics
+//  } from './add-topics/add-topics-event-handlers';
 import { 
   AddTopicsContext,
   AddTopicsDispatchContext 
@@ -18,44 +19,19 @@ function getInitialData() {
   return el ? JSON.parse(el.textContent) : {}
 }
 
-// const blankTopic = () => ({ topic: "", description: "" });
-
 function App() {
   // Extract initial data that contains information on relevant APIs
-  const init = React.useMemo(getInitialData, [])
+  const init = useMemo(getInitialData, [])
   // Instantiate existing Topics
-  const [topics, setTopics] = React.useState(null)
+  const [topics, setTopics] = useState(null)
   // Instantiate array of new topics to be created
   const [newTopics, dispatch] = useReducer(
     addTopicsReducer,
     [{ topic: "", description: "" }]
   )
-  // const [newTopics, setNewTopics] = useState([
-  //   blankTopic()
-  // ])
   // Create state variables for providing user feedback
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
-
-  // Function for adding new topic fields to form
-  // function addTopic() {
-  //   setNewTopics((prev) => [...prev, blankTopic()]);
-  // }
-
-  // Function for updating elements of newTopics array based on user input
-  // function updateTopic(index, field, value) {
-  //   setNewTopics((prev) => 
-  //     prev.map((t, i) => (i === index ? { ...t, [field]: value } : t))
-  //   );
-  // }
-
-  // Function for removing topics
-  // function removeNewTopic(index) {
-  //   setNewTopics((prev) => {
-  //     if (prev.length === 1) return prev 
-  //     return prev.filter((_, i) => i !== index);
-  //   });
-  // }
 
   const reloadTopics = React.useCallback(async () => {
     const url = init?.apiUrls?.topics
@@ -108,8 +84,10 @@ function App() {
           throw new Error(text || "Request failed");
         }
         if (res.ok) {
-          // Reload the list of topics show on the page and set up a new form
-          setNewTopics([blankTopic()]);
+          // Reset the list of topics show on the page and set up a new form
+          dispatch({
+              type: 'reset',
+          })
         }
       } catch (err) {
         setError(err.message || "Something went wrong.");
