@@ -1,6 +1,16 @@
-import React, {useState, useMemo} from 'react'
+import React, {useState, useReducer} from 'react'
 import ReactDOM from 'react-dom/client'
 import { getCsrfToken } from './utils/csrf'
+import { 
+  handleAddTopic,
+  handleRemoveTopic,
+  handleUpdateTopic
+ } from './add-topics/add-topics-event-handlers';
+
+import { 
+  AddTopicsContext,
+  AddTopicsDispatchContext 
+} from './add-topics/add-topics-context';
 
 function getInitialData() {
   const el = document.getElementById('initial-payload')

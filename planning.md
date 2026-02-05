@@ -167,7 +167,7 @@ flowchart TD
     - [] Refactor `AddTopics`
         - Implementation notes
             - Very high level
-                - Define `AddTopics` event handlers (separate file - `TopicsEventHandlers.js`)
+                - [x] Define `AddTopics` event handlers (separate file - `TopicsEventHandlers.js`)
                     ```js
                     export function handleAddTopic(name, description) {
                         dispatch({
@@ -178,7 +178,7 @@ flowchart TD
                     }
                     // ..
                     ```
-                - Manage state through a reducer (separate file - `TopicsReducer.js`)
+                - [x] Manage state through a reducer (separate file - `TopicsReducer.js`)
                     - Code Snippet: 
                         ```js
                         export default function topicsReducer(tasks, action) {
@@ -248,6 +248,11 @@ flowchart TD
         - [] Passes state around added topics "up" to the parent component where the "Submit" button will reside to allow for custom logic
             - for the `view-topics.jsx`, use the existing `onSubmit`
             - for the `NewReportContents`, nest within the logic of creating the summaries.  See comments about error handling.
+        - Testing
+            - Initial number of topics entry boxes is 1
+            - number of topics entry boxes goes up by 1 when user hits "+ Add another topic"
+            - number of topics entry boxes goes down by 1 when user hits "Remove"
+
     - [] `CreateNewReport`
         - Receives Topics from parent
         - Imports `NewReportContents`
