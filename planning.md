@@ -164,13 +164,93 @@ flowchart TD
                     - Shows both general and topic level summary content
                     - Does not show eitehr general or topic level error message
             - [x] Should have the `NewReportContents` component when the user selects that
-    - [] `CreateNewReport`
-        - Receives Topics from parent
-        - Imports `NewReportContents`
     - [] Refactor `AddTopics`
+        - Implementation notes
+            - Very high level
+                - Define `AddTopics` event handlers (separate file - `TopicsEventHandlers.js`)
+                    ```js
+                    export function handleAddTopic(name, description) {
+                        dispatch({
+                            type: 'added',
+                            name: name,
+                            description: description,
+                        })
+                    }
+                    // ..
+                    ```
+                - Manage state through a reducer (separate file - `TopicsReducer.js`)
+                    - Code Snippet: 
+                        ```js
+                        export default function topicsReducer(tasks, action) {
+                            switch (action.type) {
+                                case 'added': {
+                                    return [...topics, {
+                                        name: action.name,
+                                        description: action.description,
+                                    }]
+                                }
+                                // ..
+                                default: {
+                                    throw Error('Unknown Action' + action.type);
+                                }
+                            }
+                        }
+                        
+                        ```
+                    - Match the action 'type' dispatched by the event handlers with the switch statements 
+                - Create context (separate file - `TopicsContext.js`)
+                    - Current list of topics
+                    - Function that lets components dispatch actions
+                        ```js
+                        export const TasksContext = createContext(null);
+                        export const TasksDispatchContext = createContext(null);
+                        ```
+                - Import relevant components and integrate into parent component (`view-topics.jsx` and `update-existing-report.jsx`)
+                    - Key Tasks
+                        1. Wrap relevant components within the context
+                        2. Import the reducer and pass it to the context
+                        3. Pass the event handlers to the `AddTopics` component
+                    - Code snippet
+                        ```js
+                        export default function App() {
+                            // Import necessary dependencies
+                            import { useReducer } from 'react';
+                            // Import AddTopics component, reducer, event handlers, and context helpers
+                            import AddTopics from './AddTopic.jsx';
+                            import topicsReducer from 'TopicsReducer.js';
+                            import { handleAddTopic, HandleDeleteTopic, HandleChangeTopic } from 'TopicsEventHandlers.js';
+                            import { TasksContext, TasksDispatchContext } from 'TopicsContext.js';
+
+                            export default function App() {
+                                // Instantiate Reducer
+                                const [topics, dispatch] = useReducer(
+                                    topicsReducer,
+                                    initialTopics
+                                )
+
+                                // ...
+
+                                return (
+                                    <TopicsContext value={topics}> // Key tasks 1 and 2
+                                        <TopicsDispatchContext value={dispatch}> // Key tasks 1 and 2
+                                            <AddTopics 
+                                                topics={topics}
+                                                onAddTopic={handleAddTopic}
+                                                onDeleteTopic={handleDeleteTopic}
+                                                onChangeTopic={handleChangeTopic}
+                                            />
+                                        </TopicsDispatchContext>
+                                    </TopicsContext>
+                                )
+                            }
+                        }
+                        ```
         - [] Passes state around added topics "up" to the parent component where the "Submit" button will reside to allow for custom logic
             - for the `view-topics.jsx`, use the existing `onSubmit`
             - for the `NewReportContents`, nest within the logic of creating the summaries.  See comments about error handling.
+    - [] `CreateNewReport`
+        - Receives Topics from parent
+        - Imports `NewReportContents`
     - [] `NewReportContents` Component
         - [] Allow user to select Topics using [Mantine UI MultiSelect](https://mantine.dev/core/multi-select/)
         - [] Pulls in `AddTopics` to allow user to add topics that do not already exist

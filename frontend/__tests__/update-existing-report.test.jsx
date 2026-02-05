@@ -15,7 +15,7 @@ import UpdateExistingReport from '../src/update-existing-report'
 // import 
 import summaries from '../../test/fixtures/api/summary/list.json'
 import topics from '../../test/fixtures/api/topic/list.json'
-import { MantineProvider } from '@mantine/core';
+// import { MantineProvider } from '@mantine/core';
 
 // const renderWithMantine = (ui) => render(<MantineProvider>{ui}</MantineProvider>);
 
