@@ -14,9 +14,14 @@ export default function AddTopics() {
                             <label>
                                 Name:
                                 <input
-                                value={newTopic.topic}
-                                onChange={(e) => updateTopic(idx, "topic", e.target.value)}
-                                placeholder="e.g., Supply Chain Risk"
+                                    value={newTopic.topic}
+                                    onChange={(e) => dispatch({
+                                        type: 'update',
+                                        index: idx,
+                                        field: 'topic',
+                                        value: e.target.value,
+                                    })}
+                                    placeholder="e.g., Supply Chain Risk"
                                 />
                             </label>
                         </div>
@@ -25,20 +30,41 @@ export default function AddTopics() {
                             <label>
                                 Description:
                                 <textarea
-                                value={newTopic.description}
-                                onChange={(e) => updateTopic(idx, "description", e.target.value)}
-                                placeholder="Optional description of the topic..."
+                                    value={newTopic.description}
+                                    onChange={(e) => dispatch({
+                                        type: 'update',
+                                        index: idx,
+                                        field: 'description',
+                                        value: e.target.value,
+                                    })}
+                                    placeholder="Optional description of the topic..."
                                 />
                             </label>
                         </div>
 
-                        <button type="button" onClick={() => removeNewTopic(idx)}>
-                        Remove
+                        <button 
+                            type="button"
+                            onClick={() => dispatch({
+                                type: 'remove',
+                                index: idx
+                            })
+                        }>
+                            Remove
                         </button>
                         <hr />
                     </div>
                 ))
             }
+            <div>
+                <button 
+                    type="button"
+                    onClick={() => dispatch({
+                        type: 'add'
+                    })}
+                >
+                    + Add another topic
+                </button>
+            </div>
         </>
     )
 }
