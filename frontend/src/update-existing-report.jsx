@@ -22,11 +22,22 @@ export default function UpdateExistingReport({ summaries, topics }) {
             };
         });
     }, [summaries, topicNameById]);
+    const mappedTopics = useMemo(() => {
+        return (topics || []).map((topic) => {
+            return topic.topic
+        })
+    })
 
     const generalSummary = mappedSummaries.filter((summary) => summary.summary_type === "general");
     const topicSummaries = mappedSummaries.filter((summary) => summary.summary_type === "topic");
 
     const [opened, { toggle }] = useDisclosure(false);
+    
+    // Find topics without summaries
+    const topicsWithoutSummaries = useMemo(() => {
+        const summarized = new Set(topicSummaries.map(s => s.topic));
+        return (topics || []).filter(t => !summarized.has(t.topic));
+    }, [topics, topicSummaries]);
 
     return (
         <div data-testid="update-existing-report">
@@ -53,7 +64,7 @@ export default function UpdateExistingReport({ summaries, topics }) {
             }
             <button onClick={toggle}>Update Reports</button>
             { 
-                opened && <NewReportContents data-testid='new-report-contents' topics = {topics} />
+                opened && <NewReportContents data-testid='new-report-contents' availableTopics = {topicsWithoutSummaries} />
             }
         </div>
     )

@@ -89,7 +89,7 @@ flowchart TD
 - [ ] Frontend Testing
     - [x] Create Mock Service Worker using React Testing Library
 ### Implementation Plan
-1. Create bare bones React Components
+#### 1. Create bare bones React Components
     - Test: 
         - Ensure that all of the components show up within the larger `GenerateReport` component (default based on MSW returning Summaries should show `UpdateExistingReport`)
         - Both summaries and no summaries, ensure that with no summaries the `CreateNewReport` component appears
@@ -98,11 +98,11 @@ flowchart TD
             - `GET` `/topics/` and `/summaries/`: Return Topics and Summaries by default
                 - Filtering summaries for a specific topic
         - Provide override for no summaries
-2. Create Individual React Components
-3. Create Django Template
+#### 2. Create Individual React Components
+#### 3. Create Django Template
     - [x] Create Django template and include it within the View Transcripts page
     - [x] Create view that exposes API Endpoints
-4. Create barebones DRF Components (model -> serializer -> ModelViewSet -> Route (api_urls.py))
+#### 4. Create barebones DRF Components (model -> serializer -> ModelViewSet -> Route (api_urls.py))
     - [x] Summaries Serializer (serializers.py)
     - [x] ViewSet that allows for filtering (api_views.py)
     - [x] Route in api_urls.py
@@ -121,149 +121,193 @@ flowchart TD
                 }
             ]
             ```
-5. Create Capabilities within the components
-    - [x] Additions to the `GenerateReportPageSection`
-        - [x] Query for Topics and pass into child components as props
-        - [x] Add props to the `UpdateExistingReport` and `CreateNewReport` components
-            - [x] `UpdateExistingReport`: Summaries and Topics
-            - [x] `CreateNewReport`: Topics
-        - Create transcript data
-        - [x] Testing:
-            - [] Ensure that if you get an error reaching out to the Topics API Endpoint the Error div shows up and that the other two subcomponents don't show up
-            - Does not impact what shows up downstream as long as there is no error
-                - If you get no topics, you're still going to be able to create topic level summaries by adding to the topics in the `NewReportContents` section
-                - If you get topics, everything else shows up
-    - [x] `UpdateExistingReport`
-        - [x] Receives Summaries and Topics from parent
-        - [x] Create database entries to enable UI validation
-            - [x] Summaries exist
-                - [x] General, no topic level (Transcript 96)
-                - [x] No General, 1 x topic level (Transcript 94)
-                - [x] General and multiple topic level (Transcript 93)
-            - [x] Summaries do not exist (Transcript 95)
-        - [x] Shows the Existing summaries
-            - [x] If there are no summaries for a given type, provide that information to the user
-            - [x] General Summary: Show all the time
-            - [x] Topics: Separate heading, always shows the topics that already have summaries but create a collapsible section to show the summary (mouseover?)
-        - [x] Imports `NewReportContents` and passes down topics, filtering for topics that do not already have summaries
-            - [x] Section is visible when the user hits button.  Functionality implemented through [Mantine UI's Collapse](https://mantine.dev/core/collapse/)
-        - [x] Testing:
-            - Cases
-                - [x] Only general level summary
-                    - Shows general summary content
-                    - does not show general summary error message
-                    - Shows topic level summary error message
-                    - does not show topic level summary content
-                - [x] Only topic level summary
-                    - does not show general summary content
-                    - Shows general summary error message
-                    - Shows topic level summary content
-                    - does not show topic level summary error message
-                    - number of topic level summary sections matches the number of topics in the response
-                - [x] General and topic level summaries
-                    - Shows both general and topic level summary content
-                    - Does not show eitehr general or topic level error message
-            - [x] Should have the `NewReportContents` component when the user selects that
-    - [] Refactor `AddTopics`
-        - Implementation notes
-            - Very high level
-                - [x] Define `AddTopics` event handlers (separate file - `TopicsEventHandlers.js`)
-                    ```js
-                    export function handleAddTopic(name, description) {
-                        dispatch({
-                            type: 'added',
-                            name: name,
-                            description: description,
-                        })
+#### 5. Create Capabilities within the components
+##### Additions to the `GenerateReportPageSection`
+- [x] Query for Topics and pass into child components as props
+- [x] Add props to the `UpdateExistingReport` and `CreateNewReport` components
+    - [x] `UpdateExistingReport`: Summaries and Topics
+    - [x] `CreateNewReport`: Topics
+- Create transcript data
+- [x] Testing:
+    - [] Ensure that if you get an error reaching out to the Topics API Endpoint the Error div shows up and that the other two subcomponents don't show up
+    - Does not impact what shows up downstream as long as there is no error
+        - If you get no topics, you're still going to be able to create topic level summaries by adding to the topics in the `NewReportContents` section
+        - If you get topics, everything else shows up
+
+##### `UpdateExistingReport`
+- [x] Receives Summaries and Topics from parent
+- [x] Create database entries to enable UI validation
+    - [x] Summaries exist
+        - [x] General, no topic level (Transcript 96)
+        - [x] No General, 1 x topic level (Transcript 94)
+        - [x] General and multiple topic level (Transcript 93)
+    - [x] Summaries do not exist (Transcript 95)
+- [x] Shows the Existing summaries
+    - [x] If there are no summaries for a given type, provide that information to the user
+    - [x] General Summary: Show all the time
+    - [x] Topics: Separate heading, always shows the topics that already have summaries but create a collapsible section to show the summary (mouseover?)
+- [x] Imports `NewReportContents` and passes down topics, filtering for topics that do not already have summaries
+    - [x] Section is visible when the user hits button.  Functionality implemented through [Mantine UI's Collapse](https://mantine.dev/core/collapse/)
+- [x] Testing:
+    - Cases
+        - [x] Only general level summary
+            - Shows general summary content
+            - does not show general summary error message
+            - Shows topic level summary error message
+            - does not show topic level summary content
+        - [x] Only topic level summary
+            - does not show general summary content
+            - Shows general summary error message
+            - Shows topic level summary content
+            - does not show topic level summary error message
+            - number of topic level summary sections matches the number of topics in the response
+        - [x] General and topic level summaries
+            - Shows both general and topic level summary content
+            - Does not show eitehr general or topic level error message
+    - [x] Should have the `NewReportContents` component when the user selects that
+##### `AddTopics` Refactor
+- Implementation notes
+    - Very high level
+        - [x] Define `AddTopics` event handlers (separate file - `TopicsEventHandlers.js`)
+            ```js
+            export function handleAddTopic(name, description) {
+                dispatch({
+                    type: 'added',
+                    name: name,
+                    description: description,
+                })
+            }
+            // ..
+            ```
+        - [x] Manage state through a reducer (separate file - `TopicsReducer.js`)
+            - Code Snippet: 
+                ```js
+                export default function topicsReducer(tasks, action) {
+                    switch (action.type) {
+                        case 'added': {
+                            return [...topics, {
+                                name: action.name,
+                                description: action.description,
+                            }]
+                        }
+                        // ..
+                        default: {
+                            throw Error('Unknown Action' + action.type);
+                        }
                     }
-                    // ..
-                    ```
-                - [x] Manage state through a reducer (separate file - `TopicsReducer.js`)
-                    - Code Snippet: 
-                        ```js
-                        export default function topicsReducer(tasks, action) {
-                            switch (action.type) {
-                                case 'added': {
-                                    return [...topics, {
-                                        name: action.name,
-                                        description: action.description,
-                                    }]
-                                }
-                                // ..
-                                default: {
-                                    throw Error('Unknown Action' + action.type);
-                                }
-                            }
-                        }
-                        
-                        ```
-                    - Match the action 'type' dispatched by the event handlers with the switch statements 
-                - Create context (separate file - `TopicsContext.js`)
-                    - Current list of topics
-                    - Function that lets components dispatch actions
-                        ```js
-                        export const TasksContext = createContext(null);
-                        export const TasksDispatchContext = createContext(null);
-                        ```
-                - Import relevant components and integrate into parent component (`view-topics.jsx` and `update-existing-report.jsx`)
-                    - Key Tasks
-                        1. Wrap relevant components within the context
-                        2. Import the reducer and pass it to the context
-                        3. Pass the event handlers to the `AddTopics` component
-                    - Code snippet
-                        ```js
-                        export default function App() {
-                            // Import necessary dependencies
-                            import { useReducer } from 'react';
-                            // Import AddTopics component, reducer, event handlers, and context helpers
-                            import AddTopics from './AddTopic.jsx';
-                            import topicsReducer from 'TopicsReducer.js';
-                            import { handleAddTopic, HandleDeleteTopic, HandleChangeTopic } from 'TopicsEventHandlers.js';
-                            import { TasksContext, TasksDispatchContext } from 'TopicsContext.js';
+                }
+                
+                ```
+            - Match the action 'type' dispatched by the event handlers with the switch statements 
+        - Create context (separate file - `TopicsContext.js`)
+            - Current list of topics
+            - Function that lets components dispatch actions
+                ```js
+                export const TasksContext = createContext(null);
+                export const TasksDispatchContext = createContext(null);
+                ```
+        - Import relevant components and integrate into parent component (`view-topics.jsx` and `update-existing-report.jsx`)
+            - Key Tasks
+                1. Wrap relevant components within the context
+                2. Import the reducer and pass it to the context
+                3. Pass the event handlers to the `AddTopics` component
+            - Code snippet
+                ```js
+                export default function App() {
+                    // Import necessary dependencies
+                    import { useReducer } from 'react';
+                    // Import AddTopics component, reducer, event handlers, and context helpers
+                    import AddTopics from './AddTopic.jsx';
+                    import topicsReducer from 'TopicsReducer.js';
+                    import { handleAddTopic, HandleDeleteTopic, HandleChangeTopic } from 'TopicsEventHandlers.js';
+                    import { TasksContext, TasksDispatchContext } from 'TopicsContext.js';
 
-                            export default function App() {
-                                // Instantiate Reducer
-                                const [topics, dispatch] = useReducer(
-                                    topicsReducer,
-                                    initialTopics
-                                )
+                    export default function App() {
+                        // Instantiate Reducer
+                        const [topics, dispatch] = useReducer(
+                            topicsReducer,
+                            initialTopics
+                        )
 
-                                // ...
+                        // ...
 
-                                return (
-                                    <TopicsContext value={topics}> // Key tasks 1 and 2
-                                        <TopicsDispatchContext value={dispatch}> // Key tasks 1 and 2
-                                            <AddTopics 
-                                                topics={topics}
-                                                onAddTopic={handleAddTopic}
-                                                onDeleteTopic={handleDeleteTopic}
-                                                onChangeTopic={handleChangeTopic}
-                                            />
-                                        </TopicsDispatchContext>
-                                    </TopicsContext>
-                                )
-                            }
-                        }
-                        ```
-        - [] Passes state around added topics "up" to the parent component where the "Submit" button will reside to allow for custom logic
-            - for the `view-topics.jsx`, use the existing `onSubmit`
-            - for the `NewReportContents`, nest within the logic of creating the summaries.  See comments about error handling.
-        - Testing
-            - Initial number of topics entry boxes is 1
-            - number of topics entry boxes goes up by 1 when user hits "+ Add another topic"
-            - number of topics entry boxes goes down by 1 when user hits "Remove"
+                        return (
+                            <TopicsContext value={topics}> // Key tasks 1 and 2
+                                <TopicsDispatchContext value={dispatch}> // Key tasks 1 and 2
+                                    <AddTopics 
+                                        topics={topics}
+                                        onAddTopic={handleAddTopic}
+                                        onDeleteTopic={handleDeleteTopic}
+                                        onChangeTopic={handleChangeTopic}
+                                    />
+                                </TopicsDispatchContext>
+                            </TopicsContext>
+                        )
+                    }
+                }
+                ```
+- [x] Passes state around added topics "up" to the parent component where the "Submit" button will reside to allow for custom logic
+    - for the `view-topics.jsx`, use the existing `onSubmit`
+    - for the `NewReportContents`, nest within the logic of creating the summaries.  See comments about error handling.
+- [x] Testing
+    - Initial number of topics entry boxes is 1
+    - number of topics entry boxes goes up by 1 when user hits "+ Add another topic"
+    - number of topics entry boxes goes down by 1 when user hits "Remove"
+##### `NewReportContents`
+- [] `NewReportContents` Component
+    - [x] Receives topics from parent component
+    - [x] creates variable `availableSummaryTopics` that filters out topics that a summary exists for
+    - [] Has Y/N selector for creating a general summary
+        - [] Only shows up if general summary DOES NOT exist
+        - [] Default is no (i.e. unchecked)
+        - [] Implemented in pure HTML check box
+    - `newSummaries` variable holds new summaries that need to be created
+        - [] passed into API call
+            ```json
+            {
+                "general": Bool,
+                "topic": ["topic1", "topic2", ...]
+            }
+            ```
+    - [x] Allow user to select Topics using [Mantine UI MultiSelect](https://mantine.dev/core/multi-select/)
+        - [x] Receives `availableSummaryTopics`
+    - [] Pulls in `AddTopics` to allow user to add topics that do not already exist
+        - [] `AddTopics` State managed within `NewReportContents` component
+        - [] Passed into API Call
+            ```js 
+            [
+                {"topic": "Topic One", "description": "Description of Topic One"},
+                {"topic": "Topic Two", "description": "Description of Topic Two"},
+                ...
+            ]
+            ```
+    - [] API Call: This will ultimately be implemented in celery
+        - reviews `newTopics`, `newSummaries`, and Transcript ID variables
+            ```json
+            {
+                "transcript": 1,
+                "newTopics": [
+                    {"topic": "Topic One", "description": "Description of Topic One"},
+                    {"topic": "Topic Two", "description": "Description of Topic Two"},
+                    ...
+                ],
+                "newSummaries": {
+                    "general": Bool,
+                    "topic": ["topic1", "topic2", ...]
+                }
+            }
+            ```
+        - [] Two step API Call
+            1. If the user wants to create new topics, Create new topics (Topics API Endpoint)
+                - pass in `newTopics` object and iterate through
+            2. Validate that the topics were created successfully and provide error message
+            3. Create new summaries (Summaries API endpoint)
+                - Multiple API calls, iterating through each of the summaries that need to be created
+                - Validate that each one of the summaries were created and provide error message to the user
+##### `CreateNewReport`
+- Receives Topics from parent
+- Imports `NewReportContents`
 
-    - [] `CreateNewReport`
-        - Receives Topics from parent
-        - Imports `NewReportContents`
-    - [] `NewReportContents` Component
-        - [] Allow user to select Topics using [Mantine UI MultiSelect](https://mantine.dev/core/multi-select/)
-        - [] Pulls in `AddTopics` to allow user to add topics that do not already exist
-        - [] API Call: This will ultimately be implemented in celery
-                - [] POST Call goes to Summaries
-                    - [] For Transcript with an existing Summary, only create topic level summaries
-                    - [] For Transcript without an existing summary, create general and topic level summaries
-        - [] Implement error handling
 ## Celery infrastructure and API Integration
     - [ ] Deal with external API call failures
     - [ ] Mock external API calls

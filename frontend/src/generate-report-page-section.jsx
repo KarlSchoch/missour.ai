@@ -5,6 +5,7 @@ import { getCsrfToken } from "./utils/csrf";
 import UpdateExistingReport from "./update-existing-report";
 import CreateNewReport from "./create-new-report";
 import { MantineProvider } from '@mantine/core'
+import '@mantine/core/styles.css'
 
 export default function GenerateReportPageSection() {
     const init = useMemo(
