@@ -304,6 +304,9 @@ flowchart TD
             3. Create new summaries (Summaries API endpoint)
                 - Multiple API calls, iterating through each of the summaries that need to be created
                 - Validate that each one of the summaries were created and provide error message to the user
+                - Implementation Work
+                    - Mock call to the OpenAI API
+                    - Overwrite how the "POST" request works for summaries
 ##### `CreateNewReport`
 - Receives Topics from parent
 - Imports `NewReportContents`
