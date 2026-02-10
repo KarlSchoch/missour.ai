@@ -3,12 +3,6 @@ import ReactDOM from 'react-dom/client'
 import { getCsrfToken } from './utils/csrf'
 import AddTopics from './add-topics/add-topics';
 import addTopicsReducer from './add-topics/add-topics-reducer';
-// import { 
-//   handleAddTopic,
-//   handleRemoveTopic,
-//   handleUpdateTopic,
-//   handleResetNewTopics
-//  } from './add-topics/add-topics-event-handlers';
 import { 
   AddTopicsContext,
   AddTopicsDispatchContext 

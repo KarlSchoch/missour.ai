@@ -9,11 +9,12 @@ export default function AddTopics() {
         <>
             {
                 newTopics.map((newTopic, idx) => (
-                    <div key={idx}>
+                    <div data-testid='add-topic-form' key={idx}>
                         <div>
                             <label>
                                 Name:
                                 <input
+                                    data-testid={`add-topic-name-${idx}`}
                                     value={newTopic.topic}
                                     onChange={(e) => dispatch({
                                         type: 'update',
@@ -30,6 +31,7 @@ export default function AddTopics() {
                             <label>
                                 Description:
                                 <textarea
+                                    data-testid={`add-topic-description-${idx}`}
                                     value={newTopic.description}
                                     onChange={(e) => dispatch({
                                         type: 'update',
@@ -43,6 +45,7 @@ export default function AddTopics() {
                         </div>
 
                         <button 
+                            data-testid={`add-topic-remove-btn-${idx}`}
                             type="button"
                             onClick={() => dispatch({
                                 type: 'remove',
@@ -57,6 +60,7 @@ export default function AddTopics() {
             }
             <div>
                 <button 
+                    data-testid='add-topic-add-btn'
                     type="button"
                     onClick={() => dispatch({
                         type: 'add'
