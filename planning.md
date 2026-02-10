@@ -257,10 +257,10 @@ flowchart TD
 - [] `NewReportContents` Component
     - [x] Receives topics from parent component
     - [x] creates variable `availableSummaryTopics` that filters out topics that a summary exists for
-    - [] Has Y/N selector for creating a general summary
-        - [] Only shows up if general summary DOES NOT exist
-        - [] Default is no (i.e. unchecked)
-        - [] Implemented in pure HTML check box
+    - [x] Has Y/N selector for creating a general summary
+        - [x] Only shows up if general summary DOES NOT exist
+        - [x] Default is no (i.e. unchecked)
+        - [x] Implemented with Mantine Switch component
     - `newSummaries` variable holds new summaries that need to be created
         - [] passed into API call
             ```json
@@ -271,8 +271,8 @@ flowchart TD
             ```
     - [x] Allow user to select Topics using [Mantine UI MultiSelect](https://mantine.dev/core/multi-select/)
         - [x] Receives `availableSummaryTopics`
-    - [] Pulls in `AddTopics` to allow user to add topics that do not already exist
-        - [] `AddTopics` State managed within `NewReportContents` component
+    - [x] Pulls in `AddTopics` to allow user to add topics that do not already exist
+        - [x] `AddTopics` State managed within `NewReportContents` component
         - [] Passed into API Call
             ```js 
             [

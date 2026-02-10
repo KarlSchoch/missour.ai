@@ -64,7 +64,7 @@ export default function UpdateExistingReport({ summaries, topics }) {
             }
             <button onClick={toggle}>Update Reports</button>
             { 
-                opened && <NewReportContents data-testid='new-report-contents' availableTopics = {topicsWithoutSummaries} />
+                opened && <NewReportContents data-testid='new-report-contents' availableTopics = {topicsWithoutSummaries} generalSummary = { generalSummary } />
             }
         </div>
     )
