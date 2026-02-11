@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer } from "react";
+import React, { useState, useEffect, useReducer, useMemo } from "react";
 import { getCsrfToken } from "./utils/csrf";
 import { MultiSelect, Switch, Tooltip } from "@mantine/core";
 import AddTopics from "./add-topics/add-topics";
@@ -11,8 +11,7 @@ import { getInitialData } from "./utils/getInitialData";
 
 export default function NewReportContents({ generalSummary, availableTopics }) {
     // Pull in initial data for this component
-    const init = useMemo(
-        getInitialData('initial-payload-generate-report-page-section'), []
+    const init = useMemo( () => getInitialData('initial-payload-generate-report-page-section'), []
     )
     // Create variables for managing what needs to be created
     const [newTopicSummaries, setNewTopicSummaries] = useState([]);
@@ -46,24 +45,52 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
         // Pull in relevant URLs; throw error if they 
         const topicsUrl = init?.apiUrls?.topics
         const summariesUrl = init?.apiUrls?.summaries
-        if (!topicsUrl || summariesUrl) {
+        if (!topicsUrl || !summariesUrl) {
             setError('Missing API url(s)')
             setIsSubmitting(false);
             return
         }
 
         // validate that they are trying to create something
-        // (i.e. newTopics, newTopicSummaries, or newGeneralSummary exists)
+        let payloadTopics = newTopics.filter((t) => t.topic.length > 0)
+        console.log('payloadTopics', payloadTopics)
+        console.log('newTopicSummaries', newTopicSummaries)
+        console.log('newGeneralSummary', newGeneralSummary)
+        if (payloadTopics.length === 0 && newTopicSummaries.length === 0 && !newGeneralSummary) {
+            setError("Please select elements to add to this transcript's reports")
+            setIsSubmitting(false);
+            return
+        }
 
         // Create Topics if necesary, validating it is correctly created
-        if (newTopics) {
-            console.log("Creating new topics")
+        if (payloadTopics) {
+            for (let t of payloadTopics) {
+                // Create payload
+                const payload = {
+                    topic: t.topic.trim(),
+                    description: t.description.trim(),
+                }
+                // Call backend Topics API
+                try {
+                    const res = await fetch(URL, )
+                } catch (e) {
+
+                } finally {
+
+                }
+            }
         } else {
             console.log("Bypassing creating new topics")
         }
         // Create General Summary if necesary, validating it is correctly created
-        if (newTopics) {
+        if (newGeneralSummary) {
             console.log("Creating general summary")
+        } else {
+            console.log("Bypassing creating general summary")
+        }
+        // Create Topic Level Summary if necessary, validating it is correctly created
+        if (newTopicSummaries) {
+            console.log("Creating topic level summary summary")
         } else {
             console.log("Bypassing creating general summary")
         }
