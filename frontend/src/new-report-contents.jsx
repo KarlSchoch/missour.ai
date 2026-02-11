@@ -11,8 +11,9 @@ import { getInitialData } from "./utils/getInitialData";
 
 export default function NewReportContents({ generalSummary, availableTopics }) {
     // Pull in initial data for this component
-    const init = useMemo( () => getInitialData('initial-payload-generate-report-page-section'), []
-    )
+    const init = useMemo( () => { 
+        return getInitialData('initial-payload-generate-report-page-section')
+    }, [])
     // Create variables for managing what needs to be created
     const [newTopicSummaries, setNewTopicSummaries] = useState([]);
     const [newGeneralSummary, setNewGeneralSummary] = useState(false);
@@ -51,6 +52,9 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
             return
         }
 
+        // Pull in CSRF Token
+        const CSRFToken = getCsrfToken()
+
         // validate that they are trying to create something
         let payloadTopics = newTopics.filter((t) => t.topic.length > 0)
         console.log('payloadTopics', payloadTopics)
@@ -63,7 +67,9 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
         }
 
         // Create Topics if necesary, validating it is correctly created
-        if (payloadTopics) {
+        // To Do: Aggregate logic for dealing with topics across ViewTopics and NewReportContents
+        if (payloadTopics.length > 0) {
+            console.log('Creating new topics')
             for (let t of payloadTopics) {
                 // Create payload
                 const payload = {
@@ -72,16 +78,37 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
                 }
                 // Call backend Topics API
                 try {
-                    const res = await fetch(URL, )
+                    const res = await fetch(topicsUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': CSRFToken,
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(payload)
+                    })
+
+                    if (!res.ok) {
+                        const text = await res.text()
+                        setError('Encountered error when creating topics: ', text, '.  Please resubmit request')
+                        // To Do: Add mechanism to deal with partial success/failures in topic creation
+                        setIsSubmitting(false);
+                        return
+                    }
+                    if (res.ok) {       
+                        dispatch({ type: 'reset' });
+                    }
                 } catch (e) {
-
+                    setError(e.message || "Something went wrong.")
                 } finally {
-
+                    // To Do: Add ability to reset the list of topics (new reducer)
+                    setIsSubmitting(false)
                 }
             }
         } else {
             console.log("Bypassing creating new topics")
         }
+
         // Create General Summary if necesary, validating it is correctly created
         if (newGeneralSummary) {
             console.log("Creating general summary")
@@ -89,11 +116,12 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
             console.log("Bypassing creating general summary")
         }
         // Create Topic Level Summary if necessary, validating it is correctly created
-        if (newTopicSummaries) {
+        if (newTopicSummaries.length > 0) {
             console.log("Creating topic level summary summary")
         } else {
             console.log("Bypassing creating general summary")
         }
+        setIsSubmitting(false);
 
     }
 
