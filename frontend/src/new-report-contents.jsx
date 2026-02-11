@@ -46,7 +46,8 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
         // Pull in relevant URLs; throw error if they 
         const topicsUrl = init?.apiUrls?.topics
         const summariesUrl = init?.apiUrls?.summaries
-        if (!topicsUrl || !summariesUrl) {
+        const transcriptId = init?.transcript_id
+        if (!topicsUrl || !summariesUrl || !transcriptId) {
             setError('Missing API url(s)')
             setIsSubmitting(false);
             return
@@ -68,11 +69,12 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
 
         // Create Topics if necesary, validating it is correctly created
         // To Do: Aggregate logic for dealing with topics across ViewTopics and NewReportContents
+        let payload
         if (payloadTopics.length > 0) {
             console.log('Creating new topics')
             for (let t of payloadTopics) {
                 // Create payload
-                const payload = {
+                payload = {
                     topic: t.topic.trim(),
                     description: t.description.trim(),
                 }
@@ -112,6 +114,33 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
         // Create General Summary if necesary, validating it is correctly created
         if (newGeneralSummary) {
             console.log("Creating general summary")
+            payload = {
+                'summary_type': 'general',
+                'transcript_id': transcriptId
+            }
+            try {
+                const res = fetch(summariesUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                })
+
+                if (!res.ok) {
+                    console.log('Bad Response!')
+                }
+                if (res.ok) {
+                    console.log('Good Response!')
+                }
+
+            } catch (e) {
+                setError(e.message || 'Something went wrong')
+            } finally {
+                setIsSubmitting(false);
+            }
         } else {
             console.log("Bypassing creating general summary")
         }
