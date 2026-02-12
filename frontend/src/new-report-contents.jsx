@@ -22,12 +22,12 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
         [{ topic: "", description: "" }]
     )
 
-    useEffect(()=> {
-        console.log('Update to API Inputs')
-        console.log('* newTopicSummaries', newTopicSummaries)
-        console.log('* newGeneralSummary', newGeneralSummary)
-        console.log('* newTopics', newTopics)
-    }, [newTopicSummaries, newGeneralSummary, newTopics])
+    // useEffect(()=> {
+    //     console.log('Update to API Inputs')
+    //     console.log('* newTopicSummaries', newTopicSummaries)
+    //     console.log('* newGeneralSummary', newGeneralSummary)
+    //     console.log('* newTopics', newTopics)
+    // }, [newTopicSummaries, newGeneralSummary, newTopics])
 
     // Format availableTopics for MultiSelect
     const topicOptions = availableTopics.map((t) => {
@@ -116,10 +116,10 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
             console.log("Creating general summary")
             payload = {
                 'summary_type': 'general',
-                'transcript_id': transcriptId
+                'transcript': transcriptId
             }
             try {
-                const res = fetch(summariesUrl, {
+                const res = await fetch(summariesUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -130,7 +130,8 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
                 })
 
                 if (!res.ok) {
-                    console.log('Bad Response!')
+                    const text = await res.text()
+                    setError(`Encountered error while submitting general summary: ${text}`)
                 }
                 if (res.ok) {
                     console.log('Good Response!')
