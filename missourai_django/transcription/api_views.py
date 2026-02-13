@@ -1,16 +1,25 @@
 from rest_framework import viewsets, status, serializers
 from rest_framework.response import Response
+from os import environ
 
 from .serializers import TopicSerializer, SummarySerializer
-from .models import Topic, Summary, Transcript
+from .models import Topic, Summary, Transcript, Tag
 from transcription.summary.summary_manager import SummaryManager
-from os import environ
+from transcription.tagging.tagging_manager import TaggingManager
 
 summary_manager = SummaryManager(api_key=environ['OPENAI_API_KEY'])
 
 class TopicViewSet(viewsets.ModelViewSet):
     queryset = Topic.objects.all()
     serializer_class = TopicSerializer
+
+class TagViewSet(viewsets.ModelViewSet):
+    queryset = Tag.objects.all()
+
+    def create():
+        pass
+    def perform_create(self, serializer):
+        return super().perform_create(serializer)
 
 class SummaryViewSet(viewsets.ModelViewSet):
     queryset = Summary.objects.all()
@@ -61,8 +70,7 @@ class SummaryViewSet(viewsets.ModelViewSet):
             ## Topic Level
             elif summary_type == 'topic':
                 print("Summary Type: Topic Level")
-                pass
-                ###
+                # Look to see if there have been topics 
             # TO DO: Offload as job to celery
             # TO DO: Save all non API call dependent fields
 

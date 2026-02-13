@@ -22,12 +22,16 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
         [{ topic: "", description: "" }]
     )
 
-    // useEffect(()=> {
-    //     console.log('Update to API Inputs')
-    //     console.log('* newTopicSummaries', newTopicSummaries)
-    //     console.log('* newGeneralSummary', newGeneralSummary)
-    //     console.log('* newTopics', newTopics)
-    // }, [newTopicSummaries, newGeneralSummary, newTopics])
+    useEffect(()=> {
+        console.log('Update to API Inputs')
+        console.log('* newTopicSummaries', newTopicSummaries)
+        console.log('* newGeneralSummary', newGeneralSummary)
+        console.log('* newTopics', newTopics)
+    }, [
+        newTopicSummaries,
+        newGeneralSummary,
+        newTopics,
+    ])
 
     // Format availableTopics for MultiSelect
     const topicOptions = availableTopics.map((t) => {
@@ -69,7 +73,9 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
 
         // Create Topics if necesary, validating it is correctly created
         // To Do: Aggregate logic for dealing with topics across ViewTopics and NewReportContents
-        let payload
+        let payload;
+        // Create array to hold ids for newly created topics
+        let newlyCreatedTopics = [];
         if (payloadTopics.length > 0) {
             console.log('Creating new topics')
             for (let t of payloadTopics) {
@@ -97,7 +103,10 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
                         setIsSubmitting(false);
                         return
                     }
-                    if (res.ok) {       
+                    if (res.ok) {
+                        console.log("Good response from Topic creation")
+                        let resBody = await res.json()
+                        newlyCreatedTopics.push(String(resBody?.id))
                         dispatch({ type: 'reset' });
                     }
                 } catch (e) {
@@ -123,7 +132,7 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': getCsrfToken(),
+                        'X-CSRFToken': CSRFToken,
                     },
                     credentials: 'include',
                     body: JSON.stringify(payload)
@@ -146,12 +155,56 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
             console.log("Bypassing creating general summary")
         }
         // Create Topic Level Summary if necessary, validating it is correctly created
-        if (newTopicSummaries.length > 0) {
+        // TO DO: Create functionality where you generate tags for each topic
+        // - DONE Return newly created topics to "newlyCreatedTopics"
+        // - Aggregate ALL of the topics together and send to the backend
+        //   - newly created AND existing wanting a new summary
+        // - On the backend
+        //   - Pull all of the tags for a given transcript
+        //   - Compare against the list of topics passed back
+        //   - if topic has been passed back BUT there is no topic, create new tag   
+        //   - Pull the relevant context and pass to summary manager
+        // 
+
+        if (
+            newTopicSummaries.length > 0 || newlyCreatedTopics.length > 0
+        ) {
             console.log("Creating topic level summary summary")
+            // Aggregate all of the topics
+            const fullTopicsList = newlyCreatedTopics.concat(newTopicSummaries);
+            console.log("fullTopicsList", fullTopicsList)
+            for (let t of newTopicSummaries) {
+                let paylod = {
+                    transcript: transcriptId,
+                    summary_type: 'topic',
+                    topic: t,
+                }
+                try {
+                    const res = await fetch(topicsUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': CSRFToken,
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(payload)
+                    })
+
+                    if (!res.ok) {
+                        const text = await res.text()
+                        setError(`Encountered error while submitting general summary: ${text}`)
+                    }
+                } catch(e) {
+                    setError(e.message || 'Something went wrong')
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }
         } else {
-            console.log("Bypassing creating general summary")
+            console.log("Bypassing creating topic level summary")
         }
         setIsSubmitting(false);
+        // Reset Buttons to original state IF there is a successful submission
 
     }
 

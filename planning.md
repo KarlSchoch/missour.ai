@@ -301,7 +301,8 @@ flowchart TD
             1. If the user wants to create new topics, Create new topics (Topics API Endpoint)
                 - pass in `newTopics` object and iterate through
             2. Validate that the topics were created successfully and provide error message
-            3. Create new summaries (Summaries API endpoint)
+            3. Create new tags for the topics.
+            4. Create new summaries (Summaries API endpoint)
                 - Multiple API calls, iterating through each of the summaries that need to be created
                 - Validate that each one of the summaries were created and provide error message to the user
                 - Implementation Work
