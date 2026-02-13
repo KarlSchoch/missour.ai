@@ -173,14 +173,17 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
             // Aggregate all of the topics
             const fullTopicsList = newlyCreatedTopics.concat(newTopicSummaries);
             console.log("fullTopicsList", fullTopicsList)
-            for (let t of newTopicSummaries) {
-                let paylod = {
+            console.log("START topic summary creation loop")
+            for (let t of fullTopicsList) {
+                console.log("* topic", t)
+                let payload = {
                     transcript: transcriptId,
                     summary_type: 'topic',
                     topic: t,
                 }
+                console.log("** payload", payload)
                 try {
-                    const res = await fetch(topicsUrl, {
+                    const res = await fetch(summariesUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -192,7 +195,12 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
 
                     if (!res.ok) {
                         const text = await res.text()
-                        setError(`Encountered error while submitting general summary: ${text}`)
+                        setError(`Encountered error while submitting topic level summary: ${text}`)
+                    }
+                    if (res.ok) { 
+                        console.log("** Good Response from Topic Summary")
+                        const topicSummaryResponse = await res.json()
+                        console.log('** topicSummaryResponse', topicSummaryResponse);
                     }
                 } catch(e) {
                     setError(e.message || 'Something went wrong')
@@ -200,6 +208,7 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
                     setIsSubmitting(false);
                 }
             }
+            console.log("END topic summary creation loop")
         } else {
             console.log("Bypassing creating topic level summary")
         }
