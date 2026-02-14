@@ -64,8 +64,11 @@ class SummaryViewSet(viewsets.ModelViewSet):
                 tgt_text = tgt_transcript.transcript_text
                 print("tgt_text", tgt_text[:50])
                 ### Call the OpenAI API through the summary manager
-                summary_text = summary_manager.summarize(tgt_text)
-                print('summary_text', summary_text)
+                summary = summary_manager.summarize(
+                    transcript_content=tgt_text,
+                    tgt_transcript=tgt_transcript
+                )
+                print('summary', summary)
                 ### Create a summary object: transcript, summary_type, topic, text
             ## Topic Level
             elif summary_type == 'topic':
@@ -85,7 +88,8 @@ class SummaryViewSet(viewsets.ModelViewSet):
                     print("Tags not generated for this topic.  Generating")
                     # 3.a.i.  Generate tags for that topic
                     ## Extract the topic
-                    tgt_topic_obj = Topic.objects.get(pk = int())
+                    tgt_topic_obj = Topic.objects.get(pk = int(topic))
+                    print("tgt_topic_obj", tgt_topic_obj)
                     ## Instantiate the tagging manager
                     tagging_manager = TaggingManager(
                         api_key=environ['OPENAI_API_KEY'],
@@ -93,18 +97,40 @@ class SummaryViewSet(viewsets.ModelViewSet):
                         topics=[tgt_topic_obj]
                     )
                     new_transcript_tags = tagging_manager.tag_transcript()
+                    print("new_transcript_tags", new_transcript_tags)
                     # 3.a.ii. Requery transcript_tags
+                    transcript_tags = Tag.objects.filter(chunk__transcript_id = transcript).select_related('topic', 'chunk')
                 # 3.b. Topic passed back in generated_tags
                 else:
                     # 3.b.i.  Pass
                     print("Tags already generated for this topic")
                     pass
-                
-                # 4. Filter tags to only where topic_present field == True
+                # 4. Filter tags to only where topic_present field == True that are for the tgt_topic
+                print(f"Total number of transcript_tags ({len(transcript_tags)} tags)")
+                print("* ", transcript_tags)
+                transcript_tags = transcript_tags.filter(
+                    topic_id = int(topic),
+                    topic_present = True
+                )
+                print(f"Number of transcript_tags AFTER filtering for topic and relevant chunks ({len(transcript_tags)} tags)")
+                print("* ", transcript_tags)
                 # 5. Create prompt based on Chunk's chunk_text field
-                # 6. Pass prompt to the Summary Manager
-                # summary = summary_manager.summarize(tgt_text)
-                # 7. Create a summary 
+                transcript_content = transcript_tags.values_list(
+                    "chunk__chunk_text",
+                    flat=True
+                )
+                print('- '.join(
+                    # [x.chunk_text for x in transcript_content]
+                    transcript_content
+                ))
+                print("transcript_content", transcript_content)
+                # 6. Pass prompt to the Summary Manager (saves summary in db)
+                summary = summary_manager.summarize(
+                    transcript_content=transcript_content,
+                    tgt_transcript=tgt_transcript,
+                    tgt_topic=Topic.objects.get(pk = int(topic)),
+                )
+                print("summary", type(summary), summary)
             # TO DO: Offload as job to celery
             # TO DO: Save all non API call dependent fields
 

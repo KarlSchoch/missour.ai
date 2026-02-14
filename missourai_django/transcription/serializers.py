@@ -2,8 +2,6 @@ from rest_framework import serializers
 
 from .models import Topic, Summary, Tag
 
-# class TagSerializer(serializers.ModelSerializer):
-
 class TopicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Topic

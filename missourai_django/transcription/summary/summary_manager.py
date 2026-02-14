@@ -3,6 +3,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import os
 from ..tests.test_utils import FakeLLM
+from ..models import Summary, Transcript, Topic
 
 class SummaryManager:
     """
@@ -27,14 +28,51 @@ class SummaryManager:
                 model_provider=self.model_provider,
                 api_key=api_key
             )
-        self.prompt = ChatPromptTemplate.from_messages([
+        self.topic_summary_prompt = ChatPromptTemplate.from_messages([
             ("system", "You summarize text.  Be concise"),
-            ("user", "Summarize the following: \n\n{input}"),
+            (
+                "user", 
+                "Summarize the following piece of text in 350 words or less, focusing on the specified topic of interest.\n\n Topic of Interest: {tgt_topic}\n\n Text: {transcript_content}"
+            ),
         ])
-        self.chain = self.prompt | self.llm | StrOutputParser()
+        self.general_summary_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You summarize text.  Be concise"),
+            ("user", "Summarize the following piece of text in 500 words or less\n\n Text: {transcript_content}"),
+        ])
+        self.chains = {
+            "topic": self.topic_summary_prompt | self.llm | StrOutputParser(),
+            "general": self.general_summary_prompt | self.llm | StrOutputParser(),
+        }
 
-    def summarize(self, transcript_content:str):
-        summary = self.chain.invoke(
-            {"input": transcript_content}
+    def summarize(
+            self, 
+            transcript_content:str,
+            tgt_transcript:Transcript,
+            tgt_topic:Topic = None,
+        ):
+        print("BEGIN Inside SummaryManager.summarize()")
+        # print("self.prompt", self.prompt)
+        print("transcript_content", transcript_content)
+        print("tgt_topic", tgt_topic)
+
+        if not tgt_topic:
+            summary_type = 'general'
+            summary_text = self.chains.get('general').invoke({
+                "transcript_content": transcript_content,
+            })
+        else:
+            summary_type = 'topic'
+            summary_text = self.chains.get('topic').invoke({
+                "transcript_content": transcript_content,
+                "tgt_topic": tgt_topic.topic,
+            })
+        summary_obj = Summary(
+            transcript = tgt_transcript,
+            summary_type = summary_type,
+            topic = tgt_topic,
+            text = summary_text
         )
-        return summary
+        summary_obj.save()
+        print("END Inside SummaryManager.summarize()")
+
+        return summary_obj
