@@ -3,7 +3,7 @@ import { getCsrfToken } from "./utils/csrf";
 import NewReportContents from './new-report-contents';
 import { useDisclosure } from "@mantine/hooks";
 
-export default function UpdateExistingReport({ summaries, topics }) {
+export default function UpdateExistingReport({ summaries, topics, onReportsUpdated }) {
 
     const topicNameById = useMemo(() => {
         return new Map((topics || []).map((topic) => [topic.id, topic.topic]));
@@ -64,7 +64,14 @@ export default function UpdateExistingReport({ summaries, topics }) {
             }
             <button onClick={toggle}>Update Reports</button>
             { 
-                opened && <NewReportContents data-testid='new-report-contents' availableTopics = {topicsWithoutSummaries} generalSummary = { generalSummary } />
+                opened && (
+                    <NewReportContents
+                        data-testid='new-report-contents'
+                        availableTopics={topicsWithoutSummaries}
+                        generalSummary={generalSummary}
+                        onReportsUpdated={onReportsUpdated}
+                    />
+                )
             }
         </div>
     )

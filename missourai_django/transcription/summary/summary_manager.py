@@ -51,8 +51,7 @@ class SummaryManager:
             tgt_topic:Topic = None,
         ):
         print("BEGIN Inside SummaryManager.summarize()")
-        # print("self.prompt", self.prompt)
-        print("transcript_content", transcript_content)
+        print("transcript_content", transcript_content[:50])
         print("tgt_topic", tgt_topic)
 
         if not tgt_topic:

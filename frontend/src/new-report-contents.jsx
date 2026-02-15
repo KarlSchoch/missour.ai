@@ -9,7 +9,7 @@ import {
 } from './add-topics/add-topics-context';
 import { getInitialData } from "./utils/getInitialData";
 
-export default function NewReportContents({ generalSummary, availableTopics }) {
+export default function NewReportContents({ generalSummary, availableTopics, onReportsUpdated }) {
     // Pull in initial data for this component
     const init = useMemo( () => { 
         return getInitialData('initial-payload-generate-report-page-section')
@@ -46,6 +46,7 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
         e.preventDefault();
         setError();
         setIsSubmitting(true);
+        let hasSuccessfulMutation = false;
 
         // Pull in relevant URLs; throw error if they 
         const topicsUrl = init?.apiUrls?.topics
@@ -108,6 +109,7 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
                         let resBody = await res.json()
                         newlyCreatedTopics.push(String(resBody?.id))
                         dispatch({ type: 'reset' });
+                        hasSuccessfulMutation = true;
                     }
                 } catch (e) {
                     setError(e.message || "Something went wrong.")
@@ -144,6 +146,7 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
                 }
                 if (res.ok) {
                     console.log('Good Response!')
+                    hasSuccessfulMutation = true;
                 }
 
             } catch (e) {
@@ -201,6 +204,7 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
                         console.log("** Good Response from Topic Summary")
                         const topicSummaryResponse = await res.json()
                         console.log('** topicSummaryResponse', topicSummaryResponse);
+                        hasSuccessfulMutation = true;
                     }
                 } catch(e) {
                     setError(e.message || 'Something went wrong')
@@ -212,9 +216,12 @@ export default function NewReportContents({ generalSummary, availableTopics }) {
         } else {
             console.log("Bypassing creating topic level summary")
         }
+        if (hasSuccessfulMutation && typeof onReportsUpdated === "function") {
+            await onReportsUpdated();
+        }
         setIsSubmitting(false);
         // Reset Buttons to original state IF there is a successful submission
-
+        // Reset the transcripts
     }
 
     return (

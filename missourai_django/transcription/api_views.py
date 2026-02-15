@@ -64,11 +64,11 @@ class SummaryViewSet(viewsets.ModelViewSet):
                 tgt_text = tgt_transcript.transcript_text
                 print("tgt_text", tgt_text[:50])
                 ### Call the OpenAI API through the summary manager
-                summary = summary_manager.summarize(
+                summary_obj = summary_manager.summarize(
                     transcript_content=tgt_text,
                     tgt_transcript=tgt_transcript
                 )
-                print('summary', summary)
+                print('summary', summary_obj)
                 ### Create a summary object: transcript, summary_type, topic, text
             ## Topic Level
             elif summary_type == 'topic':
@@ -112,8 +112,22 @@ class SummaryViewSet(viewsets.ModelViewSet):
                     topic_id = int(topic),
                     topic_present = True
                 )
-                print(f"Number of transcript_tags AFTER filtering for topic and relevant chunks ({len(transcript_tags)} tags)")
+                print(f"Number of transcript_tags AFTER filtering for topic and relevant chunks ({len(transcript_tags)} tags)")                
                 print("* ", transcript_tags)
+                # Save summary and return if there are no relevant tags for the topic
+                if len(transcript_tags) == 0:
+                    print(f"no relevant mentions of {tgt_topic_obj.topic}")
+                    summary_obj = Summary(
+                        transcript=tgt_transcript,
+                        summary_type='topic',
+                        topic=tgt_topic_obj
+                    )
+                    summary_obj.save()
+                    serializer = SummarySerializer(summary_obj)
+                    headers = self.get_success_headers(serializer.data)
+                    return Response(
+                        serializer.data, status=status.HTTP_201_CREATED, headers=headers
+                    )        
                 # 5. Create prompt based on Chunk's chunk_text field
                 transcript_content = transcript_tags.values_list(
                     "chunk__chunk_text",
@@ -125,22 +139,23 @@ class SummaryViewSet(viewsets.ModelViewSet):
                 ))
                 print("transcript_content", transcript_content)
                 # 6. Pass prompt to the Summary Manager (saves summary in db)
-                summary = summary_manager.summarize(
+                summary_obj = summary_manager.summarize(
                     transcript_content=transcript_content,
                     tgt_transcript=tgt_transcript,
                     tgt_topic=Topic.objects.get(pk = int(topic)),
                 )
-                print("summary", type(summary), summary)
+                print("summary", type(summary_obj), summary_obj)
             # TO DO: Offload as job to celery
             # TO DO: Save all non API call dependent fields
 
-            # 3. Save
+            # 3. Save HANDLED IN summary_manager.py
             # Create a summary entry based on the summary_text
             # serializer.save()
 
             # 4 (???) Custom Logic Post Save
 
             # 5. Return
+            serializer = SummarySerializer(summary_obj)
             headers = self.get_success_headers(serializer.data)
             return Response(
                 serializer.data, status=status.HTTP_201_CREATED, headers=headers

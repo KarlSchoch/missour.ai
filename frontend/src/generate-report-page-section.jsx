@@ -79,8 +79,15 @@ export default function GenerateReportPageSection() {
                 setSummaries(data)
             }
         } catch(e) {
-            setError(err?.message || "Request to summaries API failed")
+            setError(e?.message || "Request to summaries API failed")
         }
+    }
+
+    async function refreshReportData() {
+        await Promise.all([
+            getSummaries(init),
+            getTopics(init),
+        ]);
     }
 
     useEffect(() => {
@@ -108,7 +115,11 @@ export default function GenerateReportPageSection() {
                             summaries.length === 0 ? ( 
                                 <CreateNewReport topics = {topics} /> 
                             ) : ( 
-                                <UpdateExistingReport topics = {topics} summaries = {summaries}  /> 
+                                <UpdateExistingReport
+                                    topics={topics}
+                                    summaries={summaries}
+                                    onReportsUpdated={refreshReportData}
+                                /> 
                             )
                         )
                     }
