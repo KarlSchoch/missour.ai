@@ -38,6 +38,8 @@ The web application combines a Django backend that exposes APIs and serves the H
 
 **Development**
 1) Copy env template and fill secrets: `cp .env.example .env` then set `SECRET_KEY`, `OPENAI_API_KEY`, etc.
+   - A number of key security-related environment variables, specifically `MODEUL_ENV` are controlled within the `docker-compose.dev.yml` file rather than within the `.env` file to avoid accidental API spend.
+   - This means that to control whether model calls are mocked or actually made to external vendors, you need to update the `model_env` variable within the [docker-compose.dev.yml](./docker-compose.dev.yml) and then recreate the containers by appending `--force-recreate` to your `docker compose up` command
 2) Start dev stack with hot reload (Django + Vite):  
    `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`  
    - Binds the whole repo into the container for live code/template changes.  

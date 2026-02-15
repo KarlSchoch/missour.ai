@@ -175,6 +175,7 @@ export default function NewReportContents({ generalSummary, availableTopics, onR
             console.log("Creating topic level summary summary")
             // Aggregate all of the topics
             const fullTopicsList = newlyCreatedTopics.concat(newTopicSummaries);
+            const successfulTopicSummaryIds = new Set();
             console.log("fullTopicsList", fullTopicsList)
             console.log("START topic summary creation loop")
             for (let t of fullTopicsList) {
@@ -205,6 +206,7 @@ export default function NewReportContents({ generalSummary, availableTopics, onR
                         const topicSummaryResponse = await res.json()
                         console.log('** topicSummaryResponse', topicSummaryResponse);
                         hasSuccessfulMutation = true;
+                        successfulTopicSummaryIds.add(String(t));
                     }
                 } catch(e) {
                     setError(e.message || 'Something went wrong')
@@ -212,6 +214,9 @@ export default function NewReportContents({ generalSummary, availableTopics, onR
                     setIsSubmitting(false);
                 }
             }
+            setNewTopicSummaries((current) =>
+                current.filter((topicId) => !successfulTopicSummaryIds.has(String(topicId)))
+            );
             console.log("END topic summary creation loop")
         } else {
             console.log("Bypassing creating topic level summary")
@@ -244,6 +249,7 @@ export default function NewReportContents({ generalSummary, availableTopics, onR
                 label="Select Existing Topics to Add to Transcript Topic-level Summaries"
                 placeholder="Pick Topics"
                 data={topicOptions}
+                value={newTopicSummaries}
                 withScrollArea={false}
                 styles={{ dropdown: { maxHeight: 200, overflowY: 'auto' } }}
                 mt="md"
