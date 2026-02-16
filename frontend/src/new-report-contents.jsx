@@ -9,7 +9,12 @@ import {
 } from './add-topics/add-topics-context';
 import { getInitialData } from "./utils/getInitialData";
 
-export default function NewReportContents({ generalSummary, availableTopics, onReportsUpdated }) {
+export default function NewReportContents({ 
+    generalSummary,
+    allTopics, 
+    availableTopics, 
+    onReportsUpdated 
+}) {
     // Pull in initial data for this component
     const init = useMemo( () => { 
         return getInitialData('initial-payload-generate-report-page-section')
@@ -77,6 +82,11 @@ export default function NewReportContents({ generalSummary, availableTopics, onR
         let payload;
         // Create array to hold ids for newly created topics
         let newlyCreatedTopics = [];
+        // Filter out all topics that already exist in the database
+        const allTopicsSet = new Set(
+            allTopics.map((t) => t.topic)
+        )
+        payloadTopics = payloadTopics.filter((t) => !allTopicsSet.has(t.topic))
         if (payloadTopics.length > 0) {
             console.log('Creating new topics')
             for (let t of payloadTopics) {
@@ -175,6 +185,7 @@ export default function NewReportContents({ generalSummary, availableTopics, onR
             console.log("Creating topic level summary summary")
             // Aggregate all of the topics
             const fullTopicsList = newlyCreatedTopics.concat(newTopicSummaries);
+
             const successfulTopicSummaryIds = new Set();
             console.log("fullTopicsList", fullTopicsList)
             console.log("START topic summary creation loop")
