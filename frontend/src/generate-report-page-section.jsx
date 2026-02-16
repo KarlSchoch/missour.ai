@@ -113,7 +113,10 @@ export default function GenerateReportPageSection() {
                     {
                         !error && (
                             summaries.length === 0 ? ( 
-                                <CreateNewReport topics = {topics} /> 
+                                <CreateNewReport 
+                                    topics = {topics} 
+                                    onReportsUpdated={refreshReportData}
+                                /> 
                             ) : ( 
                                 <UpdateExistingReport
                                     topics={topics}
