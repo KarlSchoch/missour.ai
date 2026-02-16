@@ -67,6 +67,7 @@ export default function UpdateExistingReport({ summaries, topics, onReportsUpdat
                 opened && (
                     <NewReportContents
                         data-testid='new-report-contents'
+                        allTopics={topics}
                         availableTopics={topicsWithoutSummaries}
                         generalSummary={generalSummary}
                         onReportsUpdated={onReportsUpdated}

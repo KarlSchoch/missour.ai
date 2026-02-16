@@ -7,6 +7,7 @@ export default function CreateNewReport({ topics, onReportsUpdated }) {
         <div data-testid="create-new-report">
             <NewReportContents
                 generalSummary={[]}
+                allTopics={topics}
                 availableTopics={topics}
                 onReportsUpdated={onReportsUpdated}
             />
