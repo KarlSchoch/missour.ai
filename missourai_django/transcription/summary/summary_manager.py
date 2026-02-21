@@ -32,12 +32,14 @@ class SummaryManager:
             ("system", "You summarize text.  Be concise"),
             (
                 "user", 
-                "Summarize the following piece of text in 350 words or less, focusing on the specified topic of interest.\n\n Topic of Interest: {tgt_topic}\n\n Text: {transcript_content}"
+                # "Summarize the following piece of text in 350 words or less, focusing on the specified topic of interest.\n\n Topic of Interest: {tgt_topic}\n\n Text: {transcript_content}"
+                "Summarize the following piece of text, focusing on the specified topic of interest.\n\n Topic of Interest: {tgt_topic}\n\n Text: {transcript_content}"
             ),
         ])
         self.general_summary_prompt = ChatPromptTemplate.from_messages([
             ("system", "You summarize text.  Be concise"),
-            ("user", "Summarize the following piece of text in 500 words or less\n\n Text: {transcript_content}"),
+            # ("user", "Summarize the following piece of text in 500 words or less\n\n Text: {transcript_content}"),
+            ("user", "Summarize the following piece of text\n\n Text: {transcript_content}"),
         ])
         self.chains = {
             "topic": self.topic_summary_prompt | self.llm | StrOutputParser(),
