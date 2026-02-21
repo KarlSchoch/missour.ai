@@ -50,9 +50,6 @@ class SummaryManager:
             tgt_transcript:Transcript,
             tgt_topic:Topic = None,
         ):
-        print("BEGIN Inside SummaryManager.summarize()")
-        print("transcript_content", transcript_content[:50])
-        print("tgt_topic", tgt_topic)
 
         if not tgt_topic:
             summary_type = 'general'
@@ -72,6 +69,5 @@ class SummaryManager:
             text = summary_text
         )
         summary_obj.save()
-        print("END Inside SummaryManager.summarize()")
 
         return summary_obj

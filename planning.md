@@ -308,6 +308,7 @@ flowchart TD
                 - Implementation Work
                     - Mock call to the OpenAI API
                     - Overwrite how the "POST" request works for summaries
+            5. Refresh 
 ##### `CreateNewReport`
 - Receives Topics from parent
 - Imports `NewReportContents`

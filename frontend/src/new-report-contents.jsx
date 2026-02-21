@@ -27,17 +27,6 @@ export default function NewReportContents({
         [{ topic: "", description: "" }]
     )
 
-    useEffect(()=> {
-        console.log('Update to API Inputs')
-        console.log('* newTopicSummaries', newTopicSummaries)
-        console.log('* newGeneralSummary', newGeneralSummary)
-        console.log('* newTopics', newTopics)
-    }, [
-        newTopicSummaries,
-        newGeneralSummary,
-        newTopics,
-    ])
-
     // Format availableTopics for MultiSelect
     const topicOptions = availableTopics.map((t) => {
         return { 'value': String(t.id), 'label': t.topic}
@@ -68,9 +57,6 @@ export default function NewReportContents({
 
         // validate that they are trying to create something
         let payloadTopics = newTopics.filter((t) => t.topic.length > 0)
-        console.log('payloadTopics', payloadTopics)
-        console.log('newTopicSummaries', newTopicSummaries)
-        console.log('newGeneralSummary', newGeneralSummary)
         if (payloadTopics.length === 0 && newTopicSummaries.length === 0 && !newGeneralSummary) {
             setError("Please select elements to add to this transcript's reports")
             setIsSubmitting(false);
@@ -88,7 +74,6 @@ export default function NewReportContents({
         )
         payloadTopics = payloadTopics.filter((t) => !allTopicsSet.has(t.topic))
         if (payloadTopics.length > 0) {
-            console.log('Creating new topics')
             for (let t of payloadTopics) {
                 // Create payload
                 payload = {
@@ -114,8 +99,7 @@ export default function NewReportContents({
                         setIsSubmitting(false);
                         return
                     }
-                    if (res.ok) {
-                        console.log("Good response from Topic creation")
+                    if (res.ok) {                        
                         let resBody = await res.json()
                         newlyCreatedTopics.push(String(resBody?.id))
                         dispatch({ type: 'reset' });
@@ -128,13 +112,10 @@ export default function NewReportContents({
                     setIsSubmitting(false)
                 }
             }
-        } else {
-            console.log("Bypassing creating new topics")
         }
 
         // Create General Summary if necesary, validating it is correctly created
         if (newGeneralSummary) {
-            console.log("Creating general summary")
             payload = {
                 'summary_type': 'general',
                 'transcript': transcriptId
@@ -155,7 +136,6 @@ export default function NewReportContents({
                     setError(`Encountered error while submitting general summary: ${text}`)
                 }
                 if (res.ok) {
-                    console.log('Good Response!')
                     hasSuccessfulMutation = true;
                 }
 
@@ -164,8 +144,6 @@ export default function NewReportContents({
             } finally {
                 setIsSubmitting(false);
             }
-        } else {
-            console.log("Bypassing creating general summary")
         }
         // Create Topic Level Summary if necessary, validating it is correctly created
         // TO DO: Create functionality where you generate tags for each topic
@@ -182,21 +160,16 @@ export default function NewReportContents({
         if (
             newTopicSummaries.length > 0 || newlyCreatedTopics.length > 0
         ) {
-            console.log("Creating topic level summary summary")
             // Aggregate all of the topics
             const fullTopicsList = newlyCreatedTopics.concat(newTopicSummaries);
 
             const successfulTopicSummaryIds = new Set();
-            console.log("fullTopicsList", fullTopicsList)
-            console.log("START topic summary creation loop")
             for (let t of fullTopicsList) {
-                console.log("* topic", t)
                 let payload = {
                     transcript: transcriptId,
                     summary_type: 'topic',
                     topic: t,
                 }
-                console.log("** payload", payload)
                 try {
                     const res = await fetch(summariesUrl, {
                         method: 'POST',
@@ -213,9 +186,7 @@ export default function NewReportContents({
                         setError(`Encountered error while submitting topic level summary: ${text}`)
                     }
                     if (res.ok) { 
-                        console.log("** Good Response from Topic Summary")
                         const topicSummaryResponse = await res.json()
-                        console.log('** topicSummaryResponse', topicSummaryResponse);
                         hasSuccessfulMutation = true;
                         successfulTopicSummaryIds.add(String(t));
                     }
@@ -228,9 +199,6 @@ export default function NewReportContents({
             setNewTopicSummaries((current) =>
                 current.filter((topicId) => !successfulTopicSummaryIds.has(String(topicId)))
             );
-            console.log("END topic summary creation loop")
-        } else {
-            console.log("Bypassing creating topic level summary")
         }
         if (hasSuccessfulMutation && typeof onReportsUpdated === "function") {
             await onReportsUpdated();
