@@ -46,4 +46,4 @@ WORKDIR /app
 COPY docker/entrypoint.dev.sh /entrypoint.dev.sh
 RUN sed -i 's/\r$//' /entrypoint.dev.sh && chmod +x /entrypoint.dev.sh
 ENTRYPOINT ["/entrypoint.dev.sh"]
-CMD ["/app/.venv/bin/python", "missourai_django/manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["/app/.venv/bin/python", "manage.py", "runserver", "0.0.0.0:8000"]
