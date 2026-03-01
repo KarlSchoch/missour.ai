@@ -108,8 +108,9 @@ export default function NewReportContents({
                 } catch (e) {
                     setError(e.message || "Something went wrong.")
                 } finally {
-                    // To Do: Add ability to reset the list of topics (new reducer)
-                    setIsSubmitting(false)
+                    // To Do: Reset the list of topics (new reducer)
+                    // Removed reset Submitting status since this is still submitting
+                    // setIsSubmitting(false)
                 }
             }
         }
