@@ -28,6 +28,7 @@ FAILURE (Topic is created, but the summary is only created after a VERY LONG TIM
             - User can't create a duplicate topic and gets a warning message if they try to do that
             - User can't create a duplicate summary and gets a warning message if they try to do that
             - Include a failure in the tagging for one of the chunks
+            - If a user wants to add multiple new topics for a transcript, they only end up with a single instance of the chunks
     - Tagging parallelization
         - Need to do some larger optimizations here
         - Testing
