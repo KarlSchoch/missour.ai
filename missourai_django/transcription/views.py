@@ -157,3 +157,10 @@ def analyze_audio_page_section(request):
         request,
         "transcription/partials/analyze-audio-page-section.html",
     )
+
+@login_required
+def generate_report_page_section(request):
+    return render(
+        request,
+        "transcription/partials/generate-report-page-section.html",
+    )

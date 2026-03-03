@@ -34,7 +34,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app/missourai_django
 COPY --from=python-build /app /app
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 EXPOSE 8000
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/app/.venv/bin/uvicorn", "missourai_web_app.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+
+# Stage 4: dev image with Poetry available for on-start installs
+FROM python-build AS dev
+ENV DJANGO_VITE_DEV=true
+WORKDIR /app
+COPY docker/entrypoint.dev.sh /entrypoint.dev.sh
+RUN sed -i 's/\r$//' /entrypoint.dev.sh && chmod +x /entrypoint.dev.sh
+ENTRYPOINT ["/entrypoint.dev.sh"]
+CMD ["/app/.venv/bin/python", "manage.py", "runserver", "0.0.0.0:8000"]

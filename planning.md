@@ -1,233 +1,381 @@
 # Overview
-- [x] Complete React UI Scaffolding
-- [x] Plan out Overall UI Journey
-- [x] Define MVP UI Journey
-	- *MVP Risk* Have to do tagging at time of transcript creation, can't go back.
-	- Planned to be implemented "later"
-- [ ] Create Clickable UI Scaffolding for MVP UI Journey
-- [ ] Pull in actual tagging code
-- [ ] Dev deployment of MVP to enable testing with Andy
-- [ ] Address Andy's feedback
-- [ ] Prod deployment of MVP
-- [ ] Define implementation phases
-	1. Add ability to tag transcripts after initial audio upload
-	2. Add ability to validate tagging
-
-# 1 Complete the React UI Scaffolding stuff
-
-# 2. Plan out the UI journey
-
+## UI Journey
+- [ ] Report generation happens within specific transcript page (not upload page)
+- [ ] "Transcript Report" section visible through a checkbox selection like "Transcript Tags"
+- [ ] Have different paths for "Create New" vs. "Update Existing" Report that are generated based on whether a report exists for a specific topic or not.
+    - [ ] Update Existing: 
+        - [ ] Link to download the word document (word document generated each time based on what is in the "Summary" table)
+        - [ ] "Update Report" checkbox exposes a new section
+            - [ ] Have an "Existing Report Contents" section that shows what topic summaries are in the current report (General Summaries are created automatically)
+            - [ ] "New Contents" section lists all topics that aren't part of the existing report and allows user to create new topics (pull existing logic for creating topics in the database from [api_urls.py](./missourai_django/transcription/api_urls.py) and [view_topics.jsx](./frontend/src/view-topics.jsx) - will require refactoring `view_topics.jsx` to separate out the `newTopics` capability).
+                - Error Handling: Add new state variable called `createdTopics`.  Before hitting sumbit, filter `newTopics` against `createdTopics`.  When a topic has successfully created, add it to that list.  If you get an error, prompt the user to resubmit and you will hit that re-render condition.
+        - [ ] Button for initiating report process labeled "Generate Updated Report"
+    - [ ] Create New:
+        - [ ] Basically what is in the "New Contents"
+        - [ ] Button for initiating report process labeled "Generate Report"
+- [ ] Once the user submits a report request, redirect them to the transcript page and create a modal popup that tells them that the transcript is being created and another modal that tells them when the report is complete.
+## Create UI and API Scaffolding
+### Brainstorming
 ```mermaid
-flowchart TB
-    subgraph view["View"]
-        topic["Topic"]
-        transcript["Transcript"]
-    end
-    tagged_transcript_def["Tagged Transcript Definition"]
-    subgraph topic_drop_down["Topic (Searchable, Multi-Select Drop Down Menu)"]
-        existing_topic["Existing Topic (Menu Option)"]
-        create_new_topic["Create New Topic (Popout)"]
-    end
-    subgraph analyze["Analyze"]
-        transcript_drop_down["Transcript (Searchable, Multi-Select Drop Down Menu)"]
-        topic_drop_down_imported1["Topic Drop Down"]
-    end
-    subgraph transcripts["Transcripts"]
-        view
-        analyze
-        tagged_transcript_instantiation1["Tagged Transcript(s)"]
-    end
-    subgraph upload_audio["Upload Audio"]
-        subgraph analyze_audio["Analyze Audio"]
-            topic_drop_down_imported2["Topic Drop Down"]
+---
+config:
+      theme: redux
+---
+flowchart TD
+    subgraph frontend
+        subgraph ViewTranscript
+            subgraph GenerateReport
+                subgraph NewReportContents
+                    AddNewTopic{Add New Topic?}
+                    subgraph AddTopicToDB
+                    end
+                    subgraph AddSummaryToDB
+                    end
+                    subgraph PassTextGenerationToCelery
+                    end
+                    AddNewTopic -->|Yes| AddTopicToDB -->|2| AddSummaryToDB
+                    AddNewTopic -->|No| AddSummaryToDB
+                    AddSummaryToDB -->|2| PassTextGenerationToCelery
+                end
+                NewReportContents -->|Import| UpdateExistingReport
+                NewReportContents -->|Import| CreateNewReport
+                subgraph UpdateExistingReport
+                    ExistingReportContents
+                end
+                subgraph CreateNewReport
+                end
+            end
         end
-		tagged_transcript_instantiation2["Tagged Transcript(s)"]
+        AddTopics -->|Import| CreateNewReport
+        AddTopics -->|Import| UpdateExistingReport
     end
-    subgraph validate_tagging["Validate Tagging"]
-        subgraph validation_table["Validation Table"]
-            chunk["Chunk"]
-            chunk_tag_checkbox["Chunk Tag Checkbox"]
+    AddTopicToDB -->|1. POST| Topics
+    AddSummaryToDB -->|1. POST| Summaries
+    PassTextGenerationToCelery --> CreateSummaryText
+    subgraph backend
+        Topics -->|GET| GenerateReport
+        subgraph Topics
+        end
+        Summaries -->|GET| GenerateReport
+    end
+    subgraph Celery
+        subgraph CreateSummaryText
         end
     end
-	subgraph transcript_view["Transcript"]
-		transcript_text["Transcript Text"]
-		transcript_tags["Transcript Tags"]
-	end
-
-	subgraph Legend
-		direction LR
-			Page_Full("Page")
-			Page_Section("Page Section")
-			UI_Component_Definition("UI Component Definition")
-			UI_Component_Instance("UI Component Instance")
-			Data_Model_Definition("Data Model Definition")
-			Data_Model_Instance("Data Model Instance")
-			L1[ ] -->|MVP| L2[ ]
-	end
-
-	style L1 fill:transparent,stroke:transparent
-	style L2 fill:transparent,stroke:transparent
-	linkStyle 0 stroke:#FF0000,stroke-width:2px,color:#FF0000,labelBackground:transparent
-
-    transcript_drop_down --> tagged_transcript_instantiation1
-    topic_drop_down_imported1 --> tagged_transcript_instantiation1
-    validate_tagging -->|Note 3| view
-    topic_drop_down -.-> topic_drop_down_imported1
-    topic_drop_down -.-> topic_drop_down_imported2
-    analyze_audio -->|NOT Analyzing Audio| view
-    analyze_audio -->|Analyzing Audio| tagged_transcript_instantiation2
-	linkStyle 7 stroke:#FF0000,stroke-width:3px,color:#FF0000,labelBackground:transparent
-    tagged_transcript_instantiation2 --> validate_tagging
-    tagged_transcript_instantiation1 --> validate_tagging
-	tagged_transcript_instantiation2 --> transcript
-	linkStyle 10 stroke:#FF0000,stroke-width:3px,color:#FF0000,labelBackground:transparent
-    tagged_transcript_def -.-> tagged_transcript_instantiation1
-    tagged_transcript_def -.-> tagged_transcript_instantiation2
-	transcript --> transcript_view
-
-    classDef page fill:#E8F1FF,stroke:#1B4F72,stroke-width:1px;
-    classDef section fill:#FFF4E6,stroke:#EF6C00,stroke-width:1px;
-    classDef ui_def fill:#EAF7EA,stroke:#2E7D32,stroke-width:1px;
-    classDef ui_instance fill:#FFFFFF,stroke:#2E7D32,stroke-width:1px;
-    classDef data_model_def fill:#F0DD05,stroke:#8B8000,stroke-width:1px;
-    classDef data_model_instance fill:#FFFFFF,stroke:#8B8000,stroke-width:1px;
-	classDef mvp_path stroke:#FF0000,stroke-width:3px
-
-    class transcripts,upload_audio,validate_tagging,Page_Full,transcript_view page;
-    class analyze,analyze_audio,view,Page_Section,transcript_text,transcript_tags section;
-    class topic_drop_down,transcript_drop_down,validation_table,create_new_topic,UI_Component_Definition ui_def;
-    class topic_drop_down_imported1,topic_drop_down_imported2,UI_Component_Instance ui_instance;
-    class tagged_transcript_def,Data_Model_Definition data_model_def;
-    class tagged_transcript_instantiation1,tagged_transcript_instantiation2,Data_Model_Instance data_model_instance;
-	class analyze_audio,transcript_tags,topic_drop_down,tagged_transcript_def mvp_path;
+    CreateSummaryText -->|1| OpenAIAPI
+    CreateSummaryText -->|2. PATCH| Summaries
+    subgraph OpenAIAPI
+    end
 ```
-**Notes**
-1. Create New Topic Popout
-	- On Submit of form, refresh full Analyze page (ensures the Topic dropdown menu includes the new topic)
-	- Need to maintain state with the selections of the topics and transcripts so that if a user creates a new topic they don't have to re-enter previous selections.  State for the drop down menus should get cleared, however, if they do anything other than go through the process of creating a new topic.  Likely needs to be maintained throughout the process of validating the tagging to ensure that the view is correct
-2. Validate Tagging
-	- For each chunk/topic combination within the transcript, have a checkbox that allows users to indicate whether that tag was captured correctly (defaults to the box being checked) and *capture both the initial and user feedback version of the tag within the data model*
-	- Within the UI, this will look like a table with the check box embedded as a row.  Only include the transcript column if the user is selecting multiple transcripts at once
->		|  Transcript  | Chunk Text | Tag 1 | Tag 2 | ... | Tag N |
->		| ------------ | ---------- | ----- | ----- | --- | ----- |
->       | Transcript 1 | asdfasdfad |   Y   |   N   |  N  |   Y   |
-3. Validated Tagging to View transition
-	- Ensure that the selected transcript(s) are maintained in state to ensure that the view transitions to the relevant transcript
-	- See discussion around maintaining state for the selections.
-4. Transcript and Topic Selection
-	- Users should be able to select multiple transcripts and topics
-	- See discussion around maintaining state for the selections.
-5. Transcripts Page Sidebar Menu
-	- There needs to be a sidebar menu within the Transcripts page that 
+- [ ] Create `GenerateReport` component nested within Django template
+    - [x] Create component and associated Django Infrastructure
+    - [x] API Dependencies
+        - [x] **Summaries** API Endpoint that returns records from the Summaries Table _for a specific transcript_ and then passes that down as props *only to `UpdateExistingReport` component*
+        - [x] **Topics** API Endpoint that returns all topics and passes them to both `UpdateExistingReport` and `CreateNewReport`
+    - [x] Create separate `UpdateExistingReport` and `CreateNewReport` Components
+        - [x] Conditionally render based on whether the transcript has any related summaries (`UpdateExistingReport` if there are summaries, `CreateNewReport` if there aren't)
+            - [x] **Unit Test**: Mock response with no records vs. some records and ensure that the correct component renders
+            - [x] **Integration Test**: Mock DB with summaries for a single transcript and ensure when the frontend passes in the matching transcript id you get the `UpdateExistingReport` and when the id does not match you get `CreateNewReport` 
+    - [ ] Both use the same `NewReportContents` component (naming TBD)
+        - [ ] "New Contents" section component gets passed down the summaries (can be null) and, for the `UpdateExistingReport` component, removes the topics that are already in the summary from the list of topics that can be added
+        - [ ] All of the elements from the new `AddTopics` component
+    - [ ] Create `ExistingReportContents` component that is based on the data from the **Summaries** API Endpoint
+- [ ] Refactor [view_topics.jsx](./frontend/src/view-topics.jsx)
+    - [ ] Split out the add topics into a new component that can be imported
+- [x] Create API Endpoint for Summaries
+    - GET: Fairly straightforward
+    - POST: Create the initial summary with only the Transcript, Summary Type, and Topic Fields; exclude the Summary Text field
+    - PATCH: Add the Summary Text field
+- [ ] Frontend Testing
+    - [x] Create Mock Service Worker using React Testing Library
+### Implementation Plan
+#### 1. Create bare bones React Components
+    - Test: 
+        - Ensure that all of the components show up within the larger `GenerateReport` component (default based on MSW returning Summaries should show `UpdateExistingReport`)
+        - Both summaries and no summaries, ensure that with no summaries the `CreateNewReport` component appears
+    - Test Set up
+        - MSW: 
+            - `GET` `/topics/` and `/summaries/`: Return Topics and Summaries by default
+                - Filtering summaries for a specific topic
+        - Provide override for no summaries
+#### 2. Create Individual React Components
+#### 3. Create Django Template
+    - [x] Create Django template and include it within the View Transcripts page
+    - [x] Create view that exposes API Endpoints
+#### 4. Create barebones DRF Components (model -> serializer -> ModelViewSet -> Route (api_urls.py))
+    - [x] Summaries Serializer (serializers.py)
+    - [x] ViewSet that allows for filtering (api_views.py)
+    - [x] Route in api_urls.py
+    - [x] Create test for API that shows the ability to pull out a summary for an existing transcript as well as ability to return none for a non-existent transcript.  What should this do in terms of error handling?
+        - non-existent transcript check needs to look at both a transcript that doesn't exist (error handling) AND a transcript that does not have a summary
+            - transcript that doesn't exist: `{ "transcript": [ "Select a valid choice. That choice is not one of the available choices." ] }`
+            - transcript that does not have a summary: `[]`
+        - transcript exists and has a summary:
+            ```json
+            [
+                {
+                    "transcript": 96,
+                    "summary_type": "general",
+                    "topic": null,
+                    "text": "High level summary of a very engaging and in-depth committee hearing."
+                }
+            ]
+            ```
+#### 5. Create Capabilities within the components
+##### Additions to the `GenerateReportPageSection`
+- [x] Query for Topics and pass into child components as props
+- [x] Add props to the `UpdateExistingReport` and `CreateNewReport` components
+    - [x] `UpdateExistingReport`: Summaries and Topics
+    - [x] `CreateNewReport`: Topics
+- Create transcript data
+- [x] Testing:
+    - [] Ensure that if you get an error reaching out to the Topics API Endpoint the Error div shows up and that the other two subcomponents don't show up
+    - Does not impact what shows up downstream as long as there is no error
+        - If you get no topics, you're still going to be able to create topic level summaries by adding to the topics in the `NewReportContents` section
+        - If you get topics, everything else shows up
 
-# 3. Define MVP UI Journey
-- See red highlighted section of diagram
-- Required Elements to build out
-	1. Analyze Audio Page Section
-	2. Topic Drop Down
-		- Create New Topic Poput
-	3. Tagged transcript Data Model
-	4. Transcript Tags Page Section
-	
+##### `UpdateExistingReport`
+- [x] Receives Summaries and Topics from parent
+- [x] Create database entries to enable UI validation
+    - [x] Summaries exist
+        - [x] General, no topic level (Transcript 96)
+        - [x] No General, 1 x topic level (Transcript 94)
+        - [x] General and multiple topic level (Transcript 93)
+    - [x] Summaries do not exist (Transcript 95)
+- [x] Shows the Existing summaries
+    - [x] If there are no summaries for a given type, provide that information to the user
+    - [x] General Summary: Show all the time
+    - [x] Topics: Separate heading, always shows the topics that already have summaries but create a collapsible section to show the summary (mouseover?)
+- [x] Imports `NewReportContents` and passes down topics, filtering for topics that do not already have summaries
+    - [x] Section is visible when the user hits button.  Functionality implemented through [Mantine UI's Collapse](https://mantine.dev/core/collapse/)
+- [x] Testing:
+    - Cases
+        - [x] Only general level summary
+            - Shows general summary content
+            - does not show general summary error message
+            - Shows topic level summary error message
+            - does not show topic level summary content
+        - [x] Only topic level summary
+            - does not show general summary content
+            - Shows general summary error message
+            - Shows topic level summary content
+            - does not show topic level summary error message
+            - number of topic level summary sections matches the number of topics in the response
+        - [x] General and topic level summaries
+            - Shows both general and topic level summary content
+            - Does not show eitehr general or topic level error message
+    - [x] Should have the `NewReportContents` component when the user selects that
+##### `AddTopics` Refactor
+- Implementation notes
+    - Very high level
+        - [x] Define `AddTopics` event handlers (separate file - `TopicsEventHandlers.js`)
+            ```js
+            export function handleAddTopic(name, description) {
+                dispatch({
+                    type: 'added',
+                    name: name,
+                    description: description,
+                })
+            }
+            // ..
+            ```
+        - [x] Manage state through a reducer (separate file - `TopicsReducer.js`)
+            - Code Snippet: 
+                ```js
+                export default function topicsReducer(tasks, action) {
+                    switch (action.type) {
+                        case 'added': {
+                            return [...topics, {
+                                name: action.name,
+                                description: action.description,
+                            }]
+                        }
+                        // ..
+                        default: {
+                            throw Error('Unknown Action' + action.type);
+                        }
+                    }
+                }
+                
+                ```
+            - Match the action 'type' dispatched by the event handlers with the switch statements 
+        - Create context (separate file - `TopicsContext.js`)
+            - Current list of topics
+            - Function that lets components dispatch actions
+                ```js
+                export const TasksContext = createContext(null);
+                export const TasksDispatchContext = createContext(null);
+                ```
+        - Import relevant components and integrate into parent component (`view-topics.jsx` and `update-existing-report.jsx`)
+            - Key Tasks
+                1. Wrap relevant components within the context
+                2. Import the reducer and pass it to the context
+                3. Pass the event handlers to the `AddTopics` component
+            - Code snippet
+                ```js
+                export default function App() {
+                    // Import necessary dependencies
+                    import { useReducer } from 'react';
+                    // Import AddTopics component, reducer, event handlers, and context helpers
+                    import AddTopics from './AddTopic.jsx';
+                    import topicsReducer from 'TopicsReducer.js';
+                    import { handleAddTopic, HandleDeleteTopic, HandleChangeTopic } from 'TopicsEventHandlers.js';
+                    import { TasksContext, TasksDispatchContext } from 'TopicsContext.js';
 
-# 4. Create clickable UI scaffolding
-Branching strategy: Main branch is `feat/transcript-tagging` and branches referenced below indicate the sub-branches
-- [] Analyze Audio Page Section (branches: `feat/analyze-audio` > `feat/page-section`)
-- [] Topic Drop Down Menu (branches: `feat/analyze-audio` > `feat/topic-drop-down`)
-	- [] Create Topic Data Model
-	- [] Create Base Menu
-	- [] Create "Create New Topic" Popout Form
-	- [] Integrate Base Menu with "Create New Topic" Popout Form
-- [] Tagged transcript Data Model
-- [] Transcript Tags Page Section
+                    export default function App() {
+                        // Instantiate Reducer
+                        const [topics, dispatch] = useReducer(
+                            topicsReducer,
+                            initialTopics
+                        )
 
-## Step 1: Build out "Analyze Audio" Page Section
-- [x] Create the react component
-    - checkbox that expands into a new section when selected that contains an explanatory hover
-- [x] Bring the react component into the Django page
+                        // ...
 
-## Step 2: Create "Topic Drop Down Menu" UI Element
-- [x] Provide data from the React Component to the Django form
-    > Put <input type="hidden" name="component_json" id="component_json"> in the form.
-    > In React, whenever state changes (or on submit), document.getElementById('component_json').value = JSON.stringify(state).
-    > In the Django view: data = json.loads(request.POST['component_json']).
-- [x] Abstract multi-select from Page section into its own component
-- [x] Create Topic Data Model and populate
-    - topic, description
-- [x] Populate options based on DB entries
-    - [x] Add query of DB to view and pass as initial_payload
-    - [x] Pull in topics/options from the initial_payload element
-- [x] Document How to do a partial
+                        return (
+                            <TopicsContext value={topics}> // Key tasks 1 and 2
+                                <TopicsDispatchContext value={dispatch}> // Key tasks 1 and 2
+                                    <AddTopics 
+                                        topics={topics}
+                                        onAddTopic={handleAddTopic}
+                                        onDeleteTopic={handleDeleteTopic}
+                                        onChangeTopic={handleChangeTopic}
+                                    />
+                                </TopicsDispatchContext>
+                            </TopicsContext>
+                        )
+                    }
+                }
+                ```
+- [x] Passes state around added topics "up" to the parent component where the "Submit" button will reside to allow for custom logic
+    - for the `view-topics.jsx`, use the existing `onSubmit`
+    - for the `NewReportContents`, nest within the logic of creating the summaries.  See comments about error handling.
+- [x] Testing
+    - Initial number of topics entry boxes is 1
+    - number of topics entry boxes goes up by 1 when user hits "+ Add another topic"
+    - number of topics entry boxes goes down by 1 when user hits "Remove"
+##### `NewReportContents`
+- [] `NewReportContents` Component
+    - [x] Receives topics from parent component
+    - [x] creates variable `availableSummaryTopics` that filters out topics that a summary exists for
+    - [x] Has Y/N selector for creating a general summary
+        - [x] Only shows up if general summary DOES NOT exist
+        - [x] Default is no (i.e. unchecked)
+        - [x] Implemented with Mantine Switch component
+    - `newSummaries` variable holds new summaries that need to be created
+        - [] passed into API call
+            ```json
+            {
+                "general": Bool,
+                "topic": ["topic1", "topic2", ...]
+            }
+            ```
+    - [x] Allow user to select Topics using [Mantine UI MultiSelect](https://mantine.dev/core/multi-select/)
+        - [x] Receives `availableSummaryTopics`
+    - [x] Pulls in `AddTopics` to allow user to add topics that do not already exist
+        - [x] `AddTopics` State managed within `NewReportContents` component
+        - [] Passed into API Call
+            ```js 
+            [
+                {"topic": "Topic One", "description": "Description of Topic One"},
+                {"topic": "Topic Two", "description": "Description of Topic Two"},
+                ...
+            ]
+            ```
+    - [] API Call: This will ultimately be implemented in celery
+        - reviews `newTopics`, `newSummaries`, and Transcript ID variables
+            ```json
+            {
+                "transcript": 1,
+                "newTopics": [
+                    {"topic": "Topic One", "description": "Description of Topic One"},
+                    {"topic": "Topic Two", "description": "Description of Topic Two"},
+                    ...
+                ],
+                "newSummaries": {
+                    "general": Bool,
+                    "topic": ["topic1", "topic2", ...]
+                }
+            }
+            ```
+        - [] Two step API Call
+            1. If the user wants to create new topics, Create new topics (Topics API Endpoint)
+                - pass in `newTopics` object and iterate through
+            2. Validate that the topics were created successfully and provide error message
+            3. Create new tags for the topics.
+            4. Create new summaries (Summaries API endpoint)
+                - Multiple API calls, iterating through each of the summaries that need to be created
+                - Validate that each one of the summaries were created and provide error message to the user
+                - Implementation Work
+                    - Mock call to the OpenAI API
+                    - Overwrite how the "POST" request works for summaries
+            5. Refresh 
+##### `CreateNewReport`
+- Receives Topics from parent
+- Imports `NewReportContents`
 
-## Step 3: Create module(s) to associate tags with a records
-- [x] Create Data Models
-    - [x] Create Chunk data model
-        - [x] chunk_id <Primary Key> (automatically handled by Django ORM)
-        - [x] transcript_id <Foreign Key>
-        - [x] chunk_text
-    - [x] Create Taggs Data Model
-        - [x] chunk_id <Foreign Key> (automatically associates the transcript id)
-        - [X] topic_id <Foreign Key>
-        - [X] topic_present
-        - [X] relevant_section
-        - [X] user_validation: Boolean (input from user as to whether the topic is present in the chunk)
-- [x] Create sample data for the tests
-    - [x] Create test SQLite DB: OBE due to Django's testing infrastructure
-    - [x] Add topics to SQLite topics table
-        - Workforce Training
-        - Information Technology
-    - [x] Add transcript to SQLite transcript table (use to test the Chunking module and the Tagging module's `tag_transcript()` method)
-        - Transcript needs to be ~ 1k words so that we produce two chunks
-        - Transcript needs to have first 500 words devoted to Workforce Training and the second 500 words related to Information Technology
-- [x] Create the test infrastructure
-    - [x] Create the empty SQLite database with the correct schemas: OBE due to Django's testing infrastructure
-    - [x] Direct queries within the test to this testing SQLite database: OBE due to Django's testing infrastructure
-    - [x] Create the shell Tagging Manager
-        - `chunk` method (Input: Transcript/Transcript ID; Output: 1:M records in the **Chunk** table)
-        - Tagging Module 
-            - `tag_chunk` method (Input: Chunk/Chunk ID; Output: 1:M records in the **Chunk Tag** table)
-            - `tag_transcript` (Input: Transcript/Transcript ID; Output: 1:M records in the **Chunk** table AND 1:M records in the **Chunk Tag** table)
-    - [x] Create ability to "mock" calls to LLM when we are doing the tagging (probably exists within the **Tag** module's `tag_chunk()` method)
-- [x] Create failing tests
-    - [x] test_chunk
-    - [x] test_tag_chunk
-    - [x] test_tag_transcript
-- [x] Implement modules to pass tests
-    - [x] test_chunk
-    - [x] test_tag_chunk
-    - [x] test_tag_transcript
-- Utilize modules in the view
-    - [x] Validate that the functionality works when calling out to the API
-        - Run a transcript through the UI
-        - Ensure that chunks get created
-        - Ensure that tags are creation for each chunk/topic combination
-            - i.e. if there are n chunks, ensure there are a total of 2n tags (n for IT, n for workforce training)
-    - [x] Create a "dev" flag that allows you to bypass the various calls out ("testing" flag will be for when Andy is using it)
-        - [x] Generating transcript with `process_audio()` 
-        - [x] Tagging the chunk with `tag_chunk()`
-        - [x] Update documentation around the model flag
+## Celery infrastructure and API Integration
+    - [ ] Deal with external API call failures
+    - [ ] Mock external API calls
+## Data Infrastructure 
+This considers what to pass from the front end and what queries need to be run in the backend prior to initiating the generating API call
+- [ ] Data Model
+    - [ ] Topic Table
+        - [ ] Add a uniqueness constraint to the topic model
+    - [x] Summary Table
+        - [x] "Transcript" Field: Foreign Key that relates to the transcript
+            - [ ] Needs to allow for multiple transcripts
+        - [x] "Summary Type" Field: "General" or "Topic"
+        - [x] "Topic" Field: Null if "Summary Type" field is "General", otherwise Foreign Key to Topic table
+        - [x] "Summary Text" Field: The text that was generated 
+    - Example Code
+        ```
+        from django.db import models
+        from django.db.models import Q
 
-## Step 4: Add in actual tagging code
+        class Summary(models.Model):
+            class SummaryType(models.TextChoices):
+                GENERAL = "general", "General"
+                TOPIC = "topic", "Topic"
 
+            summary_type = models.CharField(
+                max_length=20,
+                choices=SummaryType.choices,
+                default=SummaryType.GENERAL,
+            )
+            topic = models.ForeignKey(
+                "transcription.Topic",
+                null=True,
+                blank=True,
+                on_delete=models.SET_NULL,
+                related_name="summaries",
+            )
+            text = models.TextField()
 
-## Step 5: Create Transcript Tags section within Transcript page
-- [x] Add in shell of Transcript tags section to transcript page
-    - Follow the instructions in the README
-- [x] Within the view, return all of the tags associated with the transcript
-- [ ] Within the view, return all of the topics associated with those tags. This will facilitate pulling the topics into the table
-- [ ] Within the frontend logic
-    - [ ] Need a table.  Intent is for each chunk to be a row, the columns are the topics, and the cell is whether that topic exists within the that chunk
-    - [ ] Have a dropdown section so that you can see the tags section/not
-    - [ ] filter the tags so that you see the ones for the selected topic (have a "view all" option)
-    - [ ] Filter the frontend so that you only see the "present" topics (i.e. the `topic_present` field is `True`)
-- [ ] Update the redirect within the "Upload Audio" Page to go to the page for that specific transcript
+            class Meta:
+                constraints = [
+                    models.CheckConstraint(
+                        name="summary_topic_required_for_topic_type",
+                        check=(
+                            Q(summary_type=SummaryType.GENERAL, topic__isnull=True) |
+                            Q(summary_type=SummaryType.TOPIC, topic__isnull=False)
+                        ),
+                    ),
+                ]
+        ```
+- [ ] Data Pipeline for the AI Task
+    - [ ] Query the data from the frontend
+        - [ ] If Tags do not exist for a specific topic/transcript combination that is passed back from the frontend, run the tagging task
 
-Create ability to flow through UI spaces
-- [ ] Get Andy's recommendations on topics
-- [ ] Populate with dummy data
-- [ ] Have pages pull off SQLite rather than dummy data
-- [ ] Add shell of `tag_data` capability
-
-# N. Allow user to tag a transcript rather than just an audio file
-
-- [ ] Add in logging to module and provide method for integrating logging into the webapp
+## Create AI Task
+- [ ] Celery will do an API request to update the summary text field
+    ```
+    const res = await fetch('/api/summaries/123/', {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ "<field-name>": "<new-value>" }),
+    })
+    ```

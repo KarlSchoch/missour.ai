@@ -15,6 +15,11 @@
         {% include 'transcription/partials/view-transcript-chunks-page-section.html' %}
     {% endblock %}
 </p>
+<p>
+    {% block generate_report_page_section %}
+        {% render_generate_report_page_section %}
+    {% endblock %}
+</p>
 <form method="POST" enctype="multipart/form-data">
     {% csrf_token %}
     {% block analyze_transcript_page_section %}
@@ -31,4 +36,5 @@
     {% vite_hmr_client %}
     {% vite_asset 'src/view-transcript-chunk-page-section.jsx' %}
     {% vite_asset 'src/analyze-audio-page-section.jsx' %}
+    {% vite_asset 'src/generate-report-page-section.jsx' %}
 {% endblock %}

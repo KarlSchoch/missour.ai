@@ -6,6 +6,9 @@ class FakeLLM:
     def with_structured_output(self, _schema):
         return self
     
+    def __call__(self, prompt):
+        return self.invoke(prompt)
+
     def invoke(self, prompt):
         self.invocations.append(prompt)
         try:
