@@ -126,7 +126,9 @@ The web application combines a Django backend that exposes APIs and serves the H
 ### Nginx + Certbot
 - The production compose file includes Nginx and Certbot containers with shared volumes for `/etc/letsencrypt` and the webroot challenge.
 - The first cert issuance uses the production ACME endpoint (no staging flag). If you want to test without rate limits, add `--staging` to the certbot command.
-- Certbot runs a renewal loop inside the container (`certbot renew` every 12h). Restart Nginx after renewals if you change certs manually.
+- Certbot checks for renewals every 12 hours from the `certbot` service command in [`docker-compose.yml`](./docker-compose.yml). `certbot renew` only replaces a certificate when it is actually close to expiry, so certificate file timestamps will not change on every check.
+- After a successful renewal, Certbot writes a signal file into the shared webroot volume and the Nginx container automatically runs `nginx -s reload` after noticing that signal.
+- You still need to restart Nginx after the very first certificate issuance, or after manual config changes that are unrelated to the renewal flow.
 - Certificates persist in Docker volumes (`certbot-etc`, `certbot-var`) on the host; containers mount them at runtime.
 
 ### Creating New Pages
