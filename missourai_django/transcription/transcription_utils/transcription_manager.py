@@ -19,6 +19,7 @@ class TranscriptionManager:
         self.client = OpenAI(api_key=api_key)
         self.max_file_size = max_file_size
         self.file_path = file_path
+        self.chunk_path = None
 
 
         probe = subprocess.run(
@@ -95,6 +96,18 @@ class TranscriptionManager:
         if result.returncode != 0:
             raise TranscriptionMediaError("Could not extract audio from the uploaded file.")
 
+    def _cleanup_chunk(self):
+        if not self.chunk_path:
+            return
+
+        try:
+            os.remove(self.chunk_path)
+            print(f"Chunk at {self.chunk_path} successfully deleted")
+        except FileNotFoundError:
+            print(f"Chunk does not exist at {self.chunk_path}")
+        finally:
+            self.chunk_path = None
+
     def create_transcript(self) -> str:
         transcript=""
         start_time=0
@@ -103,10 +116,13 @@ class TranscriptionManager:
 
         while start_time < self.file_duration:
             print(f"Processing chunk {i} of {tgt_chunks}")
-            self.read_audio_chunk(start_time)
-            print("* Successfully read in audio chunk")
-            transcript += self._transcribe_chunk()
-            print("* Successfully transcribed chunk")
+            try:
+                self.read_audio_chunk(start_time)
+                print("* Successfully read in audio chunk")
+                transcript += self._transcribe_chunk()
+                print("* Successfully transcribed chunk")
+            finally:
+                self._cleanup_chunk()
 
             start_time += self.chunk_length_sec
             i += 1
@@ -133,11 +149,5 @@ class TranscriptionManager:
                     return ""
                 
                 raise e
-            finally:
-                try:
-                    os.remove(self.chunk_path)
-                    print(f"Chunk at {self.chunk_path} successfully deleted")
-                except:
-                    print(f"Chunk does not exist at {self.chunk_path}")
                 
         return transcript.text

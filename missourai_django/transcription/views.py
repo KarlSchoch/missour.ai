@@ -8,7 +8,10 @@ from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from .forms import TranscriptForm
 from .models import Transcript, Topic
-from .transcription_utils.transcription_manager import TranscriptionManager
+from .transcription_utils.transcription_manager import (
+    TranscriptionManager,
+    TranscriptionMediaError
+)
 from .tagging.tagging_manager import TaggingManager
 
 import os
@@ -21,10 +24,16 @@ def process_audio(file_path:str) -> str:
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set.")
-    manager = TranscriptionManager(api_key, file_path)
-    transcript_text = manager.create_transcript()
     
-    return transcript_text
+    # Create the transcript using the TranscriptionManager
+    try:
+        manager = TranscriptionManager(api_key, file_path)
+        return manager.create_transcript()
+    except TranscriptionMediaError:
+        raise
+    except Exception as exc:
+        logging.exception("Unexpected transcription failure for file %s", file_path)
+        raise RuntimeError("An unexpected error occurred while processing the file.") from exc
 
 # Create your views here.
 def index(request):
@@ -47,6 +56,7 @@ def upload_audio(request):
         if form.is_valid():
             name = form.cleaned_data['name']
             audio_file = form.cleaned_data['audio_file']
+
             # Extract Selected Topics
             topics_raw = request.POST.get('topics', '[]')
             try:
@@ -54,15 +64,34 @@ def upload_audio(request):
             except json.JSONDecodeError:
                 selected_topics = []
 
-            # Save audio file to a temporary location
-            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-                for chunk in audio_file.chunks():
-                    tmp_file.write(chunk)
-                tmp_file_path = tmp_file.name
+            # Reuse Django's temp file for large uploads when available.
+            remove_tmp_file = False
+            if hasattr(audio_file, "temporary_file_path"):
+                tmp_file_path = audio_file.temporary_file_path()
+            else:
+                with tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=os.path.splitext(audio_file.name)[1]
+                ) as tmp_file:
+                    for chunk in audio_file.chunks():
+                        tmp_file.write(chunk)
+                    tmp_file_path = tmp_file.name
+                remove_tmp_file = True
             
             # Generate transcript
-            transcript_text = process_audio(tmp_file_path)
-            print("transcript_text", transcript_text)
+            try:
+                transcript_text = process_audio(tmp_file_path)
+            except TranscriptionMediaError as exc:
+                form.add_error("audio_file", str(exc))
+                return render(
+                    request,
+                    "transcription/upload_audio.html",
+                    {"form": form},
+                    status=400,
+                )
+            finally:
+                if remove_tmp_file and os.path.exists(tmp_file_path):
+                    os.remove(tmp_file_path)
 
             # Save the transcript text
             transcript_obj = Transcript(
@@ -70,9 +99,6 @@ def upload_audio(request):
                 transcript_text=transcript_text,
             )
             transcript_obj.save()
-
-            # Remove the temporary file
-            os.remove(tmp_file_path)
             
             # Translate selected_topics into Topic objects
             selected_topics_ct = len(selected_topics)
