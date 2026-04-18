@@ -7,52 +7,106 @@ import io
 import math
 import subprocess
 import json
+import tempfile
+
+
+class TranscriptionMediaError(Exception):
+    pass
+
 
 class TranscriptionManager:
     def __init__(self, api_key:str, file_path:str, max_file_size:int=20):
         self.client = OpenAI(api_key=api_key)
         self.max_file_size = max_file_size
         self.file_path = file_path
-        # Calculate file duration
-        command = [
-                "ffprobe", "-i", self.file_path,
+        self.chunk_path = None
+
+
+        probe = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "quiet",
+                "-print_format", "json",
+                "-show_streams",
                 "-show_entries", "format=duration",
-                "-v", "quiet", "-of", "json"
-        ]
-        res = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                self.file_path,
+            ],
+            capture_output=True,
+            text=True
+        )
+        if probe.returncode != 0:
+            raise TranscriptionMediaError("Could not read the uploaded media file.")
+        
         try:
-              self.file_duration = float(json.loads(res.stdout)["format"]["duration"])
-        except (KeyError, json.JSONDecodeError, TypeError) as e:
-              raise e
+            probe_data = json.loads(probe.stdout)
+        except json.JSONDecodeError as exc:
+            raise TranscriptionMediaError("Could not inspect the uploaded media file.") from exc
+        
+        # Ensure that the file contains an audio stream
+        audio_streams = [
+            stream for stream in probe_data.get("streams", [])
+            if stream.get("codec_type") == "audio"
+        ]
+        if not audio_streams:
+            raise TranscriptionMediaError("The uploaded file does not contain an audio track.")
+
+        # Calculate file duration based on data from the probe
+        try:
+              self.file_duration = float(probe_data["format"]["duration"])
+        except (KeyError, TypeError, ValueError) as exc:
+              raise TranscriptionMediaError("Could not determine media duration") from exc
+        
         # Calculate chunk settings
-        self.chunk_path=f"{os.getcwd()}/chunk.wav"
         self.chunk_settings = {
             'channels': 1,
             'sample_rate': 16000,
             'bit_depth': 2
         }
         self.chunk_length_sec = math.floor(
-            ( self.max_file_size * 1024 * 1024 ) / ( self.chunk_settings['sample_rate'] * self.chunk_settings['bit_depth'] * self.chunk_settings['channels'] )
+            ( self.max_file_size * 1024 * 1024 ) 
+            / ( 
+                self.chunk_settings['sample_rate'] 
+                * self.chunk_settings['bit_depth'] 
+                * self.chunk_settings['channels'] 
+            )
         )
 
     def read_audio_chunk(self, start_time:float=0):
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_chunk:
+            self.chunk_path = tmp_chunk.name
 
-        command = [
-            "ffmpeg",
-            "-n", # will cause read to fail if chunk file already exists
-            "-ss", str(start_time),
-            "-t", str(self.chunk_length_sec),
-            "-i", self.file_path,
-            "-f", "wav",
-            "-ac", str(self.chunk_settings['channels']),
-            "-ar", str(self.chunk_settings['sample_rate']),
-            f"{self.chunk_path}"
-        ]
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-ss", str(start_time),
+                "-t", str(self.chunk_length_sec),
+                "-i", self.file_path,
+                "-map", "0:a:0",
+                "-vn",
+                "-ac", str(self.chunk_settings["channels"]),
+                "-ar", str(self.chunk_settings["sample_rate"]),
+                "-f", "wav",
+                self.chunk_path,
+            ],
+            capture_output=True,
+            text=True,
+        )
 
+        if result.returncode != 0:
+            raise TranscriptionMediaError("Could not extract audio from the uploaded file.")
 
-        subprocess.run(command, stderr=subprocess.DEVNULL)
-        
-        return
+    def _cleanup_chunk(self):
+        if not self.chunk_path:
+            return
+
+        try:
+            os.remove(self.chunk_path)
+            print(f"Chunk at {self.chunk_path} successfully deleted")
+        except FileNotFoundError:
+            print(f"Chunk does not exist at {self.chunk_path}")
+        finally:
+            self.chunk_path = None
 
     def create_transcript(self) -> str:
         transcript=""
@@ -62,10 +116,13 @@ class TranscriptionManager:
 
         while start_time < self.file_duration:
             print(f"Processing chunk {i} of {tgt_chunks}")
-            self.read_audio_chunk(start_time)
-            print("* Successfully read in audio chunk")
-            transcript += self._transcribe_chunk()
-            print("* Successfully transcribed chunk")
+            try:
+                self.read_audio_chunk(start_time)
+                print("* Successfully read in audio chunk")
+                transcript += self._transcribe_chunk()
+                print("* Successfully transcribed chunk")
+            finally:
+                self._cleanup_chunk()
 
             start_time += self.chunk_length_sec
             i += 1
@@ -92,11 +149,5 @@ class TranscriptionManager:
                     return ""
                 
                 raise e
-            finally:
-                try:
-                    os.remove(self.chunk_path)
-                    print(f"Chunk at {self.chunk_path} successfully deleted")
-                except:
-                    print(f"Chunk does not exist at {self.chunk_path}")
                 
         return transcript.text
