@@ -19,6 +19,9 @@ import logging
 import json
 import tempfile
 
+logger = logging.getLogger(__name__)
+
+
 def process_audio(file_path:str) -> str:
     # Intialize TranscriptionManager with OpenAI API key
     api_key = os.getenv('OPENAI_API_KEY')
@@ -77,6 +80,16 @@ def upload_audio(request):
                         tmp_file.write(chunk)
                     tmp_file_path = tmp_file.name
                 remove_tmp_file = True
+
+            logger.info(
+                "Processing upload name=%s file=%s size=%s content_type=%s temp_path=%s reused_temp_file=%s",
+                name,
+                getattr(audio_file, "name", "<unknown>"),
+                getattr(audio_file, "size", "<unknown>"),
+                getattr(audio_file, "content_type", "<unknown>"),
+                tmp_file_path,
+                not remove_tmp_file,
+            )
             
             # Generate transcript
             try:
@@ -89,9 +102,41 @@ def upload_audio(request):
                     {"form": form},
                     status=400,
                 )
+            except (RuntimeError, ValueError):
+                logger.exception(
+                    "Transcription failed for upload name=%s file=%s",
+                    name,
+                    getattr(audio_file, "name", "<unknown>"),
+                )
+                form.add_error(
+                    None,
+                    "Something went wrong while transcribing the uploaded file.",
+                )
+                return render(
+                    request,
+                    "transcription/upload_audio.html",
+                    {"form": form},
+                    status=500,
+                )
             finally:
                 if remove_tmp_file and os.path.exists(tmp_file_path):
                     os.remove(tmp_file_path)
+
+            selected_topics_ct = len(selected_topics)
+            selected_topics = list(
+                Topic.objects.filter(topic__in=selected_topics)
+            )
+            if len(selected_topics) != selected_topics_ct:
+                form.add_error(
+                    None,
+                    "One or more selected topics could not be found.",
+                )
+                return render(
+                    request,
+                    "transcription/upload_audio.html",
+                    {"form": form},
+                    status=400,
+                )
 
             # Save the transcript text
             transcript_obj = Transcript(
@@ -99,24 +144,32 @@ def upload_audio(request):
                 transcript_text=transcript_text,
             )
             transcript_obj.save()
-            
-            # Translate selected_topics into Topic objects
-            selected_topics_ct = len(selected_topics)
-            selected_topics = list(
-                Topic.objects.filter(topic__in=selected_topics)
-            )
-            assert len(selected_topics) == selected_topics_ct
-            assert isinstance(selected_topics, list)
-            for topic in selected_topics:
-                assert isinstance(topic, Topic)
 
             # Tag the transcript based on selected topics
-            tagging_manager = TaggingManager(
-                api_key = os.getenv('OPENAI_API_KEY'),
-                transcript=transcript_obj,
-                topics = selected_topics
-            )
-            tags = tagging_manager.tag_transcript()
+            try:
+                tagging_manager = TaggingManager(
+                    api_key = os.getenv('OPENAI_API_KEY'),
+                    transcript=transcript_obj,
+                    topics = selected_topics
+                )
+                tagging_manager.tag_transcript()
+            except Exception:
+                logger.exception(
+                    "Tagging failed for transcript_id=%s name=%s",
+                    transcript_obj.pk,
+                    transcript_obj.name,
+                )
+                transcript_obj.delete()
+                form.add_error(
+                    None,
+                    "Something went wrong while tagging the transcript.",
+                )
+                return render(
+                    request,
+                    "transcription/upload_audio.html",
+                    {"form": form},
+                    status=500,
+                )
 
             # Redirect to transcripts page
             return redirect('transcription:transcripts')
