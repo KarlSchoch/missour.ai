@@ -1,7 +1,12 @@
-from django.test import TestCase
-from transcription.models import Transcript, Tag, Topic, Chunk
-from django.urls import reverse
+import json
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile, TemporaryUploadedFile
+from django.test import TestCase
+from django.urls import reverse
+
+from transcription.models import Chunk, Tag, Topic, Transcript
 
 User = get_user_model()
 
@@ -84,3 +89,133 @@ class ViewTranscriptTests(TestCase):
             pk = transcripts[0]['transcript_id']
         ).values('name')
         self.assertEqual(trancript_name[0]['name'], self.transcript_one.name)
+
+
+class UploadAudioTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="upload-user", password="pw")
+        self.client.force_login(self.user)
+        self.url = reverse("transcription:upload_audio")
+        self.topic = Topic.objects.create(
+            topic="Information Technology",
+            description="",
+        )
+
+    def _make_temp_uploaded_file(self, content=b"fake media payload"):
+        uploaded_file = TemporaryUploadedFile(
+            name="large-video.mp4",
+            content_type="video/mp4",
+            size=len(content),
+            charset=None,
+        )
+        uploaded_file.write(content)
+        uploaded_file.seek(0)
+        return uploaded_file
+
+    @patch("transcription.views.TaggingManager")
+    @patch("transcription.views.process_audio", return_value="mock transcript")
+    def test_upload_audio_accepts_temporary_uploaded_file(
+        self,
+        mock_process_audio,
+        mock_tagging_manager,
+    ):
+        temp_upload = self._make_temp_uploaded_file()
+
+        response = self.client.post(
+            self.url,
+            data={
+                "name": "Large Upload",
+                "audio_file": temp_upload,
+                "topics": json.dumps([self.topic.topic]),
+            },
+        )
+
+        self.assertRedirects(response, reverse("transcription:transcripts"))
+        mock_process_audio.assert_called_once_with(temp_upload.temporary_file_path())
+        mock_tagging_manager.return_value.tag_transcript.assert_called_once_with()
+        self.assertTrue(
+            Transcript.objects.filter(
+                name="Large Upload",
+                transcript_text="mock transcript",
+            ).exists()
+        )
+
+    @patch("transcription.views.process_audio", side_effect=RuntimeError("boom"))
+    def test_upload_audio_returns_form_error_for_unexpected_transcription_failure(
+        self,
+        _mock_process_audio,
+    ):
+        upload = SimpleUploadedFile(
+            "audio.mp3",
+            b"not real audio",
+            content_type="audio/mpeg",
+        )
+
+        response = self.client.post(
+            self.url,
+            data={"name": "Broken Upload", "audio_file": upload, "topics": "[]"},
+        )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertContains(
+            response,
+            "Something went wrong while transcribing the uploaded file.",
+        )
+        self.assertFalse(Transcript.objects.filter(name="Broken Upload").exists())
+
+    @patch("transcription.views.process_audio", return_value="mock transcript")
+    def test_upload_audio_rejects_unknown_topics(
+        self,
+        _mock_process_audio,
+    ):
+        upload = SimpleUploadedFile(
+            "audio.mp3",
+            b"not real audio",
+            content_type="audio/mpeg",
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "name": "Topic Failure",
+                "audio_file": upload,
+                "topics": json.dumps([self.topic.topic, "Unknown Topic"]),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(
+            response,
+            "One or more selected topics could not be found.",
+        )
+        self.assertFalse(Transcript.objects.filter(name="Topic Failure").exists())
+
+    @patch("transcription.views.TaggingManager")
+    @patch("transcription.views.process_audio", return_value="mock transcript")
+    def test_upload_audio_rolls_back_transcript_when_tagging_fails(
+        self,
+        _mock_process_audio,
+        mock_tagging_manager,
+    ):
+        mock_tagging_manager.return_value.tag_transcript.side_effect = RuntimeError("boom")
+        upload = SimpleUploadedFile(
+            "audio.mp3",
+            b"not real audio",
+            content_type="audio/mpeg",
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "name": "Tag Failure",
+                "audio_file": upload,
+                "topics": json.dumps([self.topic.topic]),
+            },
+        )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertContains(
+            response,
+            "Something went wrong while tagging the transcript.",
+        )
+        self.assertFalse(Transcript.objects.filter(name="Tag Failure").exists())

@@ -1,7 +1,9 @@
 version: "3.9"
 services:
   web:
-    build: .
+    build:
+      context: .
+      target: runtime
     env_file: .env
     environment:
       DJANGO_VITE_DEV: "false"
@@ -22,21 +24,18 @@ services:
       - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/nginx-entrypoint.sh:/docker/nginx-entrypoint.sh:ro
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/www/certbot
+    command: ["/bin/sh", "/docker/nginx-entrypoint.sh"]
 
   certbot:
     image: certbot/certbot:latest
     volumes:
+      - ./docker/certbot-renew.sh:/docker/certbot-renew.sh:ro
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/www/certbot
-    entrypoint: /bin/sh -c
-    command: >
-      "trap exit TERM;
-      while :; do
-        certbot renew --webroot -w /var/www/certbot;
-        sleep 12h & wait $${!};
-      done"
+    command: ["/bin/sh", "/docker/certbot-renew.sh"]
 
 volumes:
   certbot-etc:

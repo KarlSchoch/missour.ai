@@ -1,6 +1,7 @@
 from django import template
 from ..models import Topic, Tag, Chunk
 from collections import OrderedDict
+from django.urls import reverse
 
 register = template.Library()
 
@@ -79,3 +80,21 @@ def render_view_transcript_chunks_section(context):
     payload = {"topics": topics, "rows": list(rows_by_chunk.values())}
 
     return { 'initial_payload': payload}
+
+@register.inclusion_tag(
+    'transcription/partials/generate-report-page-section.html',
+    takes_context=True,
+)
+def render_generate_report_page_section(context):
+    # Pull the transcript out of the context and use for filtering
+    transcript = context.get('transcript')
+
+    return {
+        'initial_payload': {
+            "transcript_id": transcript.pk,
+            "apiUrls": {
+                "topics": reverse("api:topic-list"),
+                "summaries": reverse("api:summary-list")
+            }
+        }
+    }

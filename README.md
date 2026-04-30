@@ -38,12 +38,18 @@ The web application combines a Django backend that exposes APIs and serves the H
 
 **Development**
 1) Copy env template and fill secrets: `cp .env.example .env` then set `SECRET_KEY`, `OPENAI_API_KEY`, etc.
+   - A number of key security-related environment variables, specifically `MODEUL_ENV` are controlled within the `docker-compose.dev.yml` file rather than within the `.env` file to avoid accidental API spend.
+   - This means that to control whether model calls are mocked or actually made to external vendors, you need to update the `model_env` variable within the [docker-compose.dev.yml](./docker-compose.dev.yml) and then recreate the containers by appending `--force-recreate` to your `docker compose up` command
 2) Start dev stack with hot reload (Django + Vite):  
    `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`  
    - Binds the whole repo into the container for live code/template changes.  
    - Runs Django `runserver` on 8000 and Vite dev server on 5173.  
    - `DJANGO_VITE_DEV=true` ensures HMR; APIs are proxied via the dev server.
 3) Stop with `docker compose down` (add `-v` if you want to drop the dev SQLite/media data).
+4) Dependencies and volumes (dev):
+   - Python deps (`pyproject.toml`/`poetry.lock`): restart the dev container; the dev entrypoint runs `poetry install` on startup. If the venv gets stale, remove the `venv` volume.
+   - System deps or Dockerfile changes: rebuild with `docker compose -f docker-compose.dev.yml up --build`.
+   - Frontend deps (`frontend/package.json`): run `docker compose -f docker-compose.dev.yml run --rm frontend npm install`. If you see Rollup optional-deps errors, remove `frontend/node_modules` on the host before reinstalling.
 
 **Production**
 - Build and run the app behind Nginx (HTTPS, clean URLs):  
@@ -120,7 +126,9 @@ The web application combines a Django backend that exposes APIs and serves the H
 ### Nginx + Certbot
 - The production compose file includes Nginx and Certbot containers with shared volumes for `/etc/letsencrypt` and the webroot challenge.
 - The first cert issuance uses the production ACME endpoint (no staging flag). If you want to test without rate limits, add `--staging` to the certbot command.
-- Certbot runs a renewal loop inside the container (`certbot renew` every 12h). Restart Nginx after renewals if you change certs manually.
+- Certbot checks for renewals every 12 hours from the `certbot` service command in [`docker-compose.yml`](./docker-compose.yml). `certbot renew` only replaces a certificate when it is actually close to expiry, so certificate file timestamps will not change on every check.
+- After a successful renewal, Certbot writes a signal file into the shared webroot volume and the Nginx container automatically runs `nginx -s reload` after noticing that signal.
+- You still need to restart Nginx after the very first certificate issuance, or after manual config changes that are unrelated to the renewal flow.
 - Certificates persist in Docker volumes (`certbot-etc`, `certbot-var`) on the host; containers mount them at runtime.
 
 ### Creating New Pages

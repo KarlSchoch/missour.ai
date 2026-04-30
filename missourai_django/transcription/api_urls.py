@@ -8,7 +8,7 @@ from django.utils.decorators import method_decorator
 from django.urls import include
 from itertools import count
 from .models import Topic
-from .api_views import TopicViewSet
+from .api_views import TopicViewSet, SummaryViewSet
 
 _ITEMS = []
 _id_counter = count()
@@ -41,6 +41,7 @@ class Items(APIView):
 
 router = DefaultRouter()
 router.register(r"topics", TopicViewSet)
+router.register(r"summaries", SummaryViewSet)
 
 urlpatterns = [
     path("", include(router.urls))
