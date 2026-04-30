@@ -1,11 +1,17 @@
 from django.db import models
 from django.db.models import Q
+from django.conf import settings
 
 # Create your models here.
 class Transcript(models.Model):
     name = models.CharField(max_length=255)
     transcript_text = models.TextField(default='')
     created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="transcripts"
+    )
 
 class Topic(models.Model):
     topic = models.CharField(

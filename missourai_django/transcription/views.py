@@ -44,7 +44,9 @@ def index(request):
 
 @login_required
 def transcripts(request):
-    transcripts = Transcript.objects.all()
+    transcripts = Transcript.objects.filter(
+        created_by=request.user
+    )
 
     return render(
         request,
@@ -142,6 +144,7 @@ def upload_audio(request):
             transcript_obj = Transcript(
                 name=name,
                 transcript_text=transcript_text,
+                created_by=request.user
             )
             transcript_obj.save()
 

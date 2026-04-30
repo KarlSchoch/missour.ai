@@ -5,10 +5,48 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile, TemporaryUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from django.conf import settings
 
 from transcription.models import Chunk, Tag, Topic, Transcript
 
 User = get_user_model()
+
+def create_transcript(
+        name: str,
+        text: str,
+        user: User
+    ):
+    return Transcript.objects.create(
+        name = name,
+        transcript_text = text,
+        created_by = user
+    )
+
+class UserScopedContentTests(TestCase):
+    """
+    Ensures that content is scoped to a specific user
+    """
+    def singleUserTranscriptList(self):
+        """
+        Only show transcripts that were created by the logged in user
+        """
+        # Create users
+        self.logged_in_user = User.objects.create_user(
+            username='logged-in', 
+            password='pw1'
+        )
+        self.other_user = User.objects.create_user(
+            username='other', 
+            password='pw2'
+        )
+        self.client.force_login(self.logged_in_user)
+        # Create transcript records for each usre
+        user_question = create_transcript('logged in user transcript', 'some text', self.logged_in_user)
+        other_user_question = create_transcript('other user transcript', 'some text', self.logged_in_user)
+        # Get page, validate you only see a single user's transcript
+        response = self.client.get(reverse('transcription:transcripts'))
+        self.assertEqual(response.status_code)
+        self.assertContains()
 
 class ViewTranscriptTests(TestCase):
     def setUp(self):
