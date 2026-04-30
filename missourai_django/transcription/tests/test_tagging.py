@@ -32,11 +32,36 @@ andragogy evaluation kirkpatrick outcomes placement employability internship
 apprentice stipend scholarship outreach recruitment retention scalability
 """
 
+
+class FakeLLMWithExceptions(FakeLLM):
+    def invoke(self, prompt):
+        self.invocations.append(prompt)
+        try:
+            next_result = self.scripted_results.pop(0)
+        except IndexError:
+            raise AssertionError("FakeLLm ran out of scripted responses")
+
+        if isinstance(next_result, Exception):
+            raise next_result
+
+        return next_result
+
 # Create your tests here.
 class TaggingTests(TestCase):
     def setUp(self):
         # Call TestCase's setUp() 
         super().setUp()
+        # Create patcher for environment variables
+        self.env_patcher = patch.dict(
+            os.environ,
+            {
+                "MODEL_ENV": "test",
+                "OPENAI_API_KEY": "test-key",
+            },
+            clear=False,
+        )
+        self.env_patcher.start()
+        self.addCleanup(self.env_patcher.stop)
 
         # Create fakeLLM with 8 fake responses
         fake_responses = [
@@ -58,6 +83,13 @@ class TaggingTests(TestCase):
         )
         self.addCleanup(patcher.stop)
         self.mock_init = patcher.start()
+
+    def _make_transcript(self, text=""):
+        payload = text or (IT_VOCAB + " " + WF_VOCAB)
+        return Transcript.objects.create(
+            name=f"Transcript {Transcript.objects.count() + 1}",
+            transcript_text=payload,
+        )
 
     @classmethod
     def setUpTestData(cls):
@@ -165,3 +197,188 @@ class TaggingTests(TestCase):
             chunk__transcript__name="Dummy Transcript", topic__topic="Information Technology"
         )
         self.assertEqual(4, len(it_tags))
+
+    def test_tag_transcript_creates_chunks_when_none_exist(self):
+        transcript = self._make_transcript(IT_VOCAB)
+        self.assertFalse(Chunk.objects.filter(transcript=transcript).exists())
+
+        self.mock_init.return_value = FakeLLM([
+            Classification(tag=True, relevant_section="hit"),
+        ] * 100)
+
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"),
+            transcript=transcript,
+            topics=[self.topic_it],
+        )
+        manager.tag_transcript()
+
+        chunk_count = Chunk.objects.filter(transcript=transcript).count()
+        tag_count = Tag.objects.filter(chunk__transcript=transcript, topic=self.topic_it).count()
+
+        self.assertGreater(chunk_count, 0)
+        self.assertEqual(tag_count, chunk_count)
+
+    def test_tag_transcript_reuses_existing_chunks_without_creating_new_ones(self):
+        transcript = self._make_transcript("alpha beta gamma delta epsilon zeta eta theta")
+        chunk_one = Chunk.objects.create(transcript=transcript, chunk_text="alpha beta gamma")
+        chunk_two = Chunk.objects.create(transcript=transcript, chunk_text="delta epsilon zeta")
+
+        self.mock_init.return_value = FakeLLM([
+            Classification(tag=False, relevant_section=""),
+            Classification(tag=True, relevant_section="delta epsilon"),
+        ])
+
+        before = Chunk.objects.filter(transcript=transcript).count()
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"),
+            transcript=transcript,
+            topics=[self.topic_it],
+        )
+        manager.tag_transcript()
+        after = Chunk.objects.filter(transcript=transcript).count()
+
+        self.assertEqual(before, 2)
+        self.assertEqual(after, before)
+        self.assertTrue(Chunk.objects.filter(pk=chunk_one.pk).exists())
+        self.assertTrue(Chunk.objects.filter(pk=chunk_two.pk).exists())
+
+    def test_tag_transcript_only_processes_missing_chunk_topic_pairs(self):
+        transcript = self._make_transcript("first second third fourth")
+        chunk_one = Chunk.objects.create(transcript=transcript, chunk_text="first second")
+        chunk_two = Chunk.objects.create(transcript=transcript, chunk_text="third fourth")
+
+        Tag.objects.create(
+            chunk=chunk_one,
+            topic=self.topic_it,
+            topic_present=True,
+            relevant_section="first",
+        )
+
+        llm = FakeLLM([Classification(tag=False, relevant_section="")])
+        self.mock_init.return_value = llm
+
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"),
+            transcript=transcript,
+            topics=[self.topic_it],
+        )
+        manager.tag_transcript()
+
+        self.assertEqual(len(llm.invocations), 1)
+        self.assertEqual(
+            Tag.objects.filter(chunk__transcript=transcript, topic=self.topic_it).count(),
+            2,
+        )
+        self.assertTrue(
+            Tag.objects.filter(chunk=chunk_two, topic=self.topic_it).exists()
+        )
+
+    def test_tag_transcript_noop_when_all_pairs_already_tagged(self):
+        transcript = self._make_transcript("zero one two three")
+        chunk_one = Chunk.objects.create(transcript=transcript, chunk_text="zero one")
+        chunk_two = Chunk.objects.create(transcript=transcript, chunk_text="two three")
+
+        Tag.objects.create(
+            chunk=chunk_one,
+            topic=self.topic_it,
+            topic_present=False,
+            relevant_section="",
+        )
+        Tag.objects.create(
+            chunk=chunk_two,
+            topic=self.topic_it,
+            topic_present=True,
+            relevant_section="three",
+        )
+
+        llm = FakeLLM([
+            Classification(tag=False, relevant_section=""),
+        ] * 50)
+        self.mock_init.return_value = llm
+
+        chunk_before = Chunk.objects.filter(transcript=transcript).count()
+        tag_before = Tag.objects.filter(chunk__transcript=transcript, topic=self.topic_it).count()
+
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"),
+            transcript=transcript,
+            topics=[self.topic_it],
+        )
+        manager.tag_transcript()
+
+        self.assertEqual(len(llm.invocations), 0)
+        self.assertEqual(Chunk.objects.filter(transcript=transcript).count(), chunk_before)
+        self.assertEqual(
+            Tag.objects.filter(chunk__transcript=transcript, topic=self.topic_it).count(),
+            tag_before,
+        )
+
+    def test_tag_transcript_initializes_llm_once_per_run(self):
+        transcript = self._make_transcript((IT_VOCAB + " ") * 8)
+        self.mock_init.reset_mock()
+        self.mock_init.return_value = FakeLLM([
+            Classification(tag=True, relevant_section="hit"),
+        ] * 300)
+
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"),
+            transcript=transcript,
+            topics=[self.topic_it, self.topic_wf],
+            chunk_size=120,
+            chunk_overlap=0,
+        )
+        manager.tag_transcript()
+
+        self.assertEqual(self.mock_init.call_count, 1)
+
+    def test_tag_transcript_records_failed_pairs_without_crashing_run(self):
+        transcript = self._make_transcript("lorem ipsum dolor sit amet consectetur")
+        Chunk.objects.create(transcript=transcript, chunk_text="lorem ipsum")
+        Chunk.objects.create(transcript=transcript, chunk_text="dolor sit amet")
+
+        llm = FakeLLMWithExceptions([
+            Classification(tag=True, relevant_section="lorem"),
+            RuntimeError("simulated model error"),
+        ])
+        self.mock_init.return_value = llm
+
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"),
+            transcript=transcript,
+            topics=[self.topic_it],
+        )
+
+        tags = manager.tag_transcript()
+        self.assertEqual(len(tags), 1)
+        self.assertTrue(hasattr(manager, "failed_pairs"))
+        self.assertEqual(len(manager.failed_pairs), 1)
+        self.assertEqual(
+            Tag.objects.filter(chunk__transcript=transcript, topic=self.topic_it).count(),
+            1,
+        )
+
+    def test_tag_chunk_uses_text_values_for_prompt_inputs(self):
+        transcript = self._make_transcript("alpha beta gamma")
+        chunk = Chunk.objects.create(transcript=transcript, chunk_text="alpha beta")
+        topic = Topic.objects.create(topic="Prompt Topic", description="")
+
+        with patch(
+            "transcription.tagging.tagging_manager.ChatPromptTemplate.from_template"
+        ) as prompt_mock:
+            prompt_instance = prompt_mock.return_value
+            prompt_instance.invoke.return_value = {"prompt": "ok"}
+
+            llm = FakeLLM([Classification(tag=True, relevant_section="alpha")])
+            self.mock_init.return_value = llm
+
+            manager = TaggingManager(
+                os.getenv("OPENAI_API_KEY"),
+                transcript=transcript,
+                topics=[topic],
+            )
+            manager.tag_chunk(chunk, [topic])
+
+            invoked_payload = prompt_instance.invoke.call_args[0][0]
+            self.assertEqual(invoked_payload["passage"], chunk.chunk_text)
+            self.assertEqual(invoked_payload["topic"], topic.topic)
