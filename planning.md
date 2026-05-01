@@ -1,7 +1,8 @@
 - User can only view their own transcripts
     - User ID gets added to the transcript model
     - User ID gets saved to the transcript record on upload
-    - User ID is used to filter the transcripts that show up 
+    - User ID is used to filter the transcripts that show up on the main table
+    - If a user tries to access a transcript that they did not create, they get a "Forbidden" page
 - Same things with summaries and topics
 - Users can see how much they have spent over the month
     - Transcription

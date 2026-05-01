@@ -26,7 +26,7 @@ class UserScopedContentTests(TestCase):
     """
     Ensures that content is scoped to a specific user
     """
-    def singleUserTranscriptList(self):
+    def single_user_transcript_list(self):
         """
         Only show transcripts that were created by the logged in user
         """
@@ -40,14 +40,39 @@ class UserScopedContentTests(TestCase):
             password='pw2'
         )
         self.client.force_login(self.logged_in_user)
-        # Create transcript records for each usre
-        user_question = create_transcript('logged in user transcript', 'some text', self.logged_in_user)
-        other_user_question = create_transcript('other user transcript', 'some text', self.other_user)
+        # Create transcript records for each user
+        create_transcript('logged in user transcript', 'some text', self.logged_in_user)
+        create_transcript('other user transcript', 'some text', self.other_user)
         # Get page, validate you only see a single user's transcript
         response = self.client.get(reverse('transcription:transcripts'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'logged in user transcript')
         self.assertNotContains(response, 'other user transcript')
+    
+    def forbidden_transcript(self):
+        """
+        User gets a 403 Forbidden error if they try to access another user's transcript
+        """
+        # Create users
+        owner = User.objects.create_user(
+            username='logged-in', 
+            password='pw1'
+        )
+        intruder = User.objects.create_user(
+            username='other', 
+            password='pw2'
+        )
+        self.client.force_login(intruder)
+        # Create transcript records for each user
+        transcript = create_transcript('other user transcript', 'some text', owner)
+        # Get page, validate you only see a single user's transcript
+        response = self.client.get(
+            reverse(
+                'transcription:view_transcript', 
+                args=[transcript.pk]
+            )
+        )
+        self.assertEqual(response.status_code, 403)
 
 class ViewTranscriptTests(TestCase):
     def setUp(self):

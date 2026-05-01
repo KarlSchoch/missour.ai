@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
+from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import logout
@@ -184,6 +185,9 @@ def upload_audio(request):
 @login_required
 def view_transcript(request, transcript_id):
     transcript = get_object_or_404(Transcript, id=transcript_id)
+    if request.user != transcript.created_by:
+        raise PermissionDenied
+    
     if request.method == 'POST':
         # 1. Pull the tags out of the frontned
         topics_raw = request.POST.get('topics', '[]')
