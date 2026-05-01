@@ -42,11 +42,12 @@ class UserScopedContentTests(TestCase):
         self.client.force_login(self.logged_in_user)
         # Create transcript records for each usre
         user_question = create_transcript('logged in user transcript', 'some text', self.logged_in_user)
-        other_user_question = create_transcript('other user transcript', 'some text', self.logged_in_user)
+        other_user_question = create_transcript('other user transcript', 'some text', self.other_user)
         # Get page, validate you only see a single user's transcript
         response = self.client.get(reverse('transcription:transcripts'))
-        self.assertEqual(response.status_code)
-        self.assertContains()
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'logged in user transcript')
+        self.assertNotContains(response, 'other user transcript')
 
 class ViewTranscriptTests(TestCase):
     def setUp(self):
