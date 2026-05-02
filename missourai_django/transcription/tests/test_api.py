@@ -39,10 +39,14 @@ class ApiTopicTests(TestCase):
 
         res = self.client.post(self.list_url, payload, format="json")
         self.assertEqual(res.status_code, 201)
+        
         data = res.json()
         self.assertEqual(data["topic"], payload["topic"])
         self.assertEqual(data["description"], payload["description"])
-        self.assertTrue(Topic.objects.filter(topic=payload["topic"]).exists())
+        
+        topic = Topic.objects.get(topic=payload["topic"])
+        self.assertEqual(topic.description, payload["description"])
+        self.assertEqual(topic.created_by, self.user)
 
     def test_topics_requires_auth(self):
         anon_client = APIClient()

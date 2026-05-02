@@ -5,10 +5,128 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile, TemporaryUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from django.conf import settings
 
 from transcription.models import Chunk, Tag, Topic, Transcript
 
 User = get_user_model()
+
+def create_transcript(
+        name: str,
+        text: str,
+        user: User
+    ):
+    return Transcript.objects.create(
+        name = name,
+        transcript_text = text,
+        created_by = user
+    )
+
+def create_topic(
+        topic: str,
+        description: str,
+        user: User
+):
+    return Topic.objects.create(
+        topic = topic,
+        description = description,
+        created_by = user
+    )
+
+class UserScopedTopicTests(TestCase):
+    """
+    Ensures that topics are scoped to a specific user
+    """
+    def test_single_user_topic_list(self):
+        """
+        For the view_topics.html template, only show topics that are from a single user
+        """
+        # Create users and log in
+        logged_in_user = User.objects.create_user(
+            username='logged-in', 
+            password='pw1'
+        )
+        other_user = User.objects.create_user(
+            username='other', 
+            password='pw2'
+        )
+        self.client.force_login(logged_in_user)
+        # Create topic entries for each user
+        own_topic = create_topic(
+            'Logged in User Topic',
+            'Topic created by logged in user',
+            logged_in_user
+        )
+        other_user_topic = create_topic(
+            'Other User Topic',
+            'Topic created by other user',
+            other_user
+        )
+    
+        response = self.client.get(reverse('api:topic-list'))
+        self.assertEqual(response.status_code, 200)
+
+        # Extract returned content from api
+        data = response.json()
+        returned_topic_ids = {item['id'] for item in data}
+
+        # Validate that you received the logged in user's topics
+        self.assertIn(own_topic.id, returned_topic_ids)
+
+        # Validate that the other user's topic is not visible to the logged in user
+        self.assertNotIn(other_user_topic.id, returned_topic_ids)
+
+class UserScopedTranscriptTests(TestCase):
+    """
+    Ensures that transcripts are scoped to a specific user
+    """
+    def test_single_user_transcript_list(self):
+        """
+        Only show transcripts that were created by the logged in user
+        """
+        # Create users
+        self.logged_in_user = User.objects.create_user(
+            username='logged-in', 
+            password='pw1'
+        )
+        self.other_user = User.objects.create_user(
+            username='other', 
+            password='pw2'
+        )
+        self.client.force_login(self.logged_in_user)
+        # Create transcript records for each user
+        create_transcript('logged in user transcript', 'some text', self.logged_in_user)
+        create_transcript('other user transcript', 'some text', self.other_user)
+        # Get page, validate you only see a single user's transcript
+        response = self.client.get(reverse('transcription:transcripts'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'logged in user transcript')
+        self.assertNotContains(response, 'other user transcript')
+    
+    def test_forbidden_transcript(self):
+        """
+        User gets a 403 Forbidden error if they try to access another user's transcript
+        """
+        # Create users
+        owner = User.objects.create_user(
+            username='logged-in', 
+            password='pw1'
+        )
+        intruder = User.objects.create_user(
+            username='other', 
+            password='pw2'
+        )
+        self.client.force_login(intruder)
+        # Create transcript records for each user
+        transcript = create_transcript('other user transcript', 'some text', owner)
+        # Get page, validate you only see a single user's transcript
+        response = self.client.get(
+            reverse(
+                'transcription:view_transcript', 
+                args=[transcript.pk]
+            )
+        )
+        self.assertEqual(response.status_code, 403)
 
 class ViewTranscriptTests(TestCase):
     def setUp(self):
