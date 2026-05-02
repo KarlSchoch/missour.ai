@@ -1,9 +1,18 @@
-- User can only view their own transcripts
-    - User ID gets added to the transcript model
-    - User ID gets saved to the transcript record on upload
-    - User ID is used to filter the transcripts that show up on the main table
-    - If a user tries to access a transcript that they did not create, they get a "Forbidden" page
-- Same things with summaries and topics
+- [x] User can only view their own transcripts
+    - [x] User ID gets added to the transcript model
+    - [x] User ID gets saved to the transcript record on upload
+    - [x] User ID is used to filter the transcripts that show up on the main table
+    - [x] If a user tries to access a transcript that they did not create, they get a "Forbidden" page
+- Same things with summaries, topics, and tags
+    - Topics
+        - [x] Update Model
+        - Add user ID when creating a topic
+        - User ID is used to filter the topics that show up on the
+            - [x] Topics Tab: Topics tab uses `view_topics.html` template, which invokes the `topics-list` API, so when I added user level filtering to TopicViewSet.get_queryset() I addressed this issue.
+            - List of topics available when you hit the "Analyze Topics" Button
+            - Topics that you can do topic level summaries on
+    - Summaries
+    - Tags
 - Users can see how much they have spent over the month
     - Transcription
     - Report and tagging generation

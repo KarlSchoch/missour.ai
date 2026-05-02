@@ -19,6 +19,11 @@ class Topic(models.Model):
         unique=True
     )
     description = models.CharField(max_length=255, default='', blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="topics"
+    )
 
     def __str__(self):
         return f"Topic: {self.topic}; Description: {self.description[:50]}"

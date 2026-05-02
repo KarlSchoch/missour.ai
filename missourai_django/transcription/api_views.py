@@ -13,6 +13,12 @@ class TopicViewSet(viewsets.ModelViewSet):
     queryset = Topic.objects.all()
     serializer_class = TopicSerializer
 
+    def get_queryset(self):
+        return Topic.objects.filter(created_by = self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save(created_by = self.request.user)
+
 class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()
 
