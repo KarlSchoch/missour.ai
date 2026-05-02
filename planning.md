@@ -6,7 +6,7 @@
 - Same things with summaries, topics, and tags
     - Topics
         - [x] Update Model
-        - Add user ID when creating a topic
+        - [x] Add user ID when creating a topic: Topics can be either created from the Topics tab (`view_topics.html` template -> `view_topics.jsx`) or the template for viewing a specific Transcript (`view_transcript.html` -> `genereate-report-page-section.jsx` -> `create-new-report.jsx` -> `new-report-contents.jsx`) use the API to create the topics
         - User ID is used to filter the topics that show up on the
             - [x] Topics Tab: Topics tab uses `view_topics.html` template, which invokes the `topics-list` API, so when I added user level filtering to TopicViewSet.get_queryset() I addressed this issue.
             - List of topics available when you hit the "Analyze Topics" Button
