@@ -9,7 +9,7 @@
         - [x] Add user ID when creating a topic: Topics can be either created from the Topics tab (`view_topics.html` template -> `view_topics.jsx`) or the template for viewing a specific Transcript (`view_transcript.html` -> `genereate-report-page-section.jsx` -> `create-new-report.jsx` -> `new-report-contents.jsx`) use the API to create the topics
         - User ID is used to filter the topics that show up on the
             - [x] Topics Tab: Topics tab uses `view_topics.html` template, which invokes the `topics-list` API, so when I added user level filtering to TopicViewSet.get_queryset() I addressed this issue.
-            - List of topics available when you hit the "Analyze Topics" Button
+            - List of topics available when you hit the "Analyze Topics" Checkmark: When you go into the "Upload Audio" Tab and check the "Analyze Transcript" checkbox, that opens up the `analyze_audio_page_section`, which gets its list of topics from `transcription_tags.py::render_analyze_audio_section`, which just has a call to Topic.objects.all() 
             - Topics that you can do topic level summaries on
     - Summaries
     - Tags
