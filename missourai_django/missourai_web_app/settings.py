@@ -180,3 +180,27 @@ CORS_ALLOW_CREDENTIALS = True
 if DEBUG:
     WHITENOISE_USE_FINDERS = True
     WHITENOISE_AUTOREFRESH = True
+
+# --- Application logging ---
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "console": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "console",
+        },
+    },
+    "loggers": {
+        "transcription": {
+            "handlers": ["console"],
+            "level": os.getenv("DJANGO_TRANSCRIPTION_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+    },
+}

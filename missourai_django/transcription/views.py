@@ -18,11 +18,19 @@ import os
 import logging
 import json
 import tempfile
+import time
+import uuid
 
 logger = logging.getLogger(__name__)
 
 
-def process_audio(file_path:str) -> str:
+def _elapsed_ms(start_time: float) -> int:
+    return round((time.monotonic() - start_time) * 1000)
+
+
+def process_audio(file_path: str, upload_id: str = "<unknown>") -> str:
+    process_started = time.monotonic()
+
     # Intialize TranscriptionManager with OpenAI API key
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
@@ -30,13 +38,33 @@ def process_audio(file_path:str) -> str:
     
     # Create the transcript using the TranscriptionManager
     try:
+        manager_started = time.monotonic()
         manager = TranscriptionManager(api_key, file_path)
-        return manager.create_transcript()
+        logger.info(
+            "upload_timing event=transcription_manager_init upload_id=%s elapsed_ms=%s",
+            upload_id,
+            _elapsed_ms(manager_started),
+        )
+
+        transcript_started = time.monotonic()
+        transcript = manager.create_transcript()
+        logger.info(
+            "upload_timing event=create_transcript upload_id=%s elapsed_ms=%s",
+            upload_id,
+            _elapsed_ms(transcript_started),
+        )
+        return transcript
     except TranscriptionMediaError:
         raise
     except Exception as exc:
         logging.exception("Unexpected transcription failure for file %s", file_path)
         raise RuntimeError("An unexpected error occurred while processing the file.") from exc
+    finally:
+        logger.info(
+            "upload_timing event=process_audio_total upload_id=%s elapsed_ms=%s",
+            upload_id,
+            _elapsed_ms(process_started),
+        )
 
 # Create your views here.
 def index(request):
@@ -55,19 +83,47 @@ def transcripts(request):
 @login_required
 def upload_audio(request):
     if request.method == 'POST':
+        upload_started = time.monotonic()
+        upload_id = request.META.get("HTTP_X_REQUEST_ID") or uuid.uuid4().hex[:12]
+        logger.info(
+            "upload_timing event=view_start upload_id=%s method=%s path=%s content_length=%s content_type=%s",
+            upload_id,
+            request.method,
+            request.path,
+            request.META.get("CONTENT_LENGTH", "<unknown>"),
+            request.META.get("CONTENT_TYPE", "<unknown>"),
+        )
+
+        form_started = time.monotonic()
         form = TranscriptForm(request.POST, request.FILES)
-        if form.is_valid():
+        form_is_valid = form.is_valid()
+        logger.info(
+            "upload_timing event=form_parse_validate upload_id=%s elapsed_ms=%s valid=%s",
+            upload_id,
+            _elapsed_ms(form_started),
+            form_is_valid,
+        )
+
+        if form_is_valid:
             name = form.cleaned_data['name']
             audio_file = form.cleaned_data['audio_file']
 
             # Extract Selected Topics
+            topics_started = time.monotonic()
             topics_raw = request.POST.get('topics', '[]')
             try:
                 selected_topics = json.loads(topics_raw)
             except json.JSONDecodeError:
                 selected_topics = []
+            logger.info(
+                "upload_timing event=parse_topics upload_id=%s elapsed_ms=%s selected_topic_count=%s",
+                upload_id,
+                _elapsed_ms(topics_started),
+                len(selected_topics),
+            )
 
             # Reuse Django's temp file for large uploads when available.
+            temp_file_started = time.monotonic()
             remove_tmp_file = False
             if hasattr(audio_file, "temporary_file_path"):
                 tmp_file_path = audio_file.temporary_file_path()
@@ -82,7 +138,9 @@ def upload_audio(request):
                 remove_tmp_file = True
 
             logger.info(
-                "Processing upload name=%s file=%s size=%s content_type=%s temp_path=%s reused_temp_file=%s",
+                "upload_timing event=temp_file_ready upload_id=%s elapsed_ms=%s name=%s file=%s size=%s content_type=%s temp_path=%s reused_temp_file=%s",
+                upload_id,
+                _elapsed_ms(temp_file_started),
                 name,
                 getattr(audio_file, "name", "<unknown>"),
                 getattr(audio_file, "size", "<unknown>"),
@@ -93,8 +151,19 @@ def upload_audio(request):
             
             # Generate transcript
             try:
-                transcript_text = process_audio(tmp_file_path)
+                transcription_started = time.monotonic()
+                transcript_text = process_audio(tmp_file_path, upload_id=upload_id)
+                logger.info(
+                    "upload_timing event=process_audio_view_call upload_id=%s elapsed_ms=%s",
+                    upload_id,
+                    _elapsed_ms(transcription_started),
+                )
             except TranscriptionMediaError as exc:
+                logger.info(
+                    "upload_timing event=view_return upload_id=%s status=400 elapsed_ms=%s",
+                    upload_id,
+                    _elapsed_ms(upload_started),
+                )
                 form.add_error("audio_file", str(exc))
                 return render(
                     request,
@@ -107,6 +176,11 @@ def upload_audio(request):
                     "Transcription failed for upload name=%s file=%s",
                     name,
                     getattr(audio_file, "name", "<unknown>"),
+                )
+                logger.info(
+                    "upload_timing event=view_return upload_id=%s status=500 elapsed_ms=%s",
+                    upload_id,
+                    _elapsed_ms(upload_started),
                 )
                 form.add_error(
                     None,
@@ -122,11 +196,24 @@ def upload_audio(request):
                 if remove_tmp_file and os.path.exists(tmp_file_path):
                     os.remove(tmp_file_path)
 
+            topic_query_started = time.monotonic()
             selected_topics_ct = len(selected_topics)
             selected_topics = list(
                 Topic.objects.filter(topic__in=selected_topics)
             )
+            logger.info(
+                "upload_timing event=topic_query upload_id=%s elapsed_ms=%s requested_topic_count=%s matched_topic_count=%s",
+                upload_id,
+                _elapsed_ms(topic_query_started),
+                selected_topics_ct,
+                len(selected_topics),
+            )
             if len(selected_topics) != selected_topics_ct:
+                logger.info(
+                    "upload_timing event=view_return upload_id=%s status=400 elapsed_ms=%s",
+                    upload_id,
+                    _elapsed_ms(upload_started),
+                )
                 form.add_error(
                     None,
                     "One or more selected topics could not be found.",
@@ -143,16 +230,30 @@ def upload_audio(request):
                 name=name,
                 transcript_text=transcript_text,
             )
+            transcript_save_started = time.monotonic()
             transcript_obj.save()
+            logger.info(
+                "upload_timing event=transcript_save upload_id=%s elapsed_ms=%s transcript_id=%s",
+                upload_id,
+                _elapsed_ms(transcript_save_started),
+                transcript_obj.pk,
+            )
 
             # Tag the transcript based on selected topics
             try:
+                tagging_started = time.monotonic()
                 tagging_manager = TaggingManager(
                     api_key = os.getenv('OPENAI_API_KEY'),
                     transcript=transcript_obj,
                     topics = selected_topics
                 )
                 tagging_manager.tag_transcript()
+                logger.info(
+                    "upload_timing event=tag_transcript upload_id=%s elapsed_ms=%s transcript_id=%s",
+                    upload_id,
+                    _elapsed_ms(tagging_started),
+                    transcript_obj.pk,
+                )
             except Exception:
                 logger.exception(
                     "Tagging failed for transcript_id=%s name=%s",
@@ -160,6 +261,11 @@ def upload_audio(request):
                     transcript_obj.name,
                 )
                 transcript_obj.delete()
+                logger.info(
+                    "upload_timing event=view_return upload_id=%s status=500 elapsed_ms=%s",
+                    upload_id,
+                    _elapsed_ms(upload_started),
+                )
                 form.add_error(
                     None,
                     "Something went wrong while tagging the transcript.",
@@ -172,7 +278,17 @@ def upload_audio(request):
                 )
 
             # Redirect to transcripts page
+            logger.info(
+                "upload_timing event=view_return upload_id=%s status=302 elapsed_ms=%s",
+                upload_id,
+                _elapsed_ms(upload_started),
+            )
             return redirect('transcription:transcripts')
+        logger.info(
+            "upload_timing event=view_return upload_id=%s status=200 form_valid=false elapsed_ms=%s",
+            upload_id,
+            _elapsed_ms(upload_started),
+        )
     else:
         form = TranscriptForm()
 
