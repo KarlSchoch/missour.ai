@@ -181,6 +181,8 @@ if DEBUG:
     WHITENOISE_USE_FINDERS = True
     WHITENOISE_AUTOREFRESH = True
 
+DJANGO_LOG_DIR = os.getenv("DJANGO_LOG_DIR")
+
 # --- Application logging ---
 LOGGING = {
     "version": 1,
@@ -204,3 +206,12 @@ LOGGING = {
         },
     },
 }
+
+if DJANGO_LOG_DIR:
+    os.makedirs(DJANGO_LOG_DIR, exist_ok=True)
+    LOGGING["handlers"]["transcription_file"] = {
+        "class": "logging.FileHandler",
+        "filename": os.path.join(DJANGO_LOG_DIR, "transcription.log"),
+        "formatter": "console",
+    }
+    LOGGING["loggers"]["transcription"]["handlers"].append("transcription_file")

@@ -1,4 +1,11 @@
 version: "3.9"
+
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: "50m"
+    max-file: "10"
+
 services:
   web:
     build:
@@ -9,11 +16,14 @@ services:
       DJANGO_VITE_DEV: "false"
       MODEL_ENV: "prod"
       DEBUG: "False"
+      DJANGO_LOG_DIR: "/var/log/missourai"
     expose:
       - "8000"
     volumes:
       - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
       - ./missourai_django/media:/app/missourai_django/media
+      - ./logs/web:/var/log/missourai
+    logging: *default-logging
 
   nginx:
     image: nginx:1.27-alpine
@@ -27,7 +37,9 @@ services:
       - ./docker/nginx-entrypoint.sh:/docker/nginx-entrypoint.sh:ro
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/www/certbot
+      - ./logs/nginx:/var/log/nginx
     command: ["/bin/sh", "/docker/nginx-entrypoint.sh"]
+    logging: *default-logging
 
   certbot:
     image: certbot/certbot:latest
@@ -35,7 +47,9 @@ services:
       - ./docker/certbot-renew.sh:/docker/certbot-renew.sh:ro
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/www/certbot
+      - ./logs/certbot:/var/log/letsencrypt
     command: ["/bin/sh", "/docker/certbot-renew.sh"]
+    logging: *default-logging
 
 volumes:
   certbot-etc:

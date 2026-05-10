@@ -57,6 +57,20 @@ The web application combines a Django backend that exposes APIs and serves the H
   - Runs `manage.py migrate` on startup, then uvicorn serving ASGI (internally on `web:8000`).  
   - Nginx terminates TLS and proxies requests to the Django container.  
   - `missourai_django/db.sqlite3` and `missourai_django/media` are bind-mounted for persistence.
+  - Production logs are bind-mounted under `logs/` so they survive `docker compose down`: Django transcription timing logs are in `logs/web/transcription.log`, Nginx access/error logs are in `logs/nginx/`, and Certbot logs are in `logs/certbot/`.
+- Configure log rotation on the host so bind-mounted log files do not grow indefinitely. For example, create a `logrotate` config on the production server and replace `/path/to/missour.ai` with the deployed repo path:
+  ```conf
+  /path/to/missour.ai/logs/web/*.log
+  /path/to/missour.ai/logs/nginx/*.log
+  /path/to/missour.ai/logs/certbot/*.log {
+      daily
+      rotate 14
+      compress
+      missingok
+      notifempty
+      copytruncate
+  }
+  ```
 - First-time cert issuance (once per server):  
   - Comment out port 443 portion of nginx `default.conf` (container will fail due to cert not existing)
   - Create cert: `docker compose run --rm --entrypoint certbot certbot certonly --webroot -w /var/www/certbot -d missour.ai -d www.missour.ai --email you@example.com --agree-tos --no-eff-email`
