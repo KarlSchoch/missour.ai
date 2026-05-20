@@ -1,4 +1,5 @@
 import json
+from html.parser import HTMLParser
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -10,6 +11,35 @@ from django.conf import settings
 from transcription.models import Chunk, Tag, Topic, Transcript
 
 User = get_user_model()
+
+
+class JsonScriptParser(HTMLParser):
+    def __init__(self, element_id):
+        super().__init__()
+        self.element_id = element_id
+        self.in_target_element = False
+        self.data = ""
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "script" and attrs.get("id") == self.element_id:
+            self.in_target_element = True
+
+    def handle_endtag(self, tag):
+        if tag == "script" and self.in_target_element:
+            self.in_target_element = False
+
+    def handle_data(self, data):
+        if self.in_target_element:
+            self.data += data
+
+def get_json_script_payload(response, element_id):
+    parser = JsonScriptParser(element_id)
+    parser.feed(response.content.decode())
+    if not parser.data:
+        raise AssertionError(f"Could not find JSON script element with id {element_id}")
+    return json.loads(parser.data)
+
 
 def create_transcript(
         name: str,
@@ -37,6 +67,51 @@ class UserScopedTopicTests(TestCase):
     """
     Ensures that topics are scoped to a specific user
     """
+    def test_single_user_topics_upload_audio_page(self):
+        """
+        For the upload_audio.html template, only show topics created by the logged in user
+        """
+        # Create users and log in
+        logged_in_user = User.objects.create_user(
+            username='logged-in',
+            password='pw1'
+        )
+        other_user = User.objects.create_user(
+            username='other',
+            password='pw2'
+        )
+        self.client.force_login(logged_in_user)
+        # Create topic entries for each user
+        own_topic = create_topic(
+            'Logged in User Upload Topic',
+            'Topic created by logged in user',
+            logged_in_user
+        )
+        other_user_topic = create_topic(
+            'Other User Upload Topic',
+            'Topic created by other user',
+            other_user
+        )
+
+        response = self.client.get(reverse('transcription:upload_audio'))
+        self.assertEqual(response.status_code, 200)
+
+        # Extract the payload rendered by analyze-audio-page-section.html
+        initial_payload = get_json_script_payload(
+            response,
+            "initial-payload-analyze-audio-page-section",
+        )
+
+        # Validate that the payload contains only the logged in user's topics
+        self.assertEqual(
+            initial_payload["topics"],
+            [{"value": own_topic.topic, "label": own_topic.topic}],
+        )
+        self.assertNotIn(
+            other_user_topic.topic,
+            {topic["value"] for topic in initial_payload["topics"]},
+        )
+
     def test_single_user_topic_list(self):
         """
         For the view_topics.html template, only show topics that are from a single user

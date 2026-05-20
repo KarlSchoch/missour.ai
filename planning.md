@@ -1,10 +1,10 @@
-- [x] User can only view their own transcripts
+- [x] User can only view their own transcripts (Cases documented in `test_views.py::UserScopedTranscriptTests`)
     - [x] User ID gets added to the transcript model
     - [x] User ID gets saved to the transcript record on upload
     - [x] User ID is used to filter the transcripts that show up on the main table
     - [x] If a user tries to access a transcript that they did not create, they get a "Forbidden" page
 - Same things with summaries, topics, and tags
-    - Topics
+    - Topics (documented in `test_views.py::UserScopedTopicTests`)
         - [x] Update Model
         - [x] Add user ID when creating a topic: Topics can be either created from the Topics tab (`view_topics.html` template -> `view_topics.jsx`) or the template for viewing a specific Transcript (`view_transcript.html` -> `genereate-report-page-section.jsx` -> `create-new-report.jsx` -> `new-report-contents.jsx`) use the API to create the topics
         - User ID is used to filter the topics that show up on the

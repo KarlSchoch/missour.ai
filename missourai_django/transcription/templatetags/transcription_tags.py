@@ -10,7 +10,8 @@ register = template.Library()
     takes_context=True,
 )
 def render_analyze_audio_section(context):
-    topics = Topic.objects.all()
+    request = context.get("request")
+    topics = Topic.objects.filter(created_by=request.user)
 
     payload = {
         'topics': [
