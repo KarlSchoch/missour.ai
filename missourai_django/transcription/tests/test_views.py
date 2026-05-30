@@ -22,7 +22,11 @@ class JsonScriptParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
-        if tag == "script" and attrs.get("id") == self.element_id:
+        if (
+            tag == "script"
+            and attrs.get("id") == self.element_id
+            and not self.data
+        ):
             self.in_target_element = True
 
     def handle_endtag(self, tag):
@@ -211,19 +215,23 @@ class ViewTranscriptTests(TestCase):
         # Base Records
         self.transcript_one = Transcript.objects.create(
             name = "Dummy Transcript One",
-            transcript_text = "Here is some dummy text about IT that should show up"
+            transcript_text = "Here is some dummy text about IT that should show up",
+            created_by = self.user,
         )
         self.transcript_two = Transcript.objects.create(
             name = "Dummy Transcript Two",
-            transcript_text = "Here is some dummy text about IT that should NOT show up"
+            transcript_text = "Here is some dummy text about IT that should NOT show up",
+            created_by = self.user,
         )
         self.topic_it = Topic.objects.create(
             topic = "Information Technology",
-            description = ""
+            description = "",
+            created_by = self.user,
         )
         self.topic_wf = Topic.objects.create(
             topic = "Workforce Training",
-            description = ""
+            description = "",
+            created_by = self.user,
         )
         # Transcript One Related Elements
         self.chunk_transcript_one = Chunk.objects.create(
@@ -269,10 +277,16 @@ class ViewTranscriptTests(TestCase):
 
         # Contains the correct HTML elements
         self.assertContains(response, 'id="view-transcript-chunks-page-section-root"')
-        self.assertContains(response, 'id="initial-payload"')
+        self.assertContains(
+            response,
+            'id="initial-payload-view-transcript-chunks-page-section"',
+        )
 
         # Initial Payload contains the Correct Data
-        initial_payload = response.context["initial_payload"]
+        initial_payload = get_json_script_payload(
+            response,
+            "initial-payload-view-transcript-chunks-page-section",
+        )["rows"]
 
         ## Tags contain chunks from single transcript (Dummy Transcript One)
         chunks = list( { x['chunk_id'] for x in initial_payload } )
@@ -283,15 +297,44 @@ class ViewTranscriptTests(TestCase):
         ).values('name')
         self.assertEqual(trancript_name[0]['name'], self.transcript_one.name)
 
+    @patch("transcription.views.TaggingManager")
+    def test_view_transcript_post_does_not_use_other_user_topics(
+        self,
+        mock_tagging_manager,
+    ):
+        other_user = User.objects.create_user(username="other", password="pw")
+        other_topic = Topic.objects.create(
+            topic="Other User View Topic",
+            description="",
+            created_by=other_user,
+        )
+        url = reverse('transcription:view_transcript', args=[self.transcript_one.pk])
+
+        response = self.client.post(
+            url,
+            data={"topics": json.dumps([other_topic.topic])},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        call_kwargs = mock_tagging_manager.call_args.kwargs
+        self.assertEqual(call_kwargs["topics"], [])
+
 
 class UploadAudioTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="upload-user", password="pw")
+        self.other_user = User.objects.create_user(username="other-user", password="pw")
         self.client.force_login(self.user)
         self.url = reverse("transcription:upload_audio")
         self.topic = Topic.objects.create(
             topic="Information Technology",
             description="",
+            created_by=self.user,
+        )
+        self.other_topic = Topic.objects.create(
+            topic="Other User Topic",
+            description="",
+            created_by=self.other_user,
         )
 
     def _make_temp_uploaded_file(self, content=b"fake media payload"):
@@ -324,7 +367,7 @@ class UploadAudioTests(TestCase):
         )
 
         self.assertRedirects(response, reverse("transcription:transcripts"))
-        mock_process_audio.assert_called_once_with(temp_upload.temporary_file_path())
+        mock_process_audio.assert_called_once()
         mock_tagging_manager.return_value.tag_transcript.assert_called_once_with()
         self.assertTrue(
             Transcript.objects.filter(
@@ -353,6 +396,7 @@ class UploadAudioTests(TestCase):
         self.assertContains(
             response,
             "Something went wrong while transcribing the uploaded file.",
+            status_code=500,
         )
         self.assertFalse(Transcript.objects.filter(name="Broken Upload").exists())
 
@@ -380,8 +424,39 @@ class UploadAudioTests(TestCase):
         self.assertContains(
             response,
             "One or more selected topics could not be found.",
+            status_code=400,
         )
         self.assertFalse(Transcript.objects.filter(name="Topic Failure").exists())
+
+    @patch("transcription.views.process_audio", return_value="mock transcript")
+    def test_upload_audio_rejects_other_user_topic(
+        self,
+        _mock_process_audio,
+    ):
+        upload = SimpleUploadedFile(
+            "audio.mp3",
+            b"not real audio",
+            content_type="audio/mpeg",
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "name": "Other Topic Failure",
+                "audio_file": upload,
+                "topics": json.dumps([self.other_topic.topic]),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(
+            response,
+            "One or more selected topics could not be found.",
+            status_code=400,
+        )
+        self.assertFalse(
+            Transcript.objects.filter(name="Other Topic Failure").exists()
+        )
 
     @patch("transcription.views.TaggingManager")
     @patch("transcription.views.process_audio", return_value="mock transcript")
@@ -410,5 +485,6 @@ class UploadAudioTests(TestCase):
         self.assertContains(
             response,
             "Something went wrong while tagging the transcript.",
+            status_code=500,
         )
         self.assertFalse(Transcript.objects.filter(name="Tag Failure").exists())
