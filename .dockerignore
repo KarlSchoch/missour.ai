@@ -1,5 +1,5 @@
 # Ignore the audio-files directory
-audio-files
+sample-files
 
 # Other files and directories to ignore
 .git

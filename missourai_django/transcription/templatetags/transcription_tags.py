@@ -29,12 +29,15 @@ def render_analyze_audio_section(context):
 def render_view_transcript_chunks_section(context):
     # Pull the transcript out of the context and use for filtering
     transcript = context.get('transcript')
-    
+    request = context.get("request")
 
     # 1) pull the chunks (for row order + text)
     chunks = list(
         Chunk.objects
-        .filter(transcript_id=transcript.pk)
+        .filter(
+            transcript=transcript,
+            transcript__created_by=request.user,
+        )
         .values("id", "chunk_text")
         .order_by("id")  # or your real ordering field
     )
@@ -42,7 +45,11 @@ def render_view_transcript_chunks_section(context):
     # 2) pull the tags with topic metadata
     tag_rows = list(
         Tag.objects
-        .filter(chunk__transcript_id=transcript.pk)
+        .filter(
+            chunk__transcript=transcript,
+            chunk__transcript__created_by=request.user,
+            topic__created_by=request.user,
+        )
         .select_related("topic")
         .values(
             "chunk_id",

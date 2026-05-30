@@ -7,6 +7,19 @@ class TopicSerializer(serializers.ModelSerializer):
         model = Topic
         fields = ["id", "topic", "description"]
 
+
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = [
+            "id",
+            "topic",
+            "chunk",
+            "topic_present",
+            "relevant_section",
+            "user_validation",
+        ]
+
 class SummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = Summary

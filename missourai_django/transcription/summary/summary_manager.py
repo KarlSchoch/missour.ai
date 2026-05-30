@@ -52,6 +52,13 @@ class SummaryManager:
             tgt_transcript:Transcript,
             tgt_topic:Topic = None,
         ):
+        if (
+            tgt_topic is not None
+            and tgt_topic.created_by_id != tgt_transcript.created_by_id
+        ):
+            raise ValueError(
+                "Topic must be owned by the same user as the transcript."
+            )
 
         if not tgt_topic:
             summary_type = 'general'

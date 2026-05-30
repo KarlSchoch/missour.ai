@@ -4,13 +4,13 @@
     - [x] User ID is used to filter the transcripts that show up on the main table
     - [x] If a user tries to access a transcript that they did not create, they get a "Forbidden" page
 - Same things with summaries, topics, and tags
-    - Topics (documented in `test_views.py::UserScopedTopicTests`)
+    - Topics (documented in `test_views.py::UserScopedTopicTests` and `test_api.py::UserScopedSummaryTests`)
         - [x] Update Model
         - [x] Add user ID when creating a topic: Topics can be either created from the Topics tab (`view_topics.html` template -> `view_topics.jsx`) or the template for viewing a specific Transcript (`view_transcript.html` -> `genereate-report-page-section.jsx` -> `create-new-report.jsx` -> `new-report-contents.jsx`) use the API to create the topics
         - User ID is used to filter the topics that show up on the
             - [x] Topics Tab: Topics tab uses `view_topics.html` template, which invokes the `topics-list` API, so when I added user level filtering to TopicViewSet.get_queryset() I addressed this issue.
-            - List of topics available when you hit the "Analyze Topics" Checkmark: When you go into the "Upload Audio" Tab and check the "Analyze Transcript" checkbox, that opens up the `analyze_audio_page_section`, which gets its list of topics from `transcription_tags.py::render_analyze_audio_section`, which just has a call to Topic.objects.all() 
-            - Topics that you can do topic level summaries on
+            - [x] List of topics available when you hit the "Analyze Topics" Checkmark: When you go into the "Upload Audio" Tab and check the "Analyze Transcript" checkbox, that opens up the `analyze_audio_page_section`, which gets its list of topics from `transcription_tags.py::render_analyze_audio_section`, which just has a call to Topic.objects.all() 
+            - [x] Topics that you can do topic level summaries on: Basically already implemented via UI through user filtering in the api, but addressed issue where, through the API, user can create a summary on their own transcript via another user's topic or vice versa.  Validated in `test_api.UserScopedSummaryTest`
     - Summaries
     - Tags
 - Users can see how much they have spent over the month
