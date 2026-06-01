@@ -311,7 +311,8 @@ class UserScopedSummaryTests(TestCase):
 
         res = self.client.post(self.list_url, payload, format="json")
 
-        self.assertEqual(res.status_code, 404)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("transcript", res.json())
         self.assertFalse(
             Summary.objects.filter(
                 transcript=self.other_transcript,
@@ -328,13 +329,34 @@ class UserScopedSummaryTests(TestCase):
 
         res = self.client.post(self.list_url, payload, format="json")
 
-        self.assertEqual(res.status_code, 404)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("topic", res.json())
         self.assertFalse(
             Summary.objects.filter(
                 transcript=self.own_transcript,
                 topic=self.other_topic,
             ).exists()
         )
+
+    def test_create_general_summary_rejects_other_user_transcript_like_missing_transcript(self):
+        other_payload = {
+            "transcript": self.other_transcript.id,
+            "summary_type": "general",
+            "topic": None,
+        }
+        missing_payload = {
+            "transcript": self.other_transcript.id + 9999,
+            "summary_type": "general",
+            "topic": None,
+        }
+
+        other_res = self.client.post(self.list_url, other_payload, format="json")
+        missing_res = self.client.post(self.list_url, missing_payload, format="json")
+
+        self.assertEqual(other_res.status_code, 400)
+        self.assertEqual(missing_res.status_code, 400)
+        self.assertEqual(other_res.json().keys(), missing_res.json().keys())
+        self.assertIn("transcript", other_res.json())
 
     @patch("transcription.api_views.summary_manager")
     def test_create_topic_summary_allows_own_topic_for_own_transcript(
