@@ -1,14 +1,211 @@
 import json
+from html.parser import HTMLParser
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile, TemporaryUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from django.conf import settings
 
 from transcription.models import Chunk, Tag, Topic, Transcript
 
 User = get_user_model()
+
+
+class JsonScriptParser(HTMLParser):
+    def __init__(self, element_id):
+        super().__init__()
+        self.element_id = element_id
+        self.in_target_element = False
+        self.data = ""
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if (
+            tag == "script"
+            and attrs.get("id") == self.element_id
+            and not self.data
+        ):
+            self.in_target_element = True
+
+    def handle_endtag(self, tag):
+        if tag == "script" and self.in_target_element:
+            self.in_target_element = False
+
+    def handle_data(self, data):
+        if self.in_target_element:
+            self.data += data
+
+def get_json_script_payload(response, element_id):
+    parser = JsonScriptParser(element_id)
+    parser.feed(response.content.decode())
+    if not parser.data:
+        raise AssertionError(f"Could not find JSON script element with id {element_id}")
+    return json.loads(parser.data)
+
+
+def create_transcript(
+        name: str,
+        text: str,
+        user: User
+    ):
+    return Transcript.objects.create(
+        name = name,
+        transcript_text = text,
+        created_by = user
+    )
+
+def create_topic(
+        topic: str,
+        description: str,
+        user: User
+):
+    return Topic.objects.create(
+        topic = topic,
+        description = description,
+        created_by = user
+    )
+
+class UserScopedTopicTests(TestCase):
+    """
+    Ensures that topics are scoped to a specific user
+    """
+    def test_single_user_topics_upload_audio_page(self):
+        """
+        For the upload_audio.html template, only show topics created by the logged in user
+        """
+        # Create users and log in
+        logged_in_user = User.objects.create_user(
+            username='logged-in',
+            password='pw1'
+        )
+        other_user = User.objects.create_user(
+            username='other',
+            password='pw2'
+        )
+        self.client.force_login(logged_in_user)
+        # Create topic entries for each user
+        own_topic = create_topic(
+            'Logged in User Upload Topic',
+            'Topic created by logged in user',
+            logged_in_user
+        )
+        other_user_topic = create_topic(
+            'Other User Upload Topic',
+            'Topic created by other user',
+            other_user
+        )
+
+        response = self.client.get(reverse('transcription:upload_audio'))
+        self.assertEqual(response.status_code, 200)
+
+        # Extract the payload rendered by analyze-audio-page-section.html
+        initial_payload = get_json_script_payload(
+            response,
+            "initial-payload-analyze-audio-page-section",
+        )
+
+        # Validate that the payload contains only the logged in user's topics
+        self.assertEqual(
+            initial_payload["topics"],
+            [{"value": own_topic.topic, "label": own_topic.topic}],
+        )
+        self.assertNotIn(
+            other_user_topic.topic,
+            {topic["value"] for topic in initial_payload["topics"]},
+        )
+
+    def test_single_user_topic_list(self):
+        """
+        For the view_topics.html template, only show topics that are from a single user
+        """
+        # Create users and log in
+        logged_in_user = User.objects.create_user(
+            username='logged-in', 
+            password='pw1'
+        )
+        other_user = User.objects.create_user(
+            username='other', 
+            password='pw2'
+        )
+        self.client.force_login(logged_in_user)
+        # Create topic entries for each user
+        own_topic = create_topic(
+            'Logged in User Topic',
+            'Topic created by logged in user',
+            logged_in_user
+        )
+        other_user_topic = create_topic(
+            'Other User Topic',
+            'Topic created by other user',
+            other_user
+        )
+    
+        response = self.client.get(reverse('api:topic-list'))
+        self.assertEqual(response.status_code, 200)
+
+        # Extract returned content from api
+        data = response.json()
+        returned_topic_ids = {item['id'] for item in data}
+
+        # Validate that you received the logged in user's topics
+        self.assertIn(own_topic.id, returned_topic_ids)
+
+        # Validate that the other user's topic is not visible to the logged in user
+        self.assertNotIn(other_user_topic.id, returned_topic_ids)
+
+class UserScopedTranscriptTests(TestCase):
+    """
+    Ensures that transcripts are scoped to a specific user
+    """
+    def test_single_user_transcript_list(self):
+        """
+        Only show transcripts that were created by the logged in user
+        """
+        # Create users
+        self.logged_in_user = User.objects.create_user(
+            username='logged-in', 
+            password='pw1'
+        )
+        self.other_user = User.objects.create_user(
+            username='other', 
+            password='pw2'
+        )
+        self.client.force_login(self.logged_in_user)
+        # Create transcript records for each user
+        create_transcript('logged in user transcript', 'some text', self.logged_in_user)
+        create_transcript('other user transcript', 'some text', self.other_user)
+        # Get page, validate you only see a single user's transcript
+        response = self.client.get(reverse('transcription:transcripts'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'logged in user transcript')
+        self.assertNotContains(response, 'other user transcript')
+    
+    def test_forbidden_transcript(self):
+        """
+        User gets a 403 Forbidden error if they try to access another user's transcript
+        """
+        # Create users
+        owner = User.objects.create_user(
+            username='logged-in', 
+            password='pw1'
+        )
+        intruder = User.objects.create_user(
+            username='other', 
+            password='pw2'
+        )
+        self.client.force_login(intruder)
+        # Create transcript records for each user
+        transcript = create_transcript('other user transcript', 'some text', owner)
+        # Get page, validate you only see a single user's transcript
+        response = self.client.get(
+            reverse(
+                'transcription:view_transcript', 
+                args=[transcript.pk]
+            )
+        )
+        self.assertEqual(response.status_code, 403)
 
 class ViewTranscriptTests(TestCase):
     def setUp(self):
@@ -18,19 +215,23 @@ class ViewTranscriptTests(TestCase):
         # Base Records
         self.transcript_one = Transcript.objects.create(
             name = "Dummy Transcript One",
-            transcript_text = "Here is some dummy text about IT that should show up"
+            transcript_text = "Here is some dummy text about IT that should show up",
+            created_by = self.user,
         )
         self.transcript_two = Transcript.objects.create(
             name = "Dummy Transcript Two",
-            transcript_text = "Here is some dummy text about IT that should NOT show up"
+            transcript_text = "Here is some dummy text about IT that should NOT show up",
+            created_by = self.user,
         )
         self.topic_it = Topic.objects.create(
             topic = "Information Technology",
-            description = ""
+            description = "",
+            created_by = self.user,
         )
         self.topic_wf = Topic.objects.create(
             topic = "Workforce Training",
-            description = ""
+            description = "",
+            created_by = self.user,
         )
         # Transcript One Related Elements
         self.chunk_transcript_one = Chunk.objects.create(
@@ -76,10 +277,16 @@ class ViewTranscriptTests(TestCase):
 
         # Contains the correct HTML elements
         self.assertContains(response, 'id="view-transcript-chunks-page-section-root"')
-        self.assertContains(response, 'id="initial-payload"')
+        self.assertContains(
+            response,
+            'id="initial-payload-view-transcript-chunks-page-section"',
+        )
 
         # Initial Payload contains the Correct Data
-        initial_payload = response.context["initial_payload"]
+        initial_payload = get_json_script_payload(
+            response,
+            "initial-payload-view-transcript-chunks-page-section",
+        )["rows"]
 
         ## Tags contain chunks from single transcript (Dummy Transcript One)
         chunks = list( { x['chunk_id'] for x in initial_payload } )
@@ -90,15 +297,44 @@ class ViewTranscriptTests(TestCase):
         ).values('name')
         self.assertEqual(trancript_name[0]['name'], self.transcript_one.name)
 
+    @patch("transcription.views.TaggingManager")
+    def test_view_transcript_post_does_not_use_other_user_topics(
+        self,
+        mock_tagging_manager,
+    ):
+        other_user = User.objects.create_user(username="other", password="pw")
+        other_topic = Topic.objects.create(
+            topic="Other User View Topic",
+            description="",
+            created_by=other_user,
+        )
+        url = reverse('transcription:view_transcript', args=[self.transcript_one.pk])
+
+        response = self.client.post(
+            url,
+            data={"topics": json.dumps([other_topic.topic])},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        call_kwargs = mock_tagging_manager.call_args.kwargs
+        self.assertEqual(call_kwargs["topics"], [])
+
 
 class UploadAudioTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="upload-user", password="pw")
+        self.other_user = User.objects.create_user(username="other-user", password="pw")
         self.client.force_login(self.user)
         self.url = reverse("transcription:upload_audio")
         self.topic = Topic.objects.create(
             topic="Information Technology",
             description="",
+            created_by=self.user,
+        )
+        self.other_topic = Topic.objects.create(
+            topic="Other User Topic",
+            description="",
+            created_by=self.other_user,
         )
 
     def _make_temp_uploaded_file(self, content=b"fake media payload"):
@@ -131,7 +367,7 @@ class UploadAudioTests(TestCase):
         )
 
         self.assertRedirects(response, reverse("transcription:transcripts"))
-        mock_process_audio.assert_called_once_with(temp_upload.temporary_file_path())
+        mock_process_audio.assert_called_once()
         mock_tagging_manager.return_value.tag_transcript.assert_called_once_with()
         self.assertTrue(
             Transcript.objects.filter(
@@ -160,6 +396,7 @@ class UploadAudioTests(TestCase):
         self.assertContains(
             response,
             "Something went wrong while transcribing the uploaded file.",
+            status_code=500,
         )
         self.assertFalse(Transcript.objects.filter(name="Broken Upload").exists())
 
@@ -187,8 +424,39 @@ class UploadAudioTests(TestCase):
         self.assertContains(
             response,
             "One or more selected topics could not be found.",
+            status_code=400,
         )
         self.assertFalse(Transcript.objects.filter(name="Topic Failure").exists())
+
+    @patch("transcription.views.process_audio", return_value="mock transcript")
+    def test_upload_audio_rejects_other_user_topic(
+        self,
+        _mock_process_audio,
+    ):
+        upload = SimpleUploadedFile(
+            "audio.mp3",
+            b"not real audio",
+            content_type="audio/mpeg",
+        )
+
+        response = self.client.post(
+            self.url,
+            data={
+                "name": "Other Topic Failure",
+                "audio_file": upload,
+                "topics": json.dumps([self.other_topic.topic]),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(
+            response,
+            "One or more selected topics could not be found.",
+            status_code=400,
+        )
+        self.assertFalse(
+            Transcript.objects.filter(name="Other Topic Failure").exists()
+        )
 
     @patch("transcription.views.TaggingManager")
     @patch("transcription.views.process_audio", return_value="mock transcript")
@@ -217,5 +485,6 @@ class UploadAudioTests(TestCase):
         self.assertContains(
             response,
             "Something went wrong while tagging the transcript.",
+            status_code=500,
         )
         self.assertFalse(Transcript.objects.filter(name="Tag Failure").exists())

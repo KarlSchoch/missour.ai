@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
+from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import logout
@@ -44,7 +45,9 @@ def index(request):
 
 @login_required
 def transcripts(request):
-    transcripts = Transcript.objects.all()
+    transcripts = Transcript.objects.filter(
+        created_by=request.user
+    )
 
     return render(
         request,
@@ -124,7 +127,10 @@ def upload_audio(request):
 
             selected_topics_ct = len(selected_topics)
             selected_topics = list(
-                Topic.objects.filter(topic__in=selected_topics)
+                Topic.objects.filter(
+                    topic__in=selected_topics,
+                    created_by=request.user,
+                )
             )
             if len(selected_topics) != selected_topics_ct:
                 form.add_error(
@@ -142,6 +148,7 @@ def upload_audio(request):
             transcript_obj = Transcript(
                 name=name,
                 transcript_text=transcript_text,
+                created_by=request.user
             )
             transcript_obj.save()
 
@@ -181,6 +188,9 @@ def upload_audio(request):
 @login_required
 def view_transcript(request, transcript_id):
     transcript = get_object_or_404(Transcript, id=transcript_id)
+    if request.user != transcript.created_by:
+        raise PermissionDenied
+    
     if request.method == 'POST':
         # 1. Pull the tags out of the frontned
         topics_raw = request.POST.get('topics', '[]')
@@ -197,7 +207,10 @@ def view_transcript(request, transcript_id):
 
         # 3. Translate topics_processed into list[Topic]
         selected_topics = [
-            x for x in Topic.objects.filter(topic__in=topics_processed)
+            x for x in Topic.objects.filter(
+                topic__in=topics_processed,
+                created_by=request.user,
+            )
         ]
 
         # 4. Tag the transcript based on selected topics

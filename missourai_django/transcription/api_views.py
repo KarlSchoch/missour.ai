@@ -1,8 +1,10 @@
-from rest_framework import viewsets, status, serializers
+from rest_framework import viewsets, status
 from rest_framework.response import Response
+from django.http import Http404
+from django.shortcuts import get_object_or_404
 from os import environ
 
-from .serializers import TopicSerializer, SummarySerializer
+from .serializers import TopicSerializer, SummarySerializer, TagSerializer
 from .models import Topic, Summary, Transcript, Tag
 from transcription.summary.summary_manager import SummaryManager
 from transcription.tagging.tagging_manager import TaggingManager
@@ -13,18 +15,30 @@ class TopicViewSet(viewsets.ModelViewSet):
     queryset = Topic.objects.all()
     serializer_class = TopicSerializer
 
-class TagViewSet(viewsets.ModelViewSet):
-    queryset = Tag.objects.all()
-
-    def create():
-        pass
+    def get_queryset(self):
+        return Topic.objects.filter(created_by = self.request.user)
+    
     def perform_create(self, serializer):
-        return super().perform_create(serializer)
+        serializer.save(created_by = self.request.user)
+
+class TagViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Tag.objects.none()
+    serializer_class = TagSerializer
+
+    def get_queryset(self):
+        return Tag.objects.filter(
+            chunk__transcript__created_by=self.request.user,
+            topic__created_by=self.request.user,
+        )
 
 class SummaryViewSet(viewsets.ModelViewSet):
     queryset = Summary.objects.all()
     serializer_class = SummarySerializer
     filterset_fields = ["transcript"]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        return Summary.objects.filter(transcript__created_by=self.request.user)
 
     def create(self, request, *args, **kwargs):
         # 1. Build serializer from request and validate
@@ -50,7 +64,11 @@ class SummaryViewSet(viewsets.ModelViewSet):
 
         try:
             # Query the DB for the transcript
-            tgt_transcript = Transcript.objects.get(pk = int(transcript))
+            tgt_transcript = get_object_or_404(
+                Transcript,
+                pk=int(transcript),
+                created_by=request.user,
+            )
             # Check whether this is a general or topic level summary
             ## General
             if summary_type == 'general':
@@ -65,18 +83,24 @@ class SummaryViewSet(viewsets.ModelViewSet):
             ## Topic Level
             elif summary_type == 'topic':
                 # 1. Through Chunk query the tags for a given transcript (transcript_tags)
-                transcript_tags = Tag.objects.filter(chunk__transcript_id = transcript).select_related('topic', 'chunk')
+                transcript_tags = Tag.objects.filter(
+                    chunk__transcript=tgt_transcript,
+                    topic__created_by=request.user,
+                ).select_related('topic', 'chunk')
                 # 2. Extract the set of topics tags have been generated for (generated_tag_topics)
                 generated_tag_topics = set(
                     transcript_tags.values_list("topic_id", flat=True)
                 )
                 # 3. Compare generated_tags against the topic passed
                 topic = data['topic']
+                tgt_topic_obj = get_object_or_404(
+                    Topic,
+                    pk=int(topic),
+                    created_by=request.user,
+                )
                 # 3.a. Topic passed back not in generated_tags
-                if int(topic) not in generated_tag_topics:
+                if tgt_topic_obj.pk not in generated_tag_topics:
                     # 3.a.i.  Generate tags for that topic
-                    ## Extract the topic
-                    tgt_topic_obj = Topic.objects.get(pk = int(topic))
                     ## Instantiate the tagging manager
                     tagging_manager = TaggingManager(
                         api_key=environ['OPENAI_API_KEY'],
@@ -85,14 +109,14 @@ class SummaryViewSet(viewsets.ModelViewSet):
                     )
                     new_transcript_tags = tagging_manager.tag_transcript()
                     # 3.a.ii. Requery transcript_tags
-                    transcript_tags = Tag.objects.filter(chunk__transcript_id = transcript).select_related('topic', 'chunk')
+                    transcript_tags = Tag.objects.filter(chunk__transcript=tgt_transcript).select_related('topic', 'chunk')
                 # 3.b. Topic passed back in generated_tags
                 else:
                     # 3.b.i.  Pass
                     pass
                 # 4. Filter tags to only where topic_present field == True that are for the tgt_topic
                 transcript_tags = transcript_tags.filter(
-                    topic_id = int(topic),
+                    topic=tgt_topic_obj,
                     topic_present = True
                 )
                 # Save summary and return if there are no relevant tags for the topic
@@ -118,7 +142,7 @@ class SummaryViewSet(viewsets.ModelViewSet):
                 summary_obj = summary_manager.summarize(
                     transcript_content=transcript_content,
                     tgt_transcript=tgt_transcript,
-                    tgt_topic=Topic.objects.get(pk = int(topic)),
+                    tgt_topic=tgt_topic_obj,
                 )
 
             # TO DO: Offload as job to celery
@@ -136,6 +160,8 @@ class SummaryViewSet(viewsets.ModelViewSet):
             return Response(
                 serializer.data, status=status.HTTP_201_CREATED, headers=headers
             )
+        except Http404:
+            raise
         except Exception as e:
             return Response(
                 str(e),
