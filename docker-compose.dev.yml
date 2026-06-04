@@ -21,6 +21,33 @@ services:
     ports:
       - "8000:8000"
 
+  celery-worker:
+    build:
+      context: .
+      target: dev
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    working_dir: /app/missourai_django
+    command:
+      - /app/.venv/bin/python
+      - -m
+      - celery
+      - -A
+      - missourai_web_app
+      - worker
+      - --loglevel=INFO
+      - --concurrency=1
+    env_file: .env
+    environment:
+      DEBUG: "True"
+      MODEL_ENV: "dev"
+    volumes:
+      - .:/app
+      - venv:/app/.venv
+      - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
+      - ./missourai_django/media:/app/missourai_django/media
+
   rabbitmq:
     image: rabbitmq:3-management-alpine
     environment:

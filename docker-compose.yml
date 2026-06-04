@@ -17,6 +17,32 @@ services:
       - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
       - ./missourai_django/media:/app/missourai_django/media
 
+  celery-worker:
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    working_dir: /app/missourai_django
+    command:
+      - /app/.venv/bin/python
+      - -m
+      - celery
+      - -A
+      - missourai_web_app
+      - worker
+      - --loglevel=INFO
+      - --concurrency=2
+    env_file: .env
+    environment:
+      DJANGO_VITE_DEV: "false"
+      DEBUG: "False"
+      MODEL_ENV: "prod"
+    volumes:
+      - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
+      - ./missourai_django/media:/app/missourai_django/media
+
   rabbitmq:
     image: rabbitmq:3-management-alpine
     environment:

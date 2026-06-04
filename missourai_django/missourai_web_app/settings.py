@@ -54,7 +54,8 @@ INSTALLED_APPS = [
     'django_vite',
     'rest_framework',
     'corsheaders',
-    'django_filters'
+    'django_filters',
+    'django_celery_results'
 ]
 
 MIDDLEWARE = [
@@ -194,3 +195,4 @@ CELERY_BROKER_URL = os.getenv(
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
+CELERY_RESULT_BACKEND = 'django-db' # Sets backend to default database in Settings
