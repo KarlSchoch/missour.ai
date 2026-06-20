@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.conf import settings
 
-from transcription.models import Chunk, Tag, Topic, Transcript
+from transcription.models import BackgroundJob, Chunk, Tag, Topic, Transcript
 
 User = get_user_model()
 
@@ -234,15 +234,25 @@ class AddTaskDemoTests(TestCase):
         )
 
         mock_add.delay.assert_called_once_with(2, 3)
+        job = BackgroundJob.objects.get(task_id=str(task_id))
+        self.assertEqual(job.created_by, self.user)
+        self.assertEqual(job.kind, BackgroundJob.Kind.ADD_DEMO)
+        self.assertEqual(job.label, "Add 2 + 3")
         self.assertRedirects(
             response,
-            reverse("transcription:add_task_result", args=[task_id]),
+            reverse("transcription:add_task_result", args=[job.id]),
             fetch_redirect_response=False,
         )
 
     @patch("transcription.views.AsyncResult")
-    def test_add_task_result_page_uses_task_id_to_load_result(self, mock_async_result):
+    def test_add_task_result_page_uses_job_task_id_to_load_result(self, mock_async_result):
         task_id = uuid.uuid4()
+        job = BackgroundJob.objects.create(
+            created_by=self.user,
+            task_id=str(task_id),
+            kind=BackgroundJob.Kind.ADD_DEMO,
+            label="Add 2 + 3",
+        )
 
         class FakeAsyncResult:
             status = "SUCCESS"
@@ -260,14 +270,86 @@ class AddTaskDemoTests(TestCase):
         mock_async_result.return_value = FakeAsyncResult()
 
         response = self.client.get(
-            reverse("transcription:add_task_result", args=[task_id])
+            reverse("transcription:add_task_result", args=[job.id])
         )
 
         mock_async_result.assert_called_once_with(str(task_id))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "transcription/add_task_result.html")
+        self.assertContains(response, "Job: Add 2 + 3")
         self.assertContains(response, "Status: SUCCESS")
         self.assertContains(response, "Result: 5")
+
+    def test_add_task_result_page_rejects_other_users_job(self):
+        other_user = User.objects.create_user(username="other-add-user", password="pw")
+        job = BackgroundJob.objects.create(
+            created_by=other_user,
+            task_id=str(uuid.uuid4()),
+            kind=BackgroundJob.Kind.ADD_DEMO,
+            label="Other user's add job",
+        )
+
+        response = self.client.get(
+            reverse("transcription:add_task_result", args=[job.id])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    @patch("transcription.views.AsyncResult")
+    def test_celery_task_status_returns_owned_task_status(self, mock_async_result):
+        task_id = uuid.uuid4()
+        BackgroundJob.objects.create(
+            created_by=self.user,
+            task_id=str(task_id),
+            kind=BackgroundJob.Kind.ADD_DEMO,
+            label="Add 2 + 3",
+        )
+
+        class FakeAsyncResult:
+            status = "STARTED"
+
+            def ready(self):
+                return False
+
+            def successful(self):
+                return False
+
+            def failed(self):
+                return False
+
+        mock_async_result.return_value = FakeAsyncResult()
+
+        response = self.client.get(
+            reverse("transcription:celery_task_status", args=[task_id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "task_id": str(task_id),
+                "status": "STARTED",
+                "ready": False,
+                "successful": False,
+                "failed": False,
+            },
+        )
+
+    def test_celery_task_status_rejects_other_users_task(self):
+        other_user = User.objects.create_user(username="other-task-user", password="pw")
+        task_id = uuid.uuid4()
+        BackgroundJob.objects.create(
+            created_by=other_user,
+            task_id=str(task_id),
+            kind=BackgroundJob.Kind.ADD_DEMO,
+            label="Other user's add job",
+        )
+
+        response = self.client.get(
+            reverse("transcription:celery_task_status", args=[task_id])
+        )
+
+        self.assertEqual(response.status_code, 404)
 
 class ViewTranscriptTests(TestCase):
     def setUp(self):

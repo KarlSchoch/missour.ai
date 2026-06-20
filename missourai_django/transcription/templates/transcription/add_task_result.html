@@ -1,17 +1,14 @@
 {% extends "transcription/base.html" %}
+{% load static %}
 
 {% block title %}Add Result - missour.ai{% endblock %}
-
-{% block extra_head %}
-    {% if not task.ready %}
-        <meta http-equiv="refresh" content="2">
-    {% endif %}
-{% endblock %}
 
 {% block content %}
     <h2>Add result</h2>
 
-    <p>Task ID: {{ task_id }}</p>
+    <p>Job: {{ job.label }}</p>
+    <p>Job ID: {{ job.id }}</p>
+    <p>Task ID: {{ job.task_id }}</p>
     <p>Status: {{ task.status }}</p>
 
     {% if task.successful %}
@@ -23,6 +20,16 @@
         <p>The task failed.</p>
         <p>{{ task.result }}</p>
     {% else %}
-        <p>The task is still running. This page will refresh automatically.</p>
+        <p>The task is still running.</p>
+        <div
+            data-celery-task-status
+            data-status-url="{{ task_status_url }}"
+            data-success-message="The add task is complete. Reload the page to see the result."
+            data-failure-message="The add task failed. Reload the page to see the failure details."
+        ></div>
     {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+    <script src="{% static 'transcription/js/celery-task-status.js' %}"></script>
 {% endblock %}

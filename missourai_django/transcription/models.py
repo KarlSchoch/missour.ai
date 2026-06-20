@@ -3,6 +3,28 @@ from django.db.models import Q
 from django.conf import settings
 
 # Create your models here.
+class BackgroundJob(models.Model):
+    class Kind(models.TextChoices):
+        ADD_DEMO = "add_demo", "Add demo"
+        TRANSCRIPTION = "transcription", "Transcription"
+        TAGGING = "tagging", "Tagging"
+        SUMMARY = "summary", "Summary"
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="background_jobs"
+    )
+    task_id = models.CharField(max_length=255, unique=True)
+    kind = models.CharField(max_length=50, choices=Kind.choices)
+    label = models.CharField(max_length=255)
+    related_object_id = models.PositiveBigIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.label} ({self.kind})"
+
+
 class Transcript(models.Model):
     name = models.CharField(max_length=255)
     transcript_text = models.TextField(default='')

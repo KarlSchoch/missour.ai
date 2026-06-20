@@ -127,34 +127,98 @@ The web application combines a Django backend that exposes APIs and serves the H
 ### Celery Page Pattern
 The add demo at `/transcription/add/` is a small reference implementation for moving long-running work out of a request/response cycle. It uses the `add` task in `missourai_django/transcription/tasks.py`, but the same shape applies to transcription, tagging, summary generation, or other expensive jobs.
 
+The reusable app-level object is `BackgroundJob`, not the raw Celery task id. `BackgroundJob` stores the current user, Celery `task_id`, job kind, display label, and optional related object id. That gives Django a normal model to authorize against while Celery remains the worker system behind the scenes.
+
 **Conceptual flow**
 1. A user submits a Django form.
 2. The sending view validates the form and calls `task = some_task.delay(...)`.
 3. Celery publishes the task message to the broker. In this project, the broker is RabbitMQ.
-4. Django immediately redirects the browser to a result page with `task.id` in the URL.
-5. A Celery worker processes the queued task outside the web request.
-6. Celery writes task status and the return value to the configured result backend. In this project, that backend is the Django database through `django_celery_results`.
-7. The result view rebuilds a result handle with `AsyncResult(task_id)` and renders status/result information.
+4. Django creates a `BackgroundJob` record with the current user and the Celery `task.id`.
+5. Django redirects the browser to a result page with the `BackgroundJob` id in the URL.
+6. A Celery worker processes the queued task outside the web request.
+7. Celery writes task status and the return value to the configured result backend. In this project, that backend is the Django database through `django_celery_results`.
+8. The result view loads the `BackgroundJob` for the current user, rebuilds a Celery result handle with `AsyncResult(job.task_id)`, and renders status/result information.
+9. If the job is still running, the result template opts into the shared polling script with a `data-celery-task-status` element.
+10. The browser polls the generic task-status endpoint until the task is ready, then prompts the user to reload the page.
 
-The important handoff is the task id, not the task object itself:
+The important handoff is from Celery task id to an app-owned `BackgroundJob`:
 
 ```python
-# Sending view (views.py::add_task_submit in example)
+# Sending view
 task = add.delay(x, y)
-return redirect("transcription:add_task_result", task_id=task.id)
+job = BackgroundJob.objects.create(
+    created_by=request.user,
+    task_id=task.id,
+    kind=BackgroundJob.Kind.ADD_DEMO,
+    label=f"Add {x} + {y}",
+)
+return redirect("transcription:add_task_result", job_id=job.id)
 ```
 
+The result view authorizes against `BackgroundJob` before inspecting Celery:
+
 ```python
-# Receiving/result view (views.py::add_task_result in example)
-task = AsyncResult(str(task_id))
+# Receiving/result view
+job = get_object_or_404(
+    BackgroundJob,
+    id=job_id,
+    created_by=request.user,
+)
+task = AsyncResult(job.task_id)
 return render(
     request,
     "transcription/add_task_result.html",
     {
-        "task_id": task_id,
+        "job": job,
         "task": task,
+        "task_status_url": reverse(
+            "transcription:celery_task_status",
+            args=[job.task_id],
+        ),
     },
 )
+```
+
+The generic task-status endpoint is intentionally reusable:
+
+```python
+path(
+    "celery/tasks/<uuid:task_id>/status/",
+    views.celery_task_status,
+    name="celery_task_status",
+)
+```
+
+Even though the endpoint accepts a Celery task id, it first verifies ownership through `BackgroundJob`:
+
+```python
+get_object_or_404(
+    BackgroundJob,
+    task_id=str(task_id),
+    created_by=request.user,
+)
+task = AsyncResult(str(task_id))
+```
+
+Templates opt into polling with a small `data-*` hook:
+
+```django
+<div
+    data-celery-task-status
+    data-status-url="{{ task_status_url }}"
+    data-success-message="The add task is complete. Reload the page to see the result."
+    data-failure-message="The add task failed. Reload the page to see the failure details."
+></div>
+```
+
+The shared static script at `missourai_django/transcription/static/transcription/js/celery-task-status.js` scans for `[data-celery-task-status]`, polls the configured status URL, and inserts a reload prompt when the task finishes. The template only needs to load it:
+
+```django
+{% load static %}
+
+{% block extra_scripts %}
+    <script src="{% static 'transcription/js/celery-task-status.js' %}"></script>
+{% endblock %}
 ```
 
 The broker and result backend solve different problems:
@@ -162,9 +226,16 @@ The broker and result backend solve different problems:
 - **Broker:** accepts queued work from Django and delivers it to a Celery worker.
 - **Result backend:** stores task state and return values so a later page request can inspect the outcome.
 
-For demo-only work, a raw task id in the URL is acceptable. For user-owned production work, create an application model that stores `user`, `task_id`, task type, timestamps, and any related object ids. Then have the result view load that model for the current user before calling `AsyncResult`. Celery task ids are not user-scoped by default.
+To expand this pattern for a new long-running task:
 
-To run this pattern locally, the Django app, RabbitMQ, and a Celery worker must all be running, and the `django_celery_results` migrations must have been applied.
+1. Add a new Celery task in `tasks.py`.
+2. Add a `BackgroundJob.Kind` value for that job type.
+3. In the submitting view, call `your_task.delay(...)`, create a `BackgroundJob`, and redirect to a result page with `job.id`.
+4. In the result view, load `BackgroundJob` with `created_by=request.user`, then call `AsyncResult(job.task_id)`.
+5. In the result template, include the `data-celery-task-status` element and load `celery-task-status.js`.
+6. Keep task-specific display logic in the result template and keep polling behavior in the shared script.
+
+To run this pattern locally, the Django app, RabbitMQ, and a Celery worker must all be running, and both the local app migrations and `django_celery_results` migrations must have been applied.
 
 ### Nginx + Certbot
 - The production compose file includes Nginx and Certbot containers with shared volumes for `/etc/letsencrypt` and the webroot challenge.

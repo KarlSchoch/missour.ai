@@ -1,15 +1,16 @@
 from django.shortcuts import render, redirect
 from celery.result import AsyncResult
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.core.files.base import ContentFile
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import logout
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from .forms import AddNumbersForm, TranscriptForm
-from .models import Transcript, Topic
+from .models import BackgroundJob, Transcript, Topic
 from .tasks import add
 from .transcription_utils.transcription_manager import (
     TranscriptionManager,
@@ -265,13 +266,25 @@ def add_task_submit(request):
     if request.method == "POST":
         form = AddNumbersForm(request.POST)
         if form.is_valid():
+            x = form.cleaned_data["x"]
+            y = form.cleaned_data["y"]
             task = add.delay(
-                form.cleaned_data["x"],
-                form.cleaned_data["y"],
+                x,
+                y,
+            )
+            job = BackgroundJob.objects.create(
+                created_by=request.user,
+                task_id=task.id,
+                kind=BackgroundJob.Kind.ADD_DEMO,
+                label=f"Add {x} + {y}",
+            )
+            messages.info(
+                request,
+                "Your add task has been queued. The result page will check its status.",
             )
             return redirect(
                 "transcription:add_task_result",
-                task_id=task.id,
+                job_id=job.id,
             )
     else:
         form = AddNumbersForm()
@@ -284,14 +297,43 @@ def add_task_submit(request):
 
 
 @login_required
-def add_task_result(request, task_id):
-    task = AsyncResult(str(task_id))
+def add_task_result(request, job_id):
+    job = get_object_or_404(
+        BackgroundJob,
+        id=job_id,
+        created_by=request.user,
+    )
+    task = AsyncResult(job.task_id)
 
     return render(
         request,
         "transcription/add_task_result.html",
         {
-            "task_id": task_id,
+            "job": job,
             "task": task,
+            "task_status_url": reverse(
+                "transcription:celery_task_status",
+                args=[job.task_id],
+            ),
         },
+    )
+
+
+@login_required
+def celery_task_status(request, task_id):
+    get_object_or_404(
+        BackgroundJob,
+        task_id=str(task_id),
+        created_by=request.user,
+    )
+    task = AsyncResult(str(task_id))
+
+    return JsonResponse(
+        {
+            "task_id": str(task_id),
+            "status": task.status,
+            "ready": task.ready(),
+            "successful": task.successful(),
+            "failed": task.failed(),
+        }
     )
