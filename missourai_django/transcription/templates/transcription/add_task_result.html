@@ -1,0 +1,28 @@
+{% extends "transcription/base.html" %}
+
+{% block title %}Add Result - missour.ai{% endblock %}
+
+{% block extra_head %}
+    {% if not task.ready %}
+        <meta http-equiv="refresh" content="2">
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    <h2>Add result</h2>
+
+    <p>Task ID: {{ task_id }}</p>
+    <p>Status: {{ task.status }}</p>
+
+    {% if task.successful %}
+        <p>Result: {{ task.result }}</p>
+        <p>
+            <a href="{% url 'transcription:add_task_submit' %}">Add another pair</a>
+        </p>
+    {% elif task.failed %}
+        <p>The task failed.</p>
+        <p>{{ task.result }}</p>
+    {% else %}
+        <p>The task is still running. This page will refresh automatically.</p>
+    {% endif %}
+{% endblock %}

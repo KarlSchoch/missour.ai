@@ -122,6 +122,49 @@ The web application combines a Django backend that exposes APIs and serves the H
 - **Initial payloads come from Django views.** Each page view returns an `initial_payload` dictionary that gets serialized with `{{ initial_payload|json_script:"initial-payload" }}` and can be read by React via `document.getElementById('initial-payload')`.  This `initial_payload ` is generated from the view
 - **CSRF stays consistent across fetches.** Frontend code imports `getCsrfToken` from `frontend/src/utils/csrf.js`, ensuring POST/PUT/PATCH requests include the same `csrftoken` cookie Django issued.
 - **Model Environment**: Since this project relies upon calls to external APIs, we have created the infrastructure to bypass these calls and thus incur inference costs.  To do this, we have created `Manager` Classes that encompass the various AI functionalities (currently only a [`TranscriptionManager`](/missourai_django/transcription/transcription_utils/transcription_manager.py) and  [`TaggingManager`](/missourai_django/transcription/tagging/tagging_manager.py), possibly more capabilities eventually).  This allows us to centralize any AI calls within one location within the code base, thus simplifying maintenance and mocking.  While building out initial capabilities, set the `MODEL_ENV` variable within your `.env` file to `dev` to take advantage of mocked responses.  When you want to do more integration-testing and ensure that your code works well with the model and eventually put the application into production, you can set the `MODEL_ENV` variable to `test` or `prod`
+- **Celery separates long-running work from page requests.** Django queues work through RabbitMQ using `CELERY_BROKER_URL`, and Celery stores task state/results in the Django database because `CELERY_RESULT_BACKEND = "django-db"` and `django_celery_results` is installed.
+
+### Celery Page Pattern
+The add demo at `/transcription/add/` is a small reference implementation for moving long-running work out of a request/response cycle. It uses the `add` task in `missourai_django/transcription/tasks.py`, but the same shape applies to transcription, tagging, summary generation, or other expensive jobs.
+
+**Conceptual flow**
+1. A user submits a Django form.
+2. The sending view validates the form and calls `task = some_task.delay(...)`.
+3. Celery publishes the task message to the broker. In this project, the broker is RabbitMQ.
+4. Django immediately redirects the browser to a result page with `task.id` in the URL.
+5. A Celery worker processes the queued task outside the web request.
+6. Celery writes task status and the return value to the configured result backend. In this project, that backend is the Django database through `django_celery_results`.
+7. The result view rebuilds a result handle with `AsyncResult(task_id)` and renders status/result information.
+
+The important handoff is the task id, not the task object itself:
+
+```python
+# Sending view (views.py::add_task_submit in example)
+task = add.delay(x, y)
+return redirect("transcription:add_task_result", task_id=task.id)
+```
+
+```python
+# Receiving/result view (views.py::add_task_result in example)
+task = AsyncResult(str(task_id))
+return render(
+    request,
+    "transcription/add_task_result.html",
+    {
+        "task_id": task_id,
+        "task": task,
+    },
+)
+```
+
+The broker and result backend solve different problems:
+
+- **Broker:** accepts queued work from Django and delivers it to a Celery worker.
+- **Result backend:** stores task state and return values so a later page request can inspect the outcome.
+
+For demo-only work, a raw task id in the URL is acceptable. For user-owned production work, create an application model that stores `user`, `task_id`, task type, timestamps, and any related object ids. Then have the result view load that model for the current user before calling `AsyncResult`. Celery task ids are not user-scoped by default.
+
+To run this pattern locally, the Django app, RabbitMQ, and a Celery worker must all be running, and the `django_celery_results` migrations must have been applied.
 
 ### Nginx + Certbot
 - The production compose file includes Nginx and Certbot containers with shared volumes for `/etc/letsencrypt` and the webroot challenge.

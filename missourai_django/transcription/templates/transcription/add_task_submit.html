@@ -1,0 +1,22 @@
+{% extends "transcription/base.html" %}
+
+{% block title %}Add Demo - missour.ai{% endblock %}
+
+{% block content %}
+    <h2>Add two numbers</h2>
+
+    <form method="post">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        {{ form.x.label_tag }}
+        {{ form.x }}
+        {{ form.x.errors }}
+
+        {{ form.y.label_tag }}
+        {{ form.y }}
+        {{ form.y.errors }}
+
+        <button type="submit">Submit</button>
+    </form>
+{% endblock %}

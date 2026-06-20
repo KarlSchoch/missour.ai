@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect
+from celery.result import AsyncResult
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
 from django.core.exceptions import PermissionDenied
@@ -7,8 +8,9 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
-from .forms import TranscriptForm
+from .forms import AddNumbersForm, TranscriptForm
 from .models import Transcript, Topic
+from .tasks import add
 from .transcription_utils.transcription_manager import (
     TranscriptionManager,
     TranscriptionMediaError
@@ -255,4 +257,41 @@ def generate_report_page_section(request):
     return render(
         request,
         "transcription/partials/generate-report-page-section.html",
+    )
+
+
+@login_required
+def add_task_submit(request):
+    if request.method == "POST":
+        form = AddNumbersForm(request.POST)
+        if form.is_valid():
+            task = add.delay(
+                form.cleaned_data["x"],
+                form.cleaned_data["y"],
+            )
+            return redirect(
+                "transcription:add_task_result",
+                task_id=task.id,
+            )
+    else:
+        form = AddNumbersForm()
+
+    return render(
+        request,
+        "transcription/add_task_submit.html",
+        {"form": form},
+    )
+
+
+@login_required
+def add_task_result(request, task_id):
+    task = AsyncResult(str(task_id))
+
+    return render(
+        request,
+        "transcription/add_task_result.html",
+        {
+            "task_id": task_id,
+            "task": task,
+        },
     )
