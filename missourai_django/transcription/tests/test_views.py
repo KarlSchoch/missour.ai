@@ -1,15 +1,19 @@
 import json
+import tempfile
 import uuid
 from html.parser import HTMLParser
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile, TemporaryUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.conf import settings
 
 from transcription.models import BackgroundJob, Chunk, Tag, Topic, Transcript
+from transcription.tasks import transcribe_uploaded_audio
+from transcription.views import _save_upload_for_background_job
 
 User = get_user_model()
 
@@ -492,13 +496,34 @@ class UploadAudioTests(TestCase):
         uploaded_file.seek(0)
         return uploaded_file
 
-    @patch("transcription.views.TaggingManager")
-    @patch("transcription.views.process_audio", return_value="mock transcript")
-    def test_upload_audio_accepts_temporary_uploaded_file(
+    def test_save_upload_for_background_job_creates_storage_directory(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                upload = SimpleUploadedFile(
+                    "audio.mp3",
+                    b"fake media payload",
+                    content_type="audio/mpeg",
+                )
+
+                storage_name = _save_upload_for_background_job(upload)
+
+                self.assertTrue(storage_name.startswith("background_uploads/"))
+                self.assertTrue(default_storage.exists(storage_name))
+                with default_storage.open(storage_name, "rb") as stored_file:
+                    self.assertEqual(stored_file.read(), b"fake media payload")
+
+    @patch("transcription.views.transcribe_uploaded_audio")
+    @patch("transcription.views._save_upload_for_background_job")
+    @patch("transcription.views.celery_uuid")
+    def test_upload_audio_queues_transcription_job(
         self,
-        mock_process_audio,
-        mock_tagging_manager,
+        mock_celery_uuid,
+        mock_save_upload,
+        mock_transcribe_task,
     ):
+        task_id = uuid.uuid4()
+        mock_celery_uuid.return_value = str(task_id)
+        mock_save_upload.return_value = "background_uploads/test-upload.mp4"
         temp_upload = self._make_temp_uploaded_file()
 
         response = self.client.post(
@@ -510,44 +535,30 @@ class UploadAudioTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("transcription:transcripts"))
-        mock_process_audio.assert_called_once()
-        mock_tagging_manager.return_value.tag_transcript.assert_called_once_with()
-        self.assertTrue(
-            Transcript.objects.filter(
-                name="Large Upload",
-                transcript_text="mock transcript",
-            ).exists()
-        )
-
-    @patch("transcription.views.process_audio", side_effect=RuntimeError("boom"))
-    def test_upload_audio_returns_form_error_for_unexpected_transcription_failure(
-        self,
-        _mock_process_audio,
-    ):
-        upload = SimpleUploadedFile(
-            "audio.mp3",
-            b"not real audio",
-            content_type="audio/mpeg",
-        )
-
-        response = self.client.post(
-            self.url,
-            data={"name": "Broken Upload", "audio_file": upload, "topics": "[]"},
-        )
-
-        self.assertEqual(response.status_code, 500)
-        self.assertContains(
+        job = BackgroundJob.objects.get(task_id=str(task_id))
+        self.assertEqual(job.created_by, self.user)
+        self.assertEqual(job.kind, BackgroundJob.Kind.TRANSCRIPTION)
+        self.assertEqual(job.label, "Transcribe Large Upload")
+        self.assertIsNone(job.related_object_id)
+        self.assertRedirects(
             response,
-            "Something went wrong while transcribing the uploaded file.",
-            status_code=500,
+            reverse("transcription:transcription_job_result", args=[job.id]),
+            fetch_redirect_response=False,
         )
-        self.assertFalse(Transcript.objects.filter(name="Broken Upload").exists())
+        mock_transcribe_task.apply_async.assert_called_once_with(
+            args=[
+                job.id,
+                "background_uploads/test-upload.mp4",
+                "Large Upload",
+                [self.topic.id],
+            ],
+            task_id=str(task_id),
+        )
 
-    @patch("transcription.views.process_audio", return_value="mock transcript")
+    @patch("transcription.views._save_upload_for_background_job")
     def test_upload_audio_rejects_unknown_topics(
         self,
-        _mock_process_audio,
+        mock_save_upload,
     ):
         upload = SimpleUploadedFile(
             "audio.mp3",
@@ -570,12 +581,13 @@ class UploadAudioTests(TestCase):
             "One or more selected topics could not be found.",
             status_code=400,
         )
-        self.assertFalse(Transcript.objects.filter(name="Topic Failure").exists())
+        self.assertFalse(BackgroundJob.objects.filter(label="Transcribe Topic Failure").exists())
+        mock_save_upload.assert_not_called()
 
-    @patch("transcription.views.process_audio", return_value="mock transcript")
+    @patch("transcription.views._save_upload_for_background_job")
     def test_upload_audio_rejects_other_user_topic(
         self,
-        _mock_process_audio,
+        mock_save_upload,
     ):
         upload = SimpleUploadedFile(
             "audio.mp3",
@@ -599,36 +611,167 @@ class UploadAudioTests(TestCase):
             status_code=400,
         )
         self.assertFalse(
-            Transcript.objects.filter(name="Other Topic Failure").exists()
+            BackgroundJob.objects.filter(label="Transcribe Other Topic Failure").exists()
+        )
+        mock_save_upload.assert_not_called()
+
+    @patch("transcription.views.AsyncResult")
+    def test_transcription_job_result_links_to_created_transcript(
+        self,
+        mock_async_result,
+    ):
+        transcript = Transcript.objects.create(
+            name="Ready Transcript",
+            transcript_text="mock transcript",
+            created_by=self.user,
+        )
+        job = BackgroundJob.objects.create(
+            created_by=self.user,
+            task_id=str(uuid.uuid4()),
+            kind=BackgroundJob.Kind.TRANSCRIPTION,
+            label="Transcribe Ready Transcript",
+            related_object_id=transcript.id,
         )
 
-    @patch("transcription.views.TaggingManager")
-    @patch("transcription.views.process_audio", return_value="mock transcript")
-    def test_upload_audio_rolls_back_transcript_when_tagging_fails(
+        class FakeAsyncResult:
+            status = "SUCCESS"
+
+            def successful(self):
+                return True
+
+            def failed(self):
+                return False
+
+        mock_async_result.return_value = FakeAsyncResult()
+
+        response = self.client.get(
+            reverse("transcription:transcription_job_result", args=[job.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "transcription/transcription_job_result.html")
+        self.assertContains(response, "Your transcript is ready.")
+        self.assertContains(
+            response,
+            reverse("transcription:view_transcript", args=[transcript.id]),
+        )
+
+    def test_transcription_job_result_rejects_other_users_job(self):
+        other_user = User.objects.create_user(username="other-job-user", password="pw")
+        job = BackgroundJob.objects.create(
+            created_by=other_user,
+            task_id=str(uuid.uuid4()),
+            kind=BackgroundJob.Kind.TRANSCRIPTION,
+            label="Other user's transcription job",
+        )
+
+        response = self.client.get(
+            reverse("transcription:transcription_job_result", args=[job.id])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
+class TranscribeUploadedAudioTaskTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="task-user", password="pw")
+        self.topic = Topic.objects.create(
+            topic="Information Technology",
+            description="",
+            created_by=self.user,
+        )
+        self.job = BackgroundJob.objects.create(
+            created_by=self.user,
+            task_id=str(uuid.uuid4()),
+            kind=BackgroundJob.Kind.TRANSCRIPTION,
+            label="Transcribe Task Upload",
+        )
+
+    @patch("transcription.tasks.TaggingManager")
+    @patch("transcription.tasks.process_audio", return_value="mock transcript")
+    @patch("transcription.tasks.default_storage")
+    def test_task_creates_transcript_updates_job_and_deletes_upload(
         self,
+        mock_storage,
         _mock_process_audio,
         mock_tagging_manager,
     ):
-        mock_tagging_manager.return_value.tag_transcript.side_effect = RuntimeError("boom")
-        upload = SimpleUploadedFile(
-            "audio.mp3",
-            b"not real audio",
-            content_type="audio/mpeg",
+        mock_storage.path.return_value = "stored-upload.mp4"
+        mock_storage.exists.return_value = True
+
+        transcript_id = transcribe_uploaded_audio(
+            self.job.id,
+            "background_uploads/test-upload.mp4",
+            "Task Upload",
+            [self.topic.id],
         )
 
-        response = self.client.post(
-            self.url,
-            data={
-                "name": "Tag Failure",
-                "audio_file": upload,
-                "topics": json.dumps([self.topic.topic]),
-            },
+        transcript = Transcript.objects.get(id=transcript_id)
+        self.assertEqual(transcript.name, "Task Upload")
+        self.assertEqual(transcript.transcript_text, "mock transcript")
+        self.assertEqual(transcript.created_by, self.user)
+        self.job.refresh_from_db()
+        self.assertEqual(self.job.related_object_id, transcript.id)
+        mock_tagging_manager.return_value.tag_transcript.assert_called_once_with()
+        mock_storage.delete.assert_called_once_with(
+            "background_uploads/test-upload.mp4"
         )
 
-        self.assertEqual(response.status_code, 500)
-        self.assertContains(
-            response,
-            "Something went wrong while tagging the transcript.",
-            status_code=500,
+    @patch("transcription.tasks.process_audio", return_value="mock transcript")
+    @patch("transcription.tasks.default_storage")
+    def test_task_rejects_topics_not_owned_by_job_user(
+        self,
+        mock_storage,
+        _mock_process_audio,
+    ):
+        other_user = User.objects.create_user(username="other-topic-owner", password="pw")
+        other_topic = Topic.objects.create(
+            topic="Other User Topic",
+            description="",
+            created_by=other_user,
         )
-        self.assertFalse(Transcript.objects.filter(name="Tag Failure").exists())
+        mock_storage.path.return_value = "stored-upload.mp4"
+        mock_storage.exists.return_value = True
+
+        with self.assertRaises(ValueError):
+            transcribe_uploaded_audio(
+                self.job.id,
+                "background_uploads/test-upload.mp4",
+                "Task Upload",
+                [other_topic.id],
+            )
+
+        self.assertFalse(Transcript.objects.filter(name="Task Upload").exists())
+        mock_storage.delete.assert_called_once_with(
+            "background_uploads/test-upload.mp4"
+        )
+
+    @patch("transcription.tasks.TaggingManager")
+    @patch("transcription.tasks.process_audio", return_value="mock transcript")
+    @patch("transcription.tasks.default_storage")
+    def test_task_rolls_back_transcript_when_tagging_fails(
+        self,
+        mock_storage,
+        _mock_process_audio,
+        mock_tagging_manager,
+    ):
+        mock_storage.path.return_value = "stored-upload.mp4"
+        mock_storage.exists.return_value = True
+        mock_tagging_manager.return_value.tag_transcript.side_effect = RuntimeError(
+            "boom"
+        )
+
+        with self.assertRaises(RuntimeError):
+            transcribe_uploaded_audio(
+                self.job.id,
+                "background_uploads/test-upload.mp4",
+                "Task Upload",
+                [self.topic.id],
+            )
+
+        self.assertFalse(Transcript.objects.filter(name="Task Upload").exists())
+        self.job.refresh_from_db()
+        self.assertIsNone(self.job.related_object_id)
+        mock_storage.delete.assert_called_once_with(
+            "background_uploads/test-upload.mp4"
+        )

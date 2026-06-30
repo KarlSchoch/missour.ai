@@ -6,6 +6,7 @@ app_name = 'transcription'
 urlpatterns = [
     path('', views.index, name='index'),
     path('upload/', views.upload_audio, name='upload_audio'),
+    path('upload/jobs/<int:job_id>/', views.transcription_job_result, name='transcription_job_result'),
     path('transcripts/', views.transcripts, name='transcripts'),
     path('transcripts/<int:transcript_id>/', views.view_transcript, name='view_transcript'),
     path('topics/', views.view_topics, name='view_topics'),

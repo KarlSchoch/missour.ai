@@ -1,7 +1,8 @@
 from django.shortcuts import render, redirect
+from celery import uuid as celery_uuid
 from celery.result import AsyncResult
 from django.http import HttpResponse, JsonResponse
-from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 from django.shortcuts import get_object_or_404
@@ -11,36 +12,16 @@ from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from .forms import AddNumbersForm, TranscriptForm
 from .models import BackgroundJob, Transcript, Topic
-from .tasks import add
-from .transcription_utils.transcription_manager import (
-    TranscriptionManager,
-    TranscriptionMediaError
-)
+from .tasks import add, transcribe_uploaded_audio
 from .tagging.tagging_manager import TaggingManager
 
 import os
 import logging
 import json
-import tempfile
+import uuid
 
 logger = logging.getLogger(__name__)
 
-
-def process_audio(file_path:str) -> str:
-    # Intialize TranscriptionManager with OpenAI API key
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable not set.")
-    
-    # Create the transcript using the TranscriptionManager
-    try:
-        manager = TranscriptionManager(api_key, file_path)
-        return manager.create_transcript()
-    except TranscriptionMediaError:
-        raise
-    except Exception as exc:
-        logging.exception("Unexpected transcription failure for file %s", file_path)
-        raise RuntimeError("An unexpected error occurred while processing the file.") from exc
 
 # Create your views here.
 def index(request):
@@ -73,61 +54,6 @@ def upload_audio(request):
             except json.JSONDecodeError:
                 selected_topics = []
 
-            # Reuse Django's temp file for large uploads when available.
-            remove_tmp_file = False
-            if hasattr(audio_file, "temporary_file_path"):
-                tmp_file_path = audio_file.temporary_file_path()
-            else:
-                with tempfile.NamedTemporaryFile(
-                    delete=False,
-                    suffix=os.path.splitext(audio_file.name)[1]
-                ) as tmp_file:
-                    for chunk in audio_file.chunks():
-                        tmp_file.write(chunk)
-                    tmp_file_path = tmp_file.name
-                remove_tmp_file = True
-
-            logger.info(
-                "Processing upload name=%s file=%s size=%s content_type=%s temp_path=%s reused_temp_file=%s",
-                name,
-                getattr(audio_file, "name", "<unknown>"),
-                getattr(audio_file, "size", "<unknown>"),
-                getattr(audio_file, "content_type", "<unknown>"),
-                tmp_file_path,
-                not remove_tmp_file,
-            )
-            
-            # Generate transcript
-            try:
-                transcript_text = process_audio(tmp_file_path)
-            except TranscriptionMediaError as exc:
-                form.add_error("audio_file", str(exc))
-                return render(
-                    request,
-                    "transcription/upload_audio.html",
-                    {"form": form},
-                    status=400,
-                )
-            except (RuntimeError, ValueError):
-                logger.exception(
-                    "Transcription failed for upload name=%s file=%s",
-                    name,
-                    getattr(audio_file, "name", "<unknown>"),
-                )
-                form.add_error(
-                    None,
-                    "Something went wrong while transcribing the uploaded file.",
-                )
-                return render(
-                    request,
-                    "transcription/upload_audio.html",
-                    {"form": form},
-                    status=500,
-                )
-            finally:
-                if remove_tmp_file and os.path.exists(tmp_file_path):
-                    os.remove(tmp_file_path)
-
             selected_topics_ct = len(selected_topics)
             selected_topics = list(
                 Topic.objects.filter(
@@ -147,46 +73,44 @@ def upload_audio(request):
                     status=400,
                 )
 
-            # Save the transcript text
-            transcript_obj = Transcript(
-                name=name,
-                transcript_text=transcript_text,
-                created_by=request.user
+            upload_storage_name = _save_upload_for_background_job(audio_file)
+            task_id = celery_uuid()
+            job = BackgroundJob.objects.create(
+                created_by=request.user,
+                task_id=task_id,
+                kind=BackgroundJob.Kind.TRANSCRIPTION,
+                label=f"Transcribe {name}",
             )
-            transcript_obj.save()
 
-            # Tag the transcript based on selected topics
-            try:
-                tagging_manager = TaggingManager(
-                    api_key = os.getenv('OPENAI_API_KEY'),
-                    transcript=transcript_obj,
-                    topics = selected_topics
-                )
-                tagging_manager.tag_transcript()
-            except Exception:
-                logger.exception(
-                    "Tagging failed for transcript_id=%s name=%s",
-                    transcript_obj.pk,
-                    transcript_obj.name,
-                )
-                transcript_obj.delete()
-                form.add_error(
-                    None,
-                    "Something went wrong while tagging the transcript.",
-                )
-                return render(
-                    request,
-                    "transcription/upload_audio.html",
-                    {"form": form},
-                    status=500,
-                )
+            transcribe_uploaded_audio.apply_async(
+                args=[
+                    job.id,
+                    upload_storage_name,
+                    name,
+                    [topic.id for topic in selected_topics],
+                ],
+                task_id=task_id,
+            )
 
-            # Redirect to transcripts page
-            return redirect('transcription:transcripts')
+            messages.info(
+                request,
+                "Your audio has been queued for transcription. The result page will check its status.",
+            )
+            return redirect(
+                "transcription:transcription_job_result",
+                job_id=job.id,
+            )
     else:
         form = TranscriptForm()
 
     return render(request, 'transcription/upload_audio.html', {'form': form})
+
+
+def _save_upload_for_background_job(audio_file):
+    extension = os.path.splitext(audio_file.name)[1]
+    storage_name = f"background_uploads/{uuid.uuid4()}{extension}"
+
+    return default_storage.save(storage_name, audio_file)
 
 @login_required
 def view_transcript(request, transcript_id):
@@ -311,6 +235,39 @@ def add_task_result(request, job_id):
         {
             "job": job,
             "task": task,
+            "task_status_url": reverse(
+                "transcription:celery_task_status",
+                args=[job.task_id],
+            ),
+        },
+    )
+
+
+@login_required
+def transcription_job_result(request, job_id):
+    job = get_object_or_404(
+        BackgroundJob,
+        id=job_id,
+        kind=BackgroundJob.Kind.TRANSCRIPTION,
+        created_by=request.user,
+    )
+    task = AsyncResult(job.task_id)
+    transcript = None
+
+    if task.successful() and job.related_object_id:
+        transcript = get_object_or_404(
+            Transcript,
+            id=job.related_object_id,
+            created_by=request.user,
+        )
+
+    return render(
+        request,
+        "transcription/transcription_job_result.html",
+        {
+            "job": job,
+            "task": task,
+            "transcript": transcript,
             "task_status_url": reverse(
                 "transcription:celery_task_status",
                 args=[job.task_id],
