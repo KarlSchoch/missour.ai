@@ -19,6 +19,7 @@ class BackgroundJob(models.Model):
     kind = models.CharField(max_length=50, choices=Kind.choices)
     label = models.CharField(max_length=255)
     related_object_id = models.PositiveBigIntegerField(null=True, blank=True)
+    error_message = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

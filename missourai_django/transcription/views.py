@@ -7,7 +7,6 @@ from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import logout
-from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from .forms import AddNumbersForm, TranscriptForm
@@ -21,6 +20,7 @@ import json
 import uuid
 
 logger = logging.getLogger(__name__)
+TRANSCRIPTION_PENDING_TEXT = "Transcription in progress..."
 
 
 # Create your views here.
@@ -74,31 +74,33 @@ def upload_audio(request):
                 )
 
             upload_storage_name = _save_upload_for_background_job(audio_file)
+            transcript = Transcript.objects.create(
+                name=name,
+                transcript_text=TRANSCRIPTION_PENDING_TEXT,
+                created_by=request.user,
+            )
             task_id = celery_uuid()
             job = BackgroundJob.objects.create(
                 created_by=request.user,
                 task_id=task_id,
                 kind=BackgroundJob.Kind.TRANSCRIPTION,
                 label=f"Transcribe {name}",
+                related_object_id=transcript.id,
             )
 
             transcribe_uploaded_audio.apply_async(
                 args=[
                     job.id,
                     upload_storage_name,
-                    name,
+                    transcript.id,
                     [topic.id for topic in selected_topics],
                 ],
                 task_id=task_id,
             )
 
-            messages.info(
-                request,
-                "Your audio has been queued for transcription. The result page will check its status.",
-            )
             return redirect(
-                "transcription:transcription_job_result",
-                job_id=job.id,
+                "transcription:view_transcript",
+                transcript_id=transcript.id,
             )
     else:
         form = TranscriptForm()
@@ -202,10 +204,6 @@ def add_task_submit(request):
                 kind=BackgroundJob.Kind.ADD_DEMO,
                 label=f"Add {x} + {y}",
             )
-            messages.info(
-                request,
-                "Your add task has been queued. The result page will check its status.",
-            )
             return redirect(
                 "transcription:add_task_result",
                 job_id=job.id,
@@ -235,62 +233,5 @@ def add_task_result(request, job_id):
         {
             "job": job,
             "task": task,
-            "task_status_url": reverse(
-                "transcription:celery_task_status",
-                args=[job.task_id],
-            ),
         },
-    )
-
-
-@login_required
-def transcription_job_result(request, job_id):
-    job = get_object_or_404(
-        BackgroundJob,
-        id=job_id,
-        kind=BackgroundJob.Kind.TRANSCRIPTION,
-        created_by=request.user,
-    )
-    task = AsyncResult(job.task_id)
-    transcript = None
-
-    if task.successful() and job.related_object_id:
-        transcript = get_object_or_404(
-            Transcript,
-            id=job.related_object_id,
-            created_by=request.user,
-        )
-
-    return render(
-        request,
-        "transcription/transcription_job_result.html",
-        {
-            "job": job,
-            "task": task,
-            "transcript": transcript,
-            "task_status_url": reverse(
-                "transcription:celery_task_status",
-                args=[job.task_id],
-            ),
-        },
-    )
-
-
-@login_required
-def celery_task_status(request, task_id):
-    get_object_or_404(
-        BackgroundJob,
-        task_id=str(task_id),
-        created_by=request.user,
-    )
-    task = AsyncResult(str(task_id))
-
-    return JsonResponse(
-        {
-            "task_id": str(task_id),
-            "status": task.status,
-            "ready": task.ready(),
-            "successful": task.successful(),
-            "failed": task.failed(),
-        }
     )

@@ -299,62 +299,6 @@ class AddTaskDemoTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    @patch("transcription.views.AsyncResult")
-    def test_celery_task_status_returns_owned_task_status(self, mock_async_result):
-        task_id = uuid.uuid4()
-        BackgroundJob.objects.create(
-            created_by=self.user,
-            task_id=str(task_id),
-            kind=BackgroundJob.Kind.ADD_DEMO,
-            label="Add 2 + 3",
-        )
-
-        class FakeAsyncResult:
-            status = "STARTED"
-
-            def ready(self):
-                return False
-
-            def successful(self):
-                return False
-
-            def failed(self):
-                return False
-
-        mock_async_result.return_value = FakeAsyncResult()
-
-        response = self.client.get(
-            reverse("transcription:celery_task_status", args=[task_id])
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            {
-                "task_id": str(task_id),
-                "status": "STARTED",
-                "ready": False,
-                "successful": False,
-                "failed": False,
-            },
-        )
-
-    def test_celery_task_status_rejects_other_users_task(self):
-        other_user = User.objects.create_user(username="other-task-user", password="pw")
-        task_id = uuid.uuid4()
-        BackgroundJob.objects.create(
-            created_by=other_user,
-            task_id=str(task_id),
-            kind=BackgroundJob.Kind.ADD_DEMO,
-            label="Other user's add job",
-        )
-
-        response = self.client.get(
-            reverse("transcription:celery_task_status", args=[task_id])
-        )
-
-        self.assertEqual(response.status_code, 404)
-
 class ViewTranscriptTests(TestCase):
     def setUp(self):
         # Authentication
@@ -539,17 +483,20 @@ class UploadAudioTests(TestCase):
         self.assertEqual(job.created_by, self.user)
         self.assertEqual(job.kind, BackgroundJob.Kind.TRANSCRIPTION)
         self.assertEqual(job.label, "Transcribe Large Upload")
-        self.assertIsNone(job.related_object_id)
+        transcript = Transcript.objects.get(id=job.related_object_id)
+        self.assertEqual(transcript.name, "Large Upload")
+        self.assertEqual(transcript.created_by, self.user)
+        self.assertEqual(transcript.transcript_text, "Transcription in progress...")
         self.assertRedirects(
             response,
-            reverse("transcription:transcription_job_result", args=[job.id]),
+            reverse("transcription:view_transcript", args=[transcript.id]),
             fetch_redirect_response=False,
         )
         mock_transcribe_task.apply_async.assert_called_once_with(
             args=[
                 job.id,
                 "background_uploads/test-upload.mp4",
-                "Large Upload",
+                transcript.id,
                 [self.topic.id],
             ],
             task_id=str(task_id),
@@ -615,63 +562,6 @@ class UploadAudioTests(TestCase):
         )
         mock_save_upload.assert_not_called()
 
-    @patch("transcription.views.AsyncResult")
-    def test_transcription_job_result_links_to_created_transcript(
-        self,
-        mock_async_result,
-    ):
-        transcript = Transcript.objects.create(
-            name="Ready Transcript",
-            transcript_text="mock transcript",
-            created_by=self.user,
-        )
-        job = BackgroundJob.objects.create(
-            created_by=self.user,
-            task_id=str(uuid.uuid4()),
-            kind=BackgroundJob.Kind.TRANSCRIPTION,
-            label="Transcribe Ready Transcript",
-            related_object_id=transcript.id,
-        )
-
-        class FakeAsyncResult:
-            status = "SUCCESS"
-
-            def successful(self):
-                return True
-
-            def failed(self):
-                return False
-
-        mock_async_result.return_value = FakeAsyncResult()
-
-        response = self.client.get(
-            reverse("transcription:transcription_job_result", args=[job.id])
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "transcription/transcription_job_result.html")
-        self.assertContains(response, "Your transcript is ready.")
-        self.assertContains(
-            response,
-            reverse("transcription:view_transcript", args=[transcript.id]),
-        )
-
-    def test_transcription_job_result_rejects_other_users_job(self):
-        other_user = User.objects.create_user(username="other-job-user", password="pw")
-        job = BackgroundJob.objects.create(
-            created_by=other_user,
-            task_id=str(uuid.uuid4()),
-            kind=BackgroundJob.Kind.TRANSCRIPTION,
-            label="Other user's transcription job",
-        )
-
-        response = self.client.get(
-            reverse("transcription:transcription_job_result", args=[job.id])
-        )
-
-        self.assertEqual(response.status_code, 404)
-
-
 class TranscribeUploadedAudioTaskTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="task-user", password="pw")
@@ -686,6 +576,13 @@ class TranscribeUploadedAudioTaskTests(TestCase):
             kind=BackgroundJob.Kind.TRANSCRIPTION,
             label="Transcribe Task Upload",
         )
+        self.transcript = Transcript.objects.create(
+            name="Task Upload",
+            transcript_text="Transcription in progress...",
+            created_by=self.user,
+        )
+        self.job.related_object_id = self.transcript.id
+        self.job.save(update_fields=["related_object_id"])
 
     @patch("transcription.tasks.TaggingManager")
     @patch("transcription.tasks.process_audio", return_value="mock transcript")
@@ -702,7 +599,7 @@ class TranscribeUploadedAudioTaskTests(TestCase):
         transcript_id = transcribe_uploaded_audio(
             self.job.id,
             "background_uploads/test-upload.mp4",
-            "Task Upload",
+            self.transcript.id,
             [self.topic.id],
         )
 
@@ -737,11 +634,17 @@ class TranscribeUploadedAudioTaskTests(TestCase):
             transcribe_uploaded_audio(
                 self.job.id,
                 "background_uploads/test-upload.mp4",
-                "Task Upload",
+                self.transcript.id,
                 [other_topic.id],
             )
 
-        self.assertFalse(Transcript.objects.filter(name="Task Upload").exists())
+        self.transcript.refresh_from_db()
+        self.assertEqual(self.transcript.transcript_text, "Transcription in progress...")
+        self.job.refresh_from_db()
+        self.assertEqual(
+            self.job.error_message,
+            "The uploaded audio could not be processed. Please try another file or contact support.",
+        )
         mock_storage.delete.assert_called_once_with(
             "background_uploads/test-upload.mp4"
         )
@@ -765,13 +668,18 @@ class TranscribeUploadedAudioTaskTests(TestCase):
             transcribe_uploaded_audio(
                 self.job.id,
                 "background_uploads/test-upload.mp4",
-                "Task Upload",
+                self.transcript.id,
                 [self.topic.id],
             )
 
-        self.assertFalse(Transcript.objects.filter(name="Task Upload").exists())
+        self.transcript.refresh_from_db()
+        self.assertEqual(self.transcript.transcript_text, "mock transcript")
         self.job.refresh_from_db()
-        self.assertIsNone(self.job.related_object_id)
+        self.assertEqual(self.job.related_object_id, self.transcript.id)
+        self.assertEqual(
+            self.job.error_message,
+            "The uploaded audio could not be processed. Please try another file or contact support.",
+        )
         mock_storage.delete.assert_called_once_with(
             "background_uploads/test-upload.mp4"
         )

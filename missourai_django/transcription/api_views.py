@@ -1,15 +1,55 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
+from celery.result import AsyncResult
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from os import environ
 
-from .serializers import TopicSerializer, SummarySerializer, TagSerializer
-from .models import Topic, Summary, Transcript, Tag
+from .serializers import (
+    BackgroundJobSerializer,
+    TopicSerializer,
+    SummarySerializer,
+    TagSerializer,
+)
+from .models import BackgroundJob, Topic, Summary, Transcript, Tag
 from transcription.summary.summary_manager import SummaryManager
 from transcription.tagging.tagging_manager import TaggingManager
 
 summary_manager = SummaryManager(api_key=environ['OPENAI_API_KEY'])
+
+class BackgroundJobViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = BackgroundJobSerializer
+    http_method_names = ["get", "head", "options"]
+
+    def get_queryset(self):
+        queryset = BackgroundJob.objects.filter(
+            created_by=self.request.user
+        ).order_by("-created_at")
+
+        kind = self.request.query_params.get("kind")
+        if kind:
+            queryset = queryset.filter(kind=kind)
+
+        related_object_id = self.request.query_params.get("related_object_id")
+        if related_object_id:
+            queryset = queryset.filter(related_object_id=related_object_id)
+
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = list(self.filter_queryset(self.get_queryset())[:25])
+
+        active = request.query_params.get("active")
+        if active is not None:
+            wants_active = active.lower() in {"1", "true", "yes"}
+            queryset = [
+                job
+                for job in queryset
+                if AsyncResult(job.task_id).ready() is not wants_active
+            ]
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 class TopicViewSet(viewsets.ModelViewSet):
     queryset = Topic.objects.all()

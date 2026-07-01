@@ -1,5 +1,4 @@
 {% extends "transcription/base.html" %}
-{% load static %}
 
 {% block title %}Add Result - missour.ai{% endblock %}
 
@@ -21,15 +20,5 @@
         <p>{{ task.result }}</p>
     {% else %}
         <p>The task is still running.</p>
-        <div
-            data-celery-task-status
-            data-status-url="{{ task_status_url }}"
-            data-success-message="The add task is complete. Reload the page to see the result."
-            data-failure-message="The add task failed. Reload the page to see the failure details."
-        ></div>
     {% endif %}
-{% endblock %}
-
-{% block extra_scripts %}
-    <script src="{% static 'transcription/js/celery-task-status.js' %}"></script>
 {% endblock %}

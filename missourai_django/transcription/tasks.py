@@ -13,6 +13,9 @@ import os
 import time
 
 logger = logging.getLogger(__name__)
+GENERIC_TRANSCRIPTION_ERROR = (
+    "The uploaded audio could not be processed. Please try another file or contact support."
+)
 
 
 @shared_task
@@ -39,9 +42,10 @@ def process_audio(file_path: str) -> str:
 
 
 @shared_task
-def transcribe_uploaded_audio(job_id, upload_storage_name, transcript_name, topic_ids):
+def transcribe_uploaded_audio(job_id, upload_storage_name, transcript_id, topic_ids):
     job = BackgroundJob.objects.select_related("created_by").get(id=job_id)
     user = job.created_by
+    transcript = Transcript.objects.get(id=transcript_id, created_by=user)
 
     try:
         upload_path = default_storage.path(upload_storage_name)
@@ -56,27 +60,25 @@ def transcribe_uploaded_audio(job_id, upload_storage_name, transcript_name, topi
         if len(selected_topics) != len(topic_ids):
             raise ValueError("One or more selected topics could not be found.")
 
-        transcript = Transcript.objects.create(
-            name=transcript_name,
-            transcript_text=transcript_text,
-            created_by=user,
-        )
+        transcript.transcript_text = transcript_text
+        transcript.save(update_fields=["transcript_text"])
 
-        try:
-            if selected_topics:
-                tagging_manager = TaggingManager(
-                    api_key=os.getenv("OPENAI_API_KEY"),
-                    transcript=transcript,
-                    topics=selected_topics,
-                )
-                tagging_manager.tag_transcript()
-        except Exception:
-            transcript.delete()
-            raise
+        if selected_topics:
+            tagging_manager = TaggingManager(
+                api_key=os.getenv("OPENAI_API_KEY"),
+                transcript=transcript,
+                topics=selected_topics,
+            )
+            tagging_manager.tag_transcript()
 
-        job.related_object_id = transcript.id
-        job.save(update_fields=["related_object_id"])
+        job.error_message = ""
+        job.save(update_fields=["error_message"])
         return transcript.id
+    except Exception:
+        logger.exception("Transcription background job failed job_id=%s", job_id)
+        job.error_message = GENERIC_TRANSCRIPTION_ERROR
+        job.save(update_fields=["error_message"])
+        raise
     finally:
         if default_storage.exists(upload_storage_name):
             default_storage.delete(upload_storage_name)
