@@ -104,7 +104,13 @@ function BackgroundJobNotifications() {
 
                 const jobs = await response.json();
                 if (!cancelled) {
-                    jobs.forEach(showJobNotification);
+                    jobs.forEach((job) => {
+                        try {
+                            showJobNotification(job);
+                        } catch (error) {
+                            console.error("Could not show background job notification", error, job);
+                        }
+                    });
                 }
             } finally {
                 isPolling.current = false;
@@ -114,7 +120,7 @@ function BackgroundJobNotifications() {
             }
         }
 
-        poll();
+        timeoutId = window.setTimeout(poll, 250);
 
         return () => {
             cancelled = true;
@@ -124,7 +130,7 @@ function BackgroundJobNotifications() {
 
     return (
         <MantineProvider>
-            <Notifications position="top-right" />
+            <Notifications position="top-right" mt={80} />
         </MantineProvider>
     );
 }
