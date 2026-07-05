@@ -5,7 +5,6 @@ from django.conf import settings
 # Create your models here.
 class BackgroundJob(models.Model):
     class Kind(models.TextChoices):
-        ADD_DEMO = "add_demo", "Add demo"
         TRANSCRIPTION = "transcription", "Transcription"
         TAGGING = "tagging", "Tagging"
         SUMMARY = "summary", "Summary"

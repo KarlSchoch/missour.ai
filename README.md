@@ -202,138 +202,62 @@ The rationale for this is that we need to not only succinctly provide developers
 ###### Step 1. Define Task
 For any long running tasks that are naturally grouped together like transcribing an audio file, developers should first go into [`tasks.py`](./missourai_django/transcription/tasks.py) and write the logic for that task as if you were in a view.
 
-The key nuance to note here is the `@shared_task` decorator that you should use instead of the `@app.task` decorator.  The `@shared_task` decorator allows for greater 
+The key nuance to note here is the `@shared_task` decorator that you should use instead of the `@app.task` decorator.  The `@shared_task` decorator allows for greater import flexibility when compared to `@app.task`, and while that does not currently matter since we are only using the `transcription` application within our larger `missourai_django` project, it provides more flexibility going forward in case we want to use some of these tasks within another application.
 
 ###### Step 2. Decide on User Routing
+This is important to consider because it has implications on when to create the database object that your Celery task interacts with.
+
+If you are planning on sending a user to a generic page that is independent of the DB object the task is operating on (e.g. you want to send them to `/transcripts` while the job completes), you can create the database object within the Celery Task.
+
+If instead, you want to send them to a page related to the database object the task is geenrating (e.g. you want to send them to the `view_transcripts` page for the Transcript that the Celery task is creating), then you will need to create the transcript object PRIOR TO running the Celery Task and likely add placeholder value(s).  You can see an example of how this is implemented and how it provides necessary information to the next two steps (Creating the `BackgroundJob` instance and Invoking the Task) within the [`upload_audio` view from `views.py`](./missourai_django/transcription/views.py).
+
+```python
+transcript = Transcript.objects.create(
+      name=name,
+      transcript_text=TRANSCRIPTION_PENDING_TEXT,
+      created_by=request.user,
+)
+task_id = celery_uuid()
+job = BackgroundJob.objects.create(
+      created_by=request.user,
+      task_id=task_id,
+      kind=BackgroundJob.Kind.TRANSCRIPTION,
+      label=f"Transcribe {name}",
+      related_object_id=transcript.id,
+)
+
+transcribe_uploaded_audio.apply_async(
+      args=[
+         job.id,
+         upload_storage_name,
+         transcript.id,
+         [topic.id for topic in selected_topics],
+      ],
+      task_id=task_id,
+)
+```
 
 ###### Step 3. Create BackgroundJob Instance
+Still within [`views.py`](./missourai_django/transcription/views.py), create an instance of the `BackgroundJob` model that will hold the relevant information about a job.
 
-###### Step 3. Invoke Task
+One important consideration for the `BackgroundJob` instance is that since it is the expected location to store error data within your application, even though you are creating the instance of the model within `views.py`, you should ensure to store any error data from a failed job within the `tasks.py` file's task definition.
 
-###### Step 4. Route User
+###### Step 4. Invoke Task
+Now you can invoke the task, which we recommend doing with `.apply_async()` as opposed to `.delay()`.  The reason for this is because we are using `BackgroundJob`'s `task_id` attribute to look up the status of the Celery Task from the `CELERY_RESULT_BACKEND` (see `BackgroundJobViewSet.list()`'s call to `AsyncResult()` within [`api_views.py`](./missourai_django/transcription/api_views.py)), and `.apply_async()` provides us the ability to specify a `task_id` for when the job is enqued that is not available within `.delay()`.  This allows us to ensure that the services have a common identifier that they can use to communicate.
+
+###### Step 5. Route User
 
 
 ##### Operational
+(Complete the mermaid diagram)
 1. Define Task
 
 2. Invoke Task
 
 #### Error Visibility
+Currently, we provide some feedback on errors within the `BackgroundJob` model through its `error_message` attribute.
 
-
-
-### Celery Page Pattern
-The add demo at `/transcription/add/` is a small reference implementation for moving long-running work out of a request/response cycle. It uses the `add` task in `missourai_django/transcription/tasks.py`, but the same shape applies to transcription, tagging, summary generation, or other expensive jobs.
-
-The reusable app-level object is `BackgroundJob`, not the raw Celery task id. `BackgroundJob` stores the current user, Celery `task_id`, job kind, display label, and optional related object id. That gives Django a normal model to authorize against while Celery remains the worker system behind the scenes.
-
-**Conceptual flow**
-1. A user submits a Django form.
-2. The sending view validates the form and calls `task = some_task.delay(...)`.
-3. Celery publishes the task message to the broker. In this project, the broker is RabbitMQ.
-4. Django creates a `BackgroundJob` record with the current user and the Celery `task.id`.
-5. Django redirects the browser to a result page with the `BackgroundJob` id in the URL.
-6. A Celery worker processes the queued task outside the web request.
-7. Celery writes task status and the return value to the configured result backend. In this project, that backend is the Django database through `django_celery_results`.
-8. The result view loads the `BackgroundJob` for the current user, rebuilds a Celery result handle with `AsyncResult(job.task_id)`, and renders status/result information.
-9. If the job is still running, the result template opts into the shared polling script with a `data-celery-task-status` element.
-10. The browser polls the generic task-status endpoint until the task is ready, then prompts the user to reload the page.
-
-The important handoff is from Celery task id to an app-owned `BackgroundJob`:
-
-```python
-# Sending view
-task = add.delay(x, y)
-job = BackgroundJob.objects.create(
-    created_by=request.user,
-    task_id=task.id,
-    kind=BackgroundJob.Kind.ADD_DEMO,
-    label=f"Add {x} + {y}",
-)
-return redirect("transcription:add_task_result", job_id=job.id)
-```
-
-The result view authorizes against `BackgroundJob` before inspecting Celery:
-
-```python
-# Receiving/result view
-job = get_object_or_404(
-    BackgroundJob,
-    id=job_id,
-    created_by=request.user,
-)
-task = AsyncResult(job.task_id)
-return render(
-    request,
-    "transcription/add_task_result.html",
-    {
-        "job": job,
-        "task": task,
-        "task_status_url": reverse(
-            "transcription:celery_task_status",
-            args=[job.task_id],
-        ),
-    },
-)
-```
-
-The generic task-status endpoint is intentionally reusable:
-
-```python
-path(
-    "celery/tasks/<uuid:task_id>/status/",
-    views.celery_task_status,
-    name="celery_task_status",
-)
-```
-
-Even though the endpoint accepts a Celery task id, it first verifies ownership through `BackgroundJob`:
-
-```python
-get_object_or_404(
-    BackgroundJob,
-    task_id=str(task_id),
-    created_by=request.user,
-)
-task = AsyncResult(str(task_id))
-```
-
-Templates opt into polling with a small `data-*` hook:
-
-```django
-<div
-    data-celery-task-status
-    data-status-url="{{ task_status_url }}"
-    data-success-message="The add task is complete. Reload the page to see the result."
-    data-failure-message="The add task failed. Reload the page to see the failure details."
-></div>
-```
-
-The shared static script at `missourai_django/transcription/static/transcription/js/celery-task-status.js` scans for `[data-celery-task-status]`, polls the configured status URL, and inserts a reload prompt when the task finishes. The template only needs to load it:
-
-```django
-{% load static %}
-
-{% block extra_scripts %}
-    <script src="{% static 'transcription/js/celery-task-status.js' %}"></script>
-{% endblock %}
-```
-
-The broker and result backend solve different problems:
-
-- **Broker:** accepts queued work from Django and delivers it to a Celery worker.
-- **Result backend:** stores task state and return values so a later page request can inspect the outcome.
-
-To expand this pattern for a new long-running task:
-
-1. Add a new Celery task in `tasks.py`.
-2. Add a `BackgroundJob.Kind` value for that job type.
-3. In the submitting view, call `your_task.delay(...)`, create a `BackgroundJob`, and redirect to a result page with `job.id`.
-4. In the result view, load `BackgroundJob` with `created_by=request.user`, then call `AsyncResult(job.task_id)`.
-5. In the result template, include the `data-celery-task-status` element and load `celery-task-status.js`.
-6. Keep task-specific display logic in the result template and keep polling behavior in the shared script.
-
-To run this pattern locally, the Django app, RabbitMQ, and a Celery worker must all be running, and both the local app migrations and `django_celery_results` migrations must have been applied.
+An important future improvement, however, is to provide 
 
 ### Nginx + Certbot
 - The production compose file includes Nginx and Certbot containers with shared volumes for `/etc/letsencrypt` and the webroot challenge.
