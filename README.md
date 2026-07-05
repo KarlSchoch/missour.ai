@@ -149,14 +149,14 @@ flowchart TB
       subgraph tasks["tasks.py"]
          some_long_running_task["some_long_running_task"]
       end
-      views-.-|"import task"|-.->some_long_running_task
+      some_long_running_task-.|"import"|.->views
    end
    RabbitMQ
    some_long_running_task_apply_async--|"Sends message"|-->RabbitMQ
    CeleryWorker["Celery Worker"]
    subgraph Database
       celery_results_tables["Celery Results Tables"]
-      application_data_tables["Application Data Tables"]
+      application_data_tables[""]
    end
    CeleryWorker-->celery_results_tables
    CeleryWorker-->application_data_tables
@@ -164,12 +164,12 @@ flowchart TB
 
 #### Core Components
 ##### RabbitMQ
-RabbitMQ functions as the intermediary between your Django backend and the Celery workers.
+RabbitMQ functions as the intermediary between your Django backend and the celery workers.
 
-Django transparently integrates RabbitMQ and Celery for developers (e.g. you don't need to explicitly send tasks to RabbitMQ from the Django backend), but know that when you call `some_celery_task.apply_async()` (see `transcribe_uploaded_audio.apply_async()` within `views.py::upload_audio` for an illustration), _Celery is sending a message from your backend to RabbitMQ that there is a task for the Celery workers to perform._
+Django transparently integrates RabbitMQ and Celery for developers (e.g. you don't need to explicity send tasks to RabbitMQ from the Django backend), but know that when you call `some_celery_task.apply_async()` (see `transcribe_uploaded_audio.apply_async()` within `views.py::upload_audio` for an illustration), _Celery is sending a message from your backend to RabbitMQ that there is a task for the Celery Workers to perform._
 
 ##### Celery Workers
-The Celery workers consume queued task messages from RabbitMQ and perform the work laid out in the task defined in [`tasks.py`](./missourai_django/transcription/tasks.py).  In order to do this for transcription jobs, the Celery worker and the backend have **shared storage volumes**.
+The Celery Workers constantly monitor RabbitMQ and, once they receive a message that the backend has assigned them work, they perform the work laid out in the task defined in [`tasks.py`](./missourai_django/transcription/tasks.py).  In order to do this, the Celery worker and the backend have **shared storage volumes**
 
 ##### Shared Storage Volumes
 As you can see in both the [`docker-compose.dev.yml`](./docker-compose.dev.yml) and [`docker-compose.yml`](./docker-compose.yml), the `celery-worker` and `web` services share the same `volumes` configuration
@@ -180,16 +180,16 @@ volumes:
    - ./missourai_django/media:/app/missourai_django/media
 ```
 
-The `media` portion of the shared volume is used to share large files that are uploaded to the backend and that a Celery worker needs to be able to access in order to finish its task.  We do this because sending large data files from the backend to RabbitMQ, persisting them on RabbitMQ, and then moving them onto the Celery worker would be untenable for a number of reasons.  
+The `media` portion of the shared volume is used to share large files that are downloaded to the backend that a celery worker needs to be able to access in order to finish its task .  We do this because sending large data files from the backend to RabbitMQ, persisting them on RabbitMQ, and then moving them onto the Celery Worker would be untenable for a number of reasons.  
 
-The `db.sqlite3` portion is used so that the Celery worker has access to the application's database.  That matters for two related but separate reasons: the worker writes application data through Django models (e.g. placing the transcribed text within a `Transcript` object), and Celery writes task metadata/results to the same database because `CELERY_RESULT_BACKEND` is set to `django-db` within [`settings.py`](./missourai_django/missourai_web_app/settings.py).
+-The `db.sqlite3` portion is used so that the Celery worker has access to the application's database.  That matters for two related but separate reasons: the worker writes application data through Django models (e.g. placing the transcribed text within a `Transcript` object), and Celery writes task metadata/results to the same database because `CELERY_RESULT_BACKEND` is set to `django-db` within [`settings.py`](./missourai_django/missourai_web_app/settings.py). 
 
 
 ##### BackgroundJob Model
 The [`BackgroundJob` model](./missourai_django/transcription/models.py) acts as the connective tissue within the application's DataModel to link Celery Tasks to the actual application object that they create (e.g. Transcripts) and provide useful information for debugging why tasks failed or allowing portions of the application (e.g. the frontend's notifications capability) to check on the status of a given task.
 
 ##### Notifications
-Users are provided with Mantine UI toast notifications when background jobs are queued/running, succeed, or fail (see [`background-job-notifications.jsx`](./frontend/src/background-job-notifications.jsx)).  These notifications query the `BackgroundJob` records discussed above through the `api:backgroundjob-list` URL, which is exposed by a **read-only** `BackgroundJobViewSet` defined in [`api_views.py`](./missourai_django/transcription/api_views.py).  The serializer then uses each stored Celery `task_id` to report the current Celery status.
+Users are provided with Mantine UI toast notifcations when background jobs are started, succeed, or fail (see [`background-job-notifications.jsx`](./frontend/src/background-job-notifications.jsx)).  These notifications query the `BackgroundJob` model which we discussed above through the `api:backgroundjob-list` url, exposing a **Read Only** `BackgroundJobViewSet` defined in [`api_views.py`](./missourai_django/transcription/api_views.py) 
 
 In order to ensure that notifications are visible across the entire application (i.e. a user can receive a notification that their audio file has been transcribed while looking at the summaries for another transcript), the `BackgroundJobNotifications` component is mounted within the [`base.html` template](./missourai_django/transcription/templates/transcription/base.html) that acts as the parent for all other Django templates, custom JavaScript, etc.  If you were to put it *lower* within the tree, you would have to remount the `BackgroundJobNotifications` component everywhere that you want it to be visible.
 
@@ -200,6 +200,9 @@ The rationale for this is that we need to not only succinctly provide developers
 
 ##### Development
 ###### Step 1. Define Task
+For any long running tasks that are naturally grouped together like transcribing an audio file, developers should first go into [`tasks.py`](./missourai_django/transcription/tasks.py) and write the logic for that task as if you were in a view.
+
+The key nuance to note here is the `@shared_task` decorator that you should use instead of the `@app.task` decorator.  The `@shared_task` decorator allows for greater 
 
 ###### Step 2. Decide on User Routing
 
