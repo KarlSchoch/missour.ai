@@ -124,6 +124,71 @@ The web application combines a Django backend that exposes APIs and serves the H
 - **Model Environment**: Since this project relies upon calls to external APIs, we have created the infrastructure to bypass these calls and thus incur inference costs.  To do this, we have created `Manager` Classes that encompass the various AI functionalities (currently only a [`TranscriptionManager`](/missourai_django/transcription/transcription_utils/transcription_manager.py) and  [`TaggingManager`](/missourai_django/transcription/tagging/tagging_manager.py), possibly more capabilities eventually).  This allows us to centralize any AI calls within one location within the code base, thus simplifying maintenance and mocking.  While building out initial capabilities, set the `MODEL_ENV` variable within your `.env` file to `dev` to take advantage of mocked responses.  When you want to do more integration-testing and ensure that your code works well with the model and eventually put the application into production, you can set the `MODEL_ENV` variable to `test` or `prod`
 - **Celery separates long-running work from page requests.** Django queues work through RabbitMQ using `CELERY_BROKER_URL`, and Celery stores task state/results in the Django database because `CELERY_RESULT_BACKEND = "django-db"` and `django_celery_results` is installed.
 
+### Long Running Tasks
+This application has a number of long running tasks, most notably transcribing an audio file.  In order for this to not impact the performance of the application that users experience, we have begun to work on moving those tasks out of Django's Request/Response cycle and into Celery.  This section of the documentation provides an overview of the process and should serve as guidance for transitioning long-running tasks within the application into Celery going forward (currently only the **Upload Audio**/**Transcription Manager** utilizes Celery)
+
+```mermaid
+Flowchart TB
+   subgraph frontend
+      some_component["some_component"]
+      subgraph base_html["base.html"]
+         background_job_notifications['src/background-job-notifications.jsx']
+         background_job_notifications-->backgroundjob_list
+      end
+   end
+   some_component-->some_view
+   subgraph backend
+      subgraph apis
+         backgroundjob_list["api:backgroundjob-list"]
+      end
+      subgraph views["views.py"]
+         subgraph some_view["some_view(request)"]
+            some_long_running_task_apply_async["some_long_running_task.apply_async()"]
+         end
+      end
+      subgraph tasks["tasks.py"]
+         some_long_running_task["some_long_running_task"]
+      end
+      some_long_running_task-.-|"import"|-.->views
+   end
+   RabbitMQ
+   some_long_running_task_apply_async--|"Sends message"|-->RabbitMQ
+   CeleryWorker["Celery Worker"]
+   subgraph Database
+      celery_results_tables["Celery Results Tables"]
+      application_data_tables[""]
+   end
+   CeleryWorker-->celery_results_tables
+   CeleryWorker-->application_data_tables
+```
+
+#### Core Components
+##### RabbitMQ
+RabbitMQ functions as the intermediary between your Django backend and the celery workers.
+
+Django transparently integrates RabbitMQ and Celery for developers (e.g. you don't need to explicity send tasks to RabbitMQ from the Django backend), but know that when you call `some_celery_task.apply_async()` (see `transcribe_uploaded_audio.apply_async()` within `views.py::upload_audio` for an illustration), _Celery is sending a message from your backend to RabbitMQ that there is a task for the Celery Workers to perform._
+
+##### Celery Workers
+The Celery Workers constantly monitor RabbitMQ and, once they receive a message that the backend has assigned them work, they perform the work laid out in the task defined in [`tasks.py`](./missourai_django/transcription/tasks.py).  In order to do this, the Celery worker and the backend have **shared storage volumes**
+
+##### Shared Storage Volumes
+As you can see in both the [`docker-compose.dev.yml`](./docker-compose.dev.yml) and [`docker-compose.yml`](./docker-compose.yml), the `celery-worker` and `web` services share the same `volumes` configuration
+
+```yml
+volumes:
+   - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
+   - ./missourai_django/media:/app/missourai_django/media
+```
+
+The `media` portion of the shared volume is used to share large files that are downloaded to the backend that a celery worker needs to be able to access in order to finish its task.  The `db.sqlite3` portion
+
+#### Development Process
+1. Define Task
+
+2. Invoke Task
+
+#### Error Visibility
+
 ### Celery Page Pattern
 The add demo at `/transcription/add/` is a small reference implementation for moving long-running work out of a request/response cycle. It uses the `add` task in `missourai_django/transcription/tasks.py`, but the same shape applies to transcription, tagging, summary generation, or other expensive jobs.
 
