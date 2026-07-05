@@ -128,7 +128,7 @@ The web application combines a Django backend that exposes APIs and serves the H
 This application has a number of long running tasks, most notably transcribing an audio file.  In order for this to not impact the performance of the application that users experience, we have begun to work on moving those tasks out of Django's Request/Response cycle and into Celery.  This section of the documentation provides an overview of the process and should serve as guidance for transitioning long-running tasks within the application into Celery going forward (currently only the **Upload Audio**/**Transcription Manager** utilizes Celery)
 
 ```mermaid
-Flowchart TB
+flowchart TB
    subgraph frontend
       some_component["some_component"]
       subgraph base_html["base.html"]
@@ -180,7 +180,13 @@ volumes:
    - ./missourai_django/media:/app/missourai_django/media
 ```
 
-The `media` portion of the shared volume is used to share large files that are downloaded to the backend that a celery worker needs to be able to access in order to finish its task.  The `db.sqlite3` portion
+The `media` portion of the shared volume is used to share large files that are downloaded to the backend that a celery worker needs to be able to access in order to finish its task .  We do this because sending large data files from the backend to RabbitMQ, persisting them on RabbitMQ, and then moving them onto the Celery Worker would be untenable for a number of reasons.  
+
+The `db.sqlite3` portion is used so that the Celery Worker has access to the application's database to store **BOTH** Celery task metadata and application data (e.g. placing the text for an audio file that it transcribed within a `Transcript` object).  This "two for one" behavior where we have access to both of these types of data within a single database occurs because `CELERY_RESULT_BACKEND` is set to `django-db` within [`settings.py`](./missourai_django/missourai_web_app/settings.py). 
+
+
+##### BackgroundJob Model
+The `BackgroundJob` model acts as the connective tissue within the application's DataModel to link Celery Tasks to the actual application object that they create (e.g. Transcripts) and provide useful information for debugging why tasks failed or allowing portions of the application (e.g. the frontend's notifications capability) to check on the status of a given task.
 
 #### Development Process
 1. Define Task

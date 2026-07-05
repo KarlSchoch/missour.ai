@@ -18,12 +18,6 @@ GENERIC_TRANSCRIPTION_ERROR = (
 )
 
 
-@shared_task
-def add(x, y):
-    time.sleep(5)
-    return x + y
-
-
 def process_audio(file_path: str) -> str:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
