@@ -22,7 +22,7 @@ The web application combines a Django backend that exposes APIs and serves the H
 1) Clone the repo on the server:
    - `git clone https://github.com/KarlSchoch/missour.ai.git`
    - `cd missour.ai`
-2) On a new Ubuntu 24.04 LTS server, run the setup script.  This will install Netdata to provide logging and monitoring, and please reference the [Logging and Monitoring section of the README](#logging) for information on how to properly configure Netdata. 
+2) On a new Ubuntu 24.04 LTS server, run the setup script. This installs Docker, Netdata, basic-auth tooling, and UFW firewall rules. Reference the [Logging and Monitoring section of the README](#logging) for Netdata access and security details.
    - `chmod +x server-setup.sh`
    - `sudo ./server-setup.sh`
 3) Copy data from the old droplet to the new one (two options):
@@ -496,6 +496,117 @@ Sometimes, you may need to integrate a react component within an existing Django
 #### User Data Isolation
 
 ### Logging
+
+The production server uses host-installed Netdata for server and container
+monitoring. Netdata is intentionally separate from the Django application:
+Django stores application/job metrics in its database, while Netdata stores
+host-level CPU, memory, disk, network, process, and container telemetry in
+Netdata's own metrics database.
+
+#### Netdata Installation
+
+On a new Ubuntu server, run:
+
+```bash
+sudo ./server-setup.sh
+```
+
+The setup script installs:
+
+- Docker Engine and the Compose v2 plugin
+- Netdata Agent
+- `apache2-utils` for Nginx basic-auth password files
+- `ufw` for host firewall rules
+
+The script also adds the `netdata` user to the `docker` group when both exist
+so Netdata can read Docker/container metrics from the host. Membership in the
+`docker` group is privileged, so treat Netdata as a trusted host service.
+
+Netdata retention uses the Netdata defaults. No custom retention setting is
+applied by this project.
+
+#### Netdata Access
+
+Netdata runs on the droplet host and listens on port `19999`. The public entry
+point is through the production Nginx container:
+
+```text
+https://missour.ai/netdata/
+```
+
+The production `nginx` service includes:
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+This lets containerized Nginx proxy to Netdata on the host through:
+
+```nginx
+proxy_pass http://host.docker.internal:19999/;
+```
+
+Do not proxy Netdata to `127.0.0.1:19999` from the Nginx container. Inside the
+container, `127.0.0.1` refers to the container itself, not the droplet host.
+
+#### Netdata Basic Auth
+
+Nginx protects `/netdata/` with basic auth using:
+
+```text
+/etc/nginx/.htpasswd
+```
+
+`server-setup.sh` creates this file if it does not exist. To set explicit
+credentials during setup:
+
+```bash
+sudo NETDATA_AUTH_USER=your-user NETDATA_AUTH_PASSWORD='your-password' ./server-setup.sh
+```
+
+If those environment variables are omitted, the script creates a `netdata` user
+with a generated password and writes the generated credentials to:
+
+```text
+/root/netdata-basic-auth.txt
+```
+
+To rotate the password later:
+
+```bash
+sudo htpasswd -bc /etc/nginx/.htpasswd netdata 'new-password'
+docker compose restart nginx
+```
+
+#### Firewall
+
+`server-setup.sh` enables UFW with this public access model:
+
+- allow SSH/OpenSSH
+- allow HTTP on `80/tcp`
+- allow HTTPS on `443/tcp`
+- allow Docker bridge addresses to reach Netdata on `19999/tcp`
+- deny public access to `19999/tcp`
+
+This keeps Netdata reachable through Nginx at `/netdata/` while avoiding direct
+public access to `http://server-ip:19999`.
+
+Before enabling firewall changes manually, stop one-off diagnostic listeners
+such as `iperf3` unless you intentionally want to allow their ports.
+
+#### Experiment Correlation
+
+Use Django's transcription metric tables for application-level timing:
+
+- `TranscriptionJobMetric.started_at`
+- `TranscriptionJobMetric.finished_at`
+- `TranscriptionChunkMetric.ffmpeg_duration_sec`
+- `TranscriptionChunkMetric.openai_duration_sec`
+
+Then inspect the same time window in Netdata to understand host pressure during
+that job: CPU, memory, disk I/O, network throughput, process count, and Docker
+container usage.
 
 
 ## ML Environment

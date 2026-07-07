@@ -63,12 +63,15 @@ services:
     image: nginx:1.27-alpine
     depends_on:
       - web
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/nginx-entrypoint.sh:/docker/nginx-entrypoint.sh:ro
+      - /etc/nginx/.htpasswd:/etc/nginx/.htpasswd:ro
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/www/certbot
     command: ["/bin/sh", "/docker/nginx-entrypoint.sh"]
