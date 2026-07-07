@@ -9,9 +9,9 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
-from .forms import AddNumbersForm, TranscriptForm
+from .forms import TranscriptForm
 from .models import BackgroundJob, Transcript, Topic
-from .tasks import add, transcribe_uploaded_audio
+from .tasks import transcribe_uploaded_audio
 from .tagging.tagging_manager import TaggingManager
 
 import os

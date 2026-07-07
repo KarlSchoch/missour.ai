@@ -22,7 +22,7 @@ The web application combines a Django backend that exposes APIs and serves the H
 1) Clone the repo on the server:
    - `git clone https://github.com/KarlSchoch/missour.ai.git`
    - `cd missour.ai`
-2) On a new Ubuntu 24.04 LTS server, run the setup script:
+2) On a new Ubuntu 24.04 LTS server, run the setup script.  This will install Netdata to provide logging and monitoring, and please reference the [Logging and Monitoring section of the README](#logging) for information on how to properly configure Netdata. 
    - `chmod +x server-setup.sh`
    - `sudo ./server-setup.sh`
 3) Copy data from the old droplet to the new one (two options):
@@ -492,6 +492,11 @@ Sometimes, you may need to integrate a react component within an existing Django
 #### Authentication
 - Django Pages/Views:
 - Django REST Framework: Requiring Login is set as the default behavior within [setting.py](./missourai_django/missourai_web_app/settings.py) (reference the `REST_FRAMEWORK.DEFAULT_PERMISSIONS_CLASSES` setting).
+
+#### User Data Isolation
+
+### Logging
+
 
 ## ML Environment
 To use the ML Experiments environment, do the following
