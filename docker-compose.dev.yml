@@ -13,6 +13,7 @@ services:
       DJANGO_VITE_DEV: "true"
       DEBUG: "True"
       MODEL_ENV: "dev"
+      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 2
     volumes:
       - .:/app
       - venv:/app/.venv
@@ -42,6 +43,7 @@ services:
     environment:
       DEBUG: "True"
       MODEL_ENV: "dev"
+      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 2
     volumes:
       - .:/app
       - venv:/app/.venv

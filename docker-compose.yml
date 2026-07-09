@@ -11,6 +11,7 @@ services:
       DJANGO_VITE_DEV: "false"
       MODEL_ENV: "prod"
       DEBUG: "False"
+      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 4
     expose:
       - "8000"
     volumes:
@@ -39,6 +40,7 @@ services:
       DJANGO_VITE_DEV: "false"
       DEBUG: "False"
       MODEL_ENV: "prod"
+      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 4
     volumes:
       - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
       - ./missourai_django/media:/app/missourai_django/media

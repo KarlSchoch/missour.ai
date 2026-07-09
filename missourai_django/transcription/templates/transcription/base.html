@@ -55,16 +55,6 @@
     </header>
 
     <main class="content-offset">
-        {% if messages %}
-            <ul class="messages">
-                {% for message in messages %}
-                    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>
-                        {{ message }}
-                    </li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-
         {% block content %}{% endblock %}
     </main>
 
@@ -73,8 +63,6 @@
     </footer>
     {% if user.is_authenticated %}
         <div id="background-job-notifications-root"></div>
-        {{ request.resolver_match.namespace|json_script:"background-job-notifications-current-namespace" }}
-        {{ request.resolver_match.url_name|json_script:"background-job-notifications-current-url-name" }}
         <script id="background-job-notifications-config" type="application/json">
             {
                 "apiUrl": "{% url 'api:backgroundjob-list' %}"
