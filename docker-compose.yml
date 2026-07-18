@@ -1,4 +1,11 @@
 version: "3.9"
+
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: "50m"
+    max-file: "10"
+
 services:
   web:
     build:
@@ -12,11 +19,14 @@ services:
       MODEL_ENV: "prod"
       DEBUG: "False"
       TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 4
+      DJANGO_LOG_DIR: "/var/log/missourai"
     expose:
       - "8000"
     volumes:
       - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
       - ./missourai_django/media:/app/missourai_django/media
+      - ./logs/web:/var/log/missourai
+    logging: *default-logging
 
   celery-worker:
     build:
@@ -41,9 +51,12 @@ services:
       DEBUG: "False"
       MODEL_ENV: "prod"
       TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 4
+      DJANGO_LOG_DIR: "/var/log/missourai"
     volumes:
       - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
       - ./missourai_django/media:/app/missourai_django/media
+      - ./logs/celery:/var/log/missourai
+    logging: *default-logging
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -76,7 +89,9 @@ services:
       - /etc/nginx/.htpasswd:/etc/nginx/.htpasswd:ro
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/www/certbot
+      - ./logs/nginx:/var/log/nginx
     command: ["/bin/sh", "/docker/nginx-entrypoint.sh"]
+    logging: *default-logging
 
   certbot:
     image: certbot/certbot:latest
@@ -84,7 +99,9 @@ services:
       - ./docker/certbot-renew.sh:/docker/certbot-renew.sh:ro
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/www/certbot
+      - ./logs/certbot:/var/log/letsencrypt
     command: ["/bin/sh", "/docker/certbot-renew.sh"]
+    logging: *default-logging
 
 volumes:
   certbot-etc:

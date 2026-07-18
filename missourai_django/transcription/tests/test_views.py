@@ -11,7 +11,14 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.conf import settings
 
-from transcription.models import BackgroundJob, Chunk, Tag, Topic, Transcript
+from transcription.models import (
+    BackgroundJob,
+    Chunk,
+    Tag,
+    Topic,
+    Transcript,
+    TranscriptionJobMetric,
+)
 from transcription.tasks import transcribe_uploaded_audio
 from transcription.views import _save_upload_for_background_job
 
@@ -596,4 +603,34 @@ class TranscribeUploadedAudioTaskTests(TestCase):
         )
         mock_storage.delete.assert_called_once_with(
             "background_uploads/test-upload.mp4"
+        )
+
+    @patch(
+        "transcription.tasks.process_audio",
+        side_effect=ValueError("OPENAI_API_KEY environment variable not set."),
+    )
+    @patch("transcription.tasks.default_storage")
+    def test_task_finalizes_running_metric_when_setup_fails(
+        self,
+        mock_storage,
+        _mock_process_audio,
+    ):
+        mock_storage.path.return_value = "stored-upload.mp4"
+        mock_storage.exists.return_value = True
+
+        with self.assertRaises(ValueError):
+            transcribe_uploaded_audio(
+                self.job.id,
+                "background_uploads/test-upload.mp4",
+                self.transcript.id,
+                [],
+            )
+
+        metric = TranscriptionJobMetric.objects.get(background_job=self.job)
+        self.assertEqual(metric.status, TranscriptionJobMetric.Status.FAILED)
+        self.assertIsNotNone(metric.finished_at)
+        self.assertEqual(metric.error_type, "ValueError")
+        self.assertEqual(
+            metric.error_message,
+            "OPENAI_API_KEY environment variable not set.",
         )

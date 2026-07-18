@@ -68,24 +68,6 @@ def finish_transcription_job_metric(
         ]
     )
 
-    logger.info(
-        "transcription_job_completed",
-        extra={
-            "job_metric_id": job_metric.id,
-            "background_job_id": job_metric.background_job_id,
-            "transcript_id": job_metric.transcript_id,
-            "file_size_bytes": job_metric.file_size_bytes,
-            "audio_duration_sec": job_metric.audio_duration_sec,
-            "normalized_duration_sec": job_metric.normalized_duration_sec,
-            "chunk_count": job_metric.chunk_count,
-            "max_concurrent_chunks": job_metric.max_concurrent_chunks,
-            "model_name": job_metric.model_name,
-            "total_duration_sec": total_duration_sec,
-            "status": status,
-        },
-    )
-
-
 def get_upload_file_size(upload_path: str) -> int | None:
     try:
         return os.path.getsize(upload_path)
@@ -152,6 +134,8 @@ def transcribe_uploaded_audio(job_id, upload_storage_name, transcript_id, topic_
     job = BackgroundJob.objects.select_related("created_by").get(id=job_id)
     user = job.created_by
     transcript = Transcript.objects.get(id=transcript_id, created_by=user)
+    job_metric = None
+    task_started_at = time.perf_counter()
 
     try:
         upload_path = default_storage.path(upload_storage_name)
@@ -192,7 +176,17 @@ def transcribe_uploaded_audio(job_id, upload_storage_name, transcript_id, topic_
         job.error_message = ""
         job.save(update_fields=["error_message"])
         return transcript.id
-    except Exception:
+    except Exception as exc:
+        if (
+            job_metric
+            and job_metric.status == TranscriptionJobMetric.Status.RUNNING
+        ):
+            finish_transcription_job_metric(
+                job_metric=job_metric,
+                status=TranscriptionJobMetric.Status.FAILED,
+                total_duration_sec=time.perf_counter() - task_started_at,
+                error=exc,
+            )
         logger.exception("Transcription background job failed job_id=%s", job_id)
         job.error_message = GENERIC_TRANSCRIPTION_ERROR
         job.save(update_fields=["error_message"])

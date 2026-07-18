@@ -43,7 +43,9 @@ def transcripts(request):
 def upload_audio(request):
     if request.method == 'POST':
         form = TranscriptForm(request.POST, request.FILES)
-        if form.is_valid():
+        form_is_valid = form.is_valid()
+
+        if form_is_valid:
             name = form.cleaned_data['name']
             audio_file = form.cleaned_data['audio_file']
 

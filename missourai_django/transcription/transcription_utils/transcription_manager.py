@@ -16,10 +16,8 @@ from openai import OpenAI
 
 from transcription.models import TranscriptionChunkMetric, TranscriptionJobMetric
 
-
 logger = logging.getLogger(__name__)
 TRANSCRIPTION_MODEL_NAME = "gpt-4o-mini-transcribe"
-
 
 class TranscriptionMediaError(Exception):
     pass
@@ -81,6 +79,7 @@ class TranscriptionManager:
                 read_error_message="Could not read the normalized audio track.",
                 inspect_error_message="Could not inspect the normalized audio track.",
             )
+
             try:
                 self.file_duration = float(normalized_probe_data["format"]["duration"])
             except (KeyError, TypeError, ValueError) as exc:
@@ -203,7 +202,7 @@ class TranscriptionManager:
 
     def _transcribe_chunk_file(self, chunk_path: str) -> str:
         if os.getenv("MODEL_ENV") == "dev":
-            print("MODEL_ENV is DEV. Bypassing external API calls")
+            logger.info("MODEL_ENV is DEV.  Bypassing external API calls.")
             return "Short transcript text resembling actual API output."
 
         with open(chunk_path, "rb") as audio_file:
@@ -211,6 +210,7 @@ class TranscriptionManager:
                 model=TRANSCRIPTION_MODEL_NAME,
                 file=audio_file,
             )
+
         return transcript.text
 
     def _should_split_on_error(self, exc: Exception) -> bool:
@@ -250,15 +250,21 @@ class TranscriptionManager:
         reason: Exception,
     ) -> str:
         if split_depth >= self.max_split_depth or duration <= self.min_chunk_duration_sec:
-            print(
-                f"Reached fallback limit at {start_time:.2f}s for {duration:.2f}s: {reason}"
+            logger.warning(
+                "Reached transcription fallback limit at %.2fs for %.2fs: %s",
+                start_time,
+                duration,
+                reason,
             )
             return self._issue_marker(start_time, duration)
 
         half = duration / 2
-        print(
-            f"Splitting failed segment at {start_time:.2f}s for {duration:.2f}s "
-            f"(depth {split_depth + 1}/{self.max_split_depth})"
+        logger.warning(
+            "Splitting failed transcription segment at %.2fs for %.2fs (depth %s/%s)",
+            start_time,
+            duration,
+            split_depth + 1,
+            self.max_split_depth,
         )
 
         left = self._transcribe_range_with_fallback(
@@ -300,9 +306,6 @@ class TranscriptionManager:
                     duration=duration,
                 )
                 chunk_file_size_bytes = self._file_size(chunk_path)
-                print(
-                    f"Prepared chunk start={start_time:.2f}s duration={duration:.2f}s"
-                )
                 openai_started_at = time.perf_counter()
                 transcript = self._transcribe_chunk_file(chunk_path)
                 openai_duration_sec = time.perf_counter() - openai_started_at
@@ -320,7 +323,7 @@ class TranscriptionManager:
 
         except openai.BadRequestError as exc:
             if exc.code == "audio_too_short":
-                print(
+                logger.info(
                     f"Skipping short audio segment at {start_time:.2f}s for {duration:.2f}s"
                 )
                 self._finish_chunk_metric(
@@ -380,7 +383,6 @@ class TranscriptionManager:
                 chunk_index=chunk_index,
                 reason=exc,
             )
-
     def _cleanup_chunk(self, chunk_path: Optional[str]):
         if not chunk_path:
             return
@@ -458,23 +460,6 @@ class TranscriptionManager:
                 "error_type",
                 "error_message",
             ]
-        )
-
-        logger.info(
-            "transcription_chunk_completed",
-            extra={
-                "job_metric_id": self.job_metric.id if self.job_metric else None,
-                "chunk_metric_id": chunk_metric.id,
-                "chunk_index": chunk_metric.chunk_index,
-                "chunk_start_sec": chunk_metric.start_time_sec,
-                "chunk_duration_sec": chunk_metric.duration_sec,
-                "split_depth": chunk_metric.split_depth,
-                "chunk_file_size_bytes": chunk_file_size_bytes,
-                "ffmpeg_duration_sec": ffmpeg_duration_sec,
-                "openai_duration_sec": openai_duration_sec,
-                "total_duration_sec": total_duration_sec,
-                "status": status,
-            },
         )
 
     def _cleanup_normalized_audio(self):
