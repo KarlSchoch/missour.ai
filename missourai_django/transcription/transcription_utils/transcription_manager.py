@@ -6,20 +6,21 @@ import os
 import subprocess
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 import openai
+from django.db import close_old_connections
+from django.utils import timezone
 from openai import OpenAI
 
-logger = logging.getLogger(__name__)
+from transcription.models import TranscriptionChunkMetric, TranscriptionJobMetric
 
+logger = logging.getLogger(__name__)
+TRANSCRIPTION_MODEL_NAME = "gpt-4o-mini-transcribe"
 
 class TranscriptionMediaError(Exception):
     pass
-
-
-def _elapsed_ms(start_time: float) -> int:
-    return round((time.monotonic() - start_time) * 1000)
 
 
 class TranscriptionManager:
@@ -30,32 +31,22 @@ class TranscriptionManager:
         max_file_size: int = 20,
         max_split_depth: int = 3,
         min_chunk_duration_sec: int = 15,
+        max_concurrent_chunks: int = 2,
+        job_metric: Optional[TranscriptionJobMetric] = None,
     ):
-        init_started = time.monotonic()
-        source_size = os.path.getsize(file_path) if os.path.exists(file_path) else "<missing>"
-        logger.info(
-            "transcription_timing event=manager_init_start file=%s source_size=%s",
-            file_path,
-            source_size,
-        )
-
-        client_started = time.monotonic()
         self.client = OpenAI(api_key=api_key)
-        logger.info(
-            "transcription_timing event=openai_client_init elapsed_ms=%s",
-            _elapsed_ms(client_started),
-        )
-
         self.max_file_size = max_file_size
         self.file_path = file_path
         self.max_split_depth = max_split_depth
         self.min_chunk_duration_sec = min_chunk_duration_sec
+        self.max_concurrent_chunks = max(1, max_concurrent_chunks)
+        self.job_metric = job_metric
         self.issue_marker_template = (
             "[Transcription warning: audio from {start} to {end} "
             "could not be processed automatically.]"
         )
         self.normalized_audio_path: Optional[str] = None
-        self.chunk_path: Optional[str] = None
+        self.file_duration: Optional[float] = None
 
         # Calculate chunk settings
         self.chunk_settings = {
@@ -72,61 +63,36 @@ class TranscriptionManager:
             )
         )
 
-        probe_started = time.monotonic()
         raw_probe_data = self._probe_media(
             self.file_path,
             read_error_message="Could not read the uploaded media file.",
             inspect_error_message="Could not inspect the uploaded media file.",
         )
-        logger.info(
-            "transcription_timing event=raw_probe elapsed_ms=%s",
-            _elapsed_ms(probe_started),
-        )
         self._ensure_audio_stream(raw_probe_data)
+        raw_file_duration = self._duration_from_probe(raw_probe_data)
 
         try:
-            normalize_started = time.monotonic()
             self._normalize_audio_source()
-            normalized_size = (
-                os.path.getsize(self.normalized_audio_path)
-                if self.normalized_audio_path and os.path.exists(self.normalized_audio_path)
-                else "<missing>"
-            )
-            logger.info(
-                "transcription_timing event=normalize_source elapsed_ms=%s normalized_size=%s normalized_path=%s",
-                _elapsed_ms(normalize_started),
-                normalized_size,
-                self.normalized_audio_path,
-            )
 
-            normalized_probe_started = time.monotonic()
             normalized_probe_data = self._probe_media(
                 self.normalized_audio_path,
                 read_error_message="Could not read the normalized audio track.",
                 inspect_error_message="Could not inspect the normalized audio track.",
             )
-            logger.info(
-                "transcription_timing event=normalized_probe elapsed_ms=%s",
-                _elapsed_ms(normalized_probe_started),
-            )
+
             try:
                 self.file_duration = float(normalized_probe_data["format"]["duration"])
             except (KeyError, TypeError, ValueError) as exc:
                 raise TranscriptionMediaError("Could not determine media duration.") from exc
-        except Exception:
-            logger.exception(
-                "transcription_timing event=manager_init_failed elapsed_ms=%s",
-                _elapsed_ms(init_started),
+            self._update_job_metric(
+                audio_duration_sec=raw_file_duration,
+                normalized_duration_sec=self.file_duration,
+                max_concurrent_chunks=self.max_concurrent_chunks,
+                model_name=TRANSCRIPTION_MODEL_NAME,
             )
+        except Exception:
             self._cleanup_normalized_audio()
             raise
-
-        logger.info(
-            "transcription_timing event=manager_init_complete elapsed_ms=%s file_duration_sec=%.2f chunk_length_sec=%s",
-            _elapsed_ms(init_started),
-            self.file_duration,
-            self.chunk_length_sec,
-        )
 
     def _probe_media(
         self,
@@ -154,6 +120,12 @@ class TranscriptionManager:
         except json.JSONDecodeError as exc:
             raise TranscriptionMediaError(inspect_error_message) from exc
 
+    def _duration_from_probe(self, probe_data: dict) -> Optional[float]:
+        try:
+            return float(probe_data["format"]["duration"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
     def _ensure_audio_stream(self, probe_data: dict):
         audio_streams = [
             stream
@@ -169,7 +141,6 @@ class TranscriptionManager:
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_audio:
             self.normalized_audio_path = tmp_audio.name
 
-        ffmpeg_started = time.monotonic()
         result = subprocess.run(
             [
                 "ffmpeg",
@@ -187,11 +158,6 @@ class TranscriptionManager:
             capture_output=True,
             text=True,
         )
-        logger.info(
-            "transcription_timing event=normalize_ffmpeg elapsed_ms=%s returncode=%s",
-            _elapsed_ms(ffmpeg_started),
-            result.returncode,
-        )
 
         if result.returncode != 0:
             self._cleanup_normalized_audio()
@@ -203,13 +169,13 @@ class TranscriptionManager:
         self,
         start_time: float = 0,
         duration: Optional[float] = None,
-    ):
+    ) -> tuple[str, float]:
         duration = duration if duration is not None else self.chunk_length_sec
 
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_chunk:
-            self.chunk_path = tmp_chunk.name
+            chunk_path = tmp_chunk.name
 
-        chunk_started = time.monotonic()
+        started_at = time.perf_counter()
         result = subprocess.run(
             [
                 "ffmpeg",
@@ -221,44 +187,30 @@ class TranscriptionManager:
                 "-ar", str(self.chunk_settings["sample_rate"]),
                 "-c:a", "pcm_s16le",
                 "-f", "wav",
-                self.chunk_path,
+                chunk_path,
             ],
             capture_output=True,
             text=True,
         )
-        chunk_size = (
-            os.path.getsize(self.chunk_path)
-            if self.chunk_path and os.path.exists(self.chunk_path)
-            else "<missing>"
-        )
-        logger.info(
-            "transcription_timing event=extract_chunk start_time=%.2f duration=%.2f elapsed_ms=%s returncode=%s chunk_size=%s",
-            start_time,
-            duration,
-            _elapsed_ms(chunk_started),
-            result.returncode,
-            chunk_size,
-        )
+        ffmpeg_duration_sec = time.perf_counter() - started_at
 
         if result.returncode != 0:
+            self._cleanup_chunk(chunk_path)
             raise TranscriptionMediaError("Could not extract audio from the uploaded file.")
 
-    def _transcribe_current_chunk_file(self) -> str:
+        return chunk_path, ffmpeg_duration_sec
+
+    def _transcribe_chunk_file(self, chunk_path: str) -> str:
         if os.getenv("MODEL_ENV") == "dev":
-            logger.info("transcription_timing event=api_call_bypass model_env=dev")
+            logger.info("MODEL_ENV is DEV.  Bypassing external API calls.")
             return "Short transcript text resembling actual API output."
 
-        api_started = time.monotonic()
-        with open(self.chunk_path, "rb") as audio_file:
+        with open(chunk_path, "rb") as audio_file:
             transcript = self.client.audio.transcriptions.create(
-                model="gpt-4o-mini-transcribe",
+                model=TRANSCRIPTION_MODEL_NAME,
                 file=audio_file,
             )
-        logger.info(
-            "transcription_timing event=openai_transcription elapsed_ms=%s chunk_path=%s",
-            _elapsed_ms(api_started),
-            self.chunk_path,
-        )
+
         return transcript.text
 
     def _should_split_on_error(self, exc: Exception) -> bool:
@@ -294,11 +246,12 @@ class TranscriptionManager:
         start_time: float,
         duration: float,
         split_depth: int,
+        chunk_index: int,
         reason: Exception,
     ) -> str:
         if split_depth >= self.max_split_depth or duration <= self.min_chunk_duration_sec:
             logger.warning(
-                "transcription_timing event=fallback_limit start_time=%.2f duration=%.2f reason=%s",
+                "Reached transcription fallback limit at %.2fs for %.2fs: %s",
                 start_time,
                 duration,
                 reason,
@@ -307,7 +260,7 @@ class TranscriptionManager:
 
         half = duration / 2
         logger.warning(
-            "transcription_timing event=split_failed_segment start_time=%.2f duration=%.2f split_depth=%s max_split_depth=%s",
+            "Splitting failed transcription segment at %.2fs for %.2fs (depth %s/%s)",
             start_time,
             duration,
             split_depth + 1,
@@ -317,11 +270,13 @@ class TranscriptionManager:
         left = self._transcribe_range_with_fallback(
             start_time=start_time,
             duration=half,
+            chunk_index=chunk_index,
             split_depth=split_depth + 1,
         )
         right = self._transcribe_range_with_fallback(
             start_time=start_time + half,
             duration=duration - half,
+            chunk_index=chunk_index,
             split_depth=split_depth + 1,
         )
         return self._join_transcript_parts([left, right])
@@ -330,67 +285,182 @@ class TranscriptionManager:
         self,
         start_time: float,
         duration: float,
+        chunk_index: int,
         split_depth: int = 0,
     ) -> str:
-        range_started = time.monotonic()
+        chunk_path = None
+        chunk_metric = self._create_chunk_metric(
+            chunk_index=chunk_index,
+            start_time=start_time,
+            duration=duration,
+            split_depth=split_depth,
+        )
+        total_started_at = time.perf_counter()
+        ffmpeg_duration_sec = None
+        openai_duration_sec = None
+        chunk_file_size_bytes = None
         try:
             try:
-                self.read_audio_chunk(start_time=start_time, duration=duration)
-                logger.info(
-                    "transcription_timing event=chunk_ready start_time=%.2f duration=%.2f",
-                    start_time,
-                    duration,
+                chunk_path, ffmpeg_duration_sec = self.read_audio_chunk(
+                    start_time=start_time,
+                    duration=duration,
                 )
-                return self._transcribe_current_chunk_file()
+                chunk_file_size_bytes = self._file_size(chunk_path)
+                openai_started_at = time.perf_counter()
+                transcript = self._transcribe_chunk_file(chunk_path)
+                openai_duration_sec = time.perf_counter() - openai_started_at
+                self._finish_chunk_metric(
+                    chunk_metric,
+                    status=TranscriptionChunkMetric.Status.SUCCESS,
+                    total_duration_sec=time.perf_counter() - total_started_at,
+                    chunk_file_size_bytes=chunk_file_size_bytes,
+                    ffmpeg_duration_sec=ffmpeg_duration_sec,
+                    openai_duration_sec=openai_duration_sec,
+                )
+                return transcript
             finally:
-                self._cleanup_chunk()
+                self._cleanup_chunk(chunk_path)
 
         except openai.BadRequestError as exc:
             if exc.code == "audio_too_short":
                 logger.info(
-                    "transcription_timing event=skip_short_audio start_time=%.2f duration=%.2f elapsed_ms=%s",
-                    start_time,
-                    duration,
-                    _elapsed_ms(range_started),
+                    f"Skipping short audio segment at {start_time:.2f}s for {duration:.2f}s"
+                )
+                self._finish_chunk_metric(
+                    chunk_metric,
+                    status=TranscriptionChunkMetric.Status.SKIPPED,
+                    total_duration_sec=time.perf_counter() - total_started_at,
+                    chunk_file_size_bytes=chunk_file_size_bytes,
+                    ffmpeg_duration_sec=ffmpeg_duration_sec,
+                    openai_duration_sec=openai_duration_sec,
+                    error=exc,
                 )
                 return ""
 
             if not self._should_split_on_error(exc):
+                self._finish_chunk_metric(
+                    chunk_metric,
+                    status=TranscriptionChunkMetric.Status.FAILED,
+                    total_duration_sec=time.perf_counter() - total_started_at,
+                    chunk_file_size_bytes=chunk_file_size_bytes,
+                    ffmpeg_duration_sec=ffmpeg_duration_sec,
+                    openai_duration_sec=openai_duration_sec,
+                    error=exc,
+                )
                 raise
 
+            self._finish_chunk_metric(
+                chunk_metric,
+                status=TranscriptionChunkMetric.Status.FAILED,
+                total_duration_sec=time.perf_counter() - total_started_at,
+                chunk_file_size_bytes=chunk_file_size_bytes,
+                ffmpeg_duration_sec=ffmpeg_duration_sec,
+                openai_duration_sec=openai_duration_sec,
+                error=exc,
+            )
             return self._split_or_mark(
                 start_time=start_time,
                 duration=duration,
                 split_depth=split_depth,
+                chunk_index=chunk_index,
                 reason=exc,
             )
 
         except TranscriptionMediaError as exc:
+            self._finish_chunk_metric(
+                chunk_metric,
+                status=TranscriptionChunkMetric.Status.FAILED,
+                total_duration_sec=time.perf_counter() - total_started_at,
+                chunk_file_size_bytes=chunk_file_size_bytes,
+                ffmpeg_duration_sec=ffmpeg_duration_sec,
+                openai_duration_sec=openai_duration_sec,
+                error=exc,
+            )
             return self._split_or_mark(
                 start_time=start_time,
                 duration=duration,
                 split_depth=split_depth,
+                chunk_index=chunk_index,
                 reason=exc,
             )
-        finally:
-            logger.info(
-                "transcription_timing event=transcribe_range_complete start_time=%.2f duration=%.2f split_depth=%s elapsed_ms=%s",
-                start_time,
-                duration,
-                split_depth,
-                _elapsed_ms(range_started),
-            )
-
-    def _cleanup_chunk(self):
-        if not self.chunk_path:
+    def _cleanup_chunk(self, chunk_path: Optional[str]):
+        if not chunk_path:
             return
 
         try:
-            os.remove(self.chunk_path)
+            os.remove(chunk_path)
         except FileNotFoundError:
             pass
-        finally:
-            self.chunk_path = None
+
+    def _file_size(self, path: Optional[str]) -> Optional[int]:
+        if not path:
+            return None
+
+        try:
+            return os.path.getsize(path)
+        except OSError:
+            return None
+
+    def _update_job_metric(self, **fields):
+        if not self.job_metric:
+            return
+
+        for field, value in fields.items():
+            setattr(self.job_metric, field, value)
+        self.job_metric.save(update_fields=list(fields))
+
+    def _create_chunk_metric(
+        self,
+        chunk_index: int,
+        start_time: float,
+        duration: float,
+        split_depth: int,
+    ) -> Optional[TranscriptionChunkMetric]:
+        if not self.job_metric:
+            return None
+
+        return TranscriptionChunkMetric.objects.create(
+            job_metric=self.job_metric,
+            chunk_index=chunk_index,
+            start_time_sec=start_time,
+            duration_sec=duration,
+            split_depth=split_depth,
+        )
+
+    def _finish_chunk_metric(
+        self,
+        chunk_metric: Optional[TranscriptionChunkMetric],
+        status: str,
+        total_duration_sec: float,
+        chunk_file_size_bytes: Optional[int] = None,
+        ffmpeg_duration_sec: Optional[float] = None,
+        openai_duration_sec: Optional[float] = None,
+        error: Optional[Exception] = None,
+    ):
+        if not chunk_metric:
+            return
+
+        chunk_metric.status = status
+        chunk_metric.finished_at = timezone.now()
+        chunk_metric.total_duration_sec = total_duration_sec
+        chunk_metric.chunk_file_size_bytes = chunk_file_size_bytes
+        chunk_metric.ffmpeg_duration_sec = ffmpeg_duration_sec
+        chunk_metric.openai_duration_sec = openai_duration_sec
+        if error:
+            chunk_metric.error_type = error.__class__.__name__
+            chunk_metric.error_message = str(error)
+        chunk_metric.save(
+            update_fields=[
+                "status",
+                "finished_at",
+                "total_duration_sec",
+                "chunk_file_size_bytes",
+                "ffmpeg_duration_sec",
+                "openai_duration_sec",
+                "error_type",
+                "error_message",
+            ]
+        )
 
     def _cleanup_normalized_audio(self):
         if not self.normalized_audio_path:
@@ -403,49 +473,84 @@ class TranscriptionManager:
         finally:
             self.normalized_audio_path = None
 
-    def create_transcript(self) -> str:
-        transcript_started = time.monotonic()
-        pieces: list[str] = []
+    def _build_chunk_ranges(self) -> list[tuple[int, float, float]]:
+        chunks = []
         start_time = 0.0
         chunk_index = 1
-        target_chunks = math.ceil(self.file_duration / self.chunk_length_sec)
+
+        while start_time < self.file_duration:
+            duration = min(self.chunk_length_sec, self.file_duration - start_time)
+            chunks.append((chunk_index, start_time, duration))
+            start_time += duration
+            chunk_index += 1
+
+        return chunks
+
+    def _transcribe_chunk_range(
+        self,
+        chunk_index: int,
+        target_chunks: int,
+        start_time: float,
+        duration: float,
+    ) -> str:
+        close_old_connections()
+        try:
+            print(f"Processing chunk {chunk_index} of {target_chunks}")
+            return self._transcribe_range_with_fallback(
+                start_time=start_time,
+                duration=duration,
+                chunk_index=chunk_index,
+                split_depth=0,
+            )
+        finally:
+            close_old_connections()
+
+    def create_transcript(self) -> str:
+        chunks = self._build_chunk_ranges()
+        target_chunks = len(chunks)
+        self._update_job_metric(chunk_count=target_chunks)
 
         try:
-            while start_time < self.file_duration:
-                duration = min(self.chunk_length_sec, self.file_duration - start_time)
-                chunk_started = time.monotonic()
-                logger.info(
-                    "transcription_timing event=process_chunk_start chunk_index=%s target_chunks=%s start_time=%.2f duration=%.2f",
-                    chunk_index,
-                    target_chunks,
-                    start_time,
-                    duration,
-                )
+            if self.max_concurrent_chunks == 1 or target_chunks <= 1:
+                pieces = []
+                for chunk_index, start_time, duration in chunks:
+                    print(f"Processing chunk {chunk_index} of {target_chunks}")
+                    pieces.append(
+                        self._transcribe_range_with_fallback(
+                            start_time=start_time,
+                            duration=duration,
+                            chunk_index=chunk_index,
+                            split_depth=0,
+                        )
+                    )
+                return self._join_transcript_parts(pieces)
 
-                piece = self._transcribe_range_with_fallback(
-                    start_time=start_time,
-                    duration=duration,
-                    split_depth=0,
-                )
-                pieces.append(piece)
-                logger.info(
-                    "transcription_timing event=process_chunk_complete chunk_index=%s target_chunks=%s elapsed_ms=%s transcript_chars=%s",
-                    chunk_index,
-                    target_chunks,
-                    _elapsed_ms(chunk_started),
-                    len(piece),
-                )
+            pieces_by_index = {}
+            max_workers = min(self.max_concurrent_chunks, target_chunks)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(
+                        self._transcribe_chunk_range,
+                        chunk_index,
+                        target_chunks,
+                        start_time,
+                        duration,
+                    ): chunk_index
+                    for chunk_index, start_time, duration in chunks
+                }
 
-                start_time += duration
-                chunk_index += 1
+                try:
+                    for future in as_completed(futures):
+                        chunk_index = futures[future]
+                        pieces_by_index[chunk_index] = future.result()
+                except Exception:
+                    for future in futures:
+                        future.cancel()
+                    raise
 
-            return self._join_transcript_parts(pieces)
+            return self._join_transcript_parts([
+                pieces_by_index[index]
+                for index in sorted(pieces_by_index)
+            ])
         finally:
-            logger.info(
-                "transcription_timing event=create_transcript_complete elapsed_ms=%s chunks_completed=%s target_chunks=%s",
-                _elapsed_ms(transcript_started),
-                chunk_index - 1,
-                target_chunks,
-            )
-            self._cleanup_chunk()
             self._cleanup_normalized_audio()

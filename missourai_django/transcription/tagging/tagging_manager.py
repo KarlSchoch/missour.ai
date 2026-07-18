@@ -43,6 +43,16 @@ class TaggingManager:
         self.topics:list[Topic] = topics
         self.tags:list[Tag] = []
 
+    def _validate_topic_ownership(self, topics:List[Topic]) -> None:
+        mismatched_topics = [
+            topic.pk for topic in topics
+            if topic.created_by_id != self.transcript.created_by_id
+        ]
+        if mismatched_topics:
+            raise ValueError(
+                "Topics must be owned by the same user as the transcript."
+            )
+
     def chunk(self) -> List[Chunk]:
         # Use chunker to create langchain "docs"
         self.docs = self.chunker.create_documents([self.transcript.transcript_text])
@@ -64,6 +74,7 @@ class TaggingManager:
         ## If there are no topics, fall back onto self.topics
         if not topics:
             topics = self.topics
+        self._validate_topic_ownership(topics)
 
         # Set up LLM to enable tagging
         fake_responses = [
@@ -142,6 +153,7 @@ class TaggingManager:
         ## If there are no topics, fall back onto self.topics
         if not topics:
             topics = self.topics
+        self._validate_topic_ownership(topics)
 
         # Chunk the transcript provided when initialized
         self.chunk()

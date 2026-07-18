@@ -11,11 +11,14 @@ services:
     build:
       context: .
       target: runtime
+    depends_on:
+      - rabbitmq
     env_file: .env
     environment:
       DJANGO_VITE_DEV: "false"
       MODEL_ENV: "prod"
       DEBUG: "False"
+      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 4
       DJANGO_LOG_DIR: "/var/log/missourai"
     expose:
       - "8000"
@@ -25,16 +28,65 @@ services:
       - ./logs/web:/var/log/missourai
     logging: *default-logging
 
+  celery-worker:
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    working_dir: /app/missourai_django
+    command:
+      - /app/.venv/bin/python
+      - -m
+      - celery
+      - -A
+      - missourai_web_app
+      - worker
+      - --loglevel=INFO
+      - --concurrency=2
+    env_file: .env
+    environment:
+      DJANGO_VITE_DEV: "false"
+      DEBUG: "False"
+      MODEL_ENV: "prod"
+      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 4
+      DJANGO_LOG_DIR: "/var/log/missourai"
+    volumes:
+      - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
+      - ./missourai_django/media:/app/missourai_django/media
+      - ./logs/celery:/var/log/missourai
+    logging: *default-logging
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+    expose:
+      - "5672"
+      - "15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   nginx:
     image: nginx:1.27-alpine
     depends_on:
       - web
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/nginx-entrypoint.sh:/docker/nginx-entrypoint.sh:ro
+      - /etc/nginx/.htpasswd:/etc/nginx/.htpasswd:ro
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/www/certbot
       - ./logs/nginx:/var/log/nginx
@@ -54,3 +106,4 @@ services:
 volumes:
   certbot-etc:
   certbot-var:
+  rabbitmq-data:

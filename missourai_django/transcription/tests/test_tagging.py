@@ -1,9 +1,12 @@
 import os
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from transcription.models import Transcript, Chunk, Topic, Tag
 from transcription.tagging.tagging_manager import TaggingManager, Classification
 from unittest.mock import patch
 from transcription.tests.test_utils import FakeLLM
+
+User = get_user_model()
 
 IT_VOCAB = """
 cloud computing microservices kubernetes containers orchestration devops ci cd
@@ -89,21 +92,27 @@ class TaggingTests(TestCase):
         return Transcript.objects.create(
             name=f"Transcript {Transcript.objects.count() + 1}",
             transcript_text=payload,
+            created_by=self.user,
         )
 
     @classmethod
     def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="tagging-user", password="pw")
+        cls.other_user = User.objects.create_user(username="other-user", password="pw")
         cls.transcript = Transcript.objects.create(
             name="Dummy Transcript",
-            transcript_text= IT_VOCAB + " " + WF_VOCAB
+            transcript_text= IT_VOCAB + " " + WF_VOCAB,
+            created_by=cls.user,
         )
         cls.topic_it = Topic.objects.create(
             topic = "Information Technology",
-            description = ""
+            description = "",
+            created_by=cls.user,
         )
         cls.topic_wf = Topic.objects.create(
             topic = "Workforce Training",
-            description = ""
+            description = "",
+            created_by=cls.user,
         )
         cls.chunk_wf = Chunk.objects.create(
             transcript = cls.transcript,
@@ -361,7 +370,11 @@ class TaggingTests(TestCase):
     def test_tag_chunk_uses_text_values_for_prompt_inputs(self):
         transcript = self._make_transcript("alpha beta gamma")
         chunk = Chunk.objects.create(transcript=transcript, chunk_text="alpha beta")
-        topic = Topic.objects.create(topic="Prompt Topic", description="")
+        topic = Topic.objects.create(
+            topic="Prompt Topic",
+            description="",
+            created_by=self.user,
+        )
 
         with patch(
             "transcription.tagging.tagging_manager.ChatPromptTemplate.from_template"
@@ -382,3 +395,18 @@ class TaggingTests(TestCase):
             invoked_payload = prompt_instance.invoke.call_args[0][0]
             self.assertEqual(invoked_payload["passage"], chunk.chunk_text)
             self.assertEqual(invoked_payload["topic"], topic.topic)
+
+    def test_tagging_rejects_topic_owned_by_different_user(self):
+        other_topic = Topic.objects.create(
+            topic="Other User Topic",
+            description="",
+            created_by=self.other_user,
+        )
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"),
+            transcript=self.transcript,
+            topics=[other_topic],
+        )
+
+        with self.assertRaises(ValueError):
+            manager.tag_transcript()
