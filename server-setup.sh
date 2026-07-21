@@ -79,13 +79,34 @@ else
 fi
 
 install_netdata() {
+  local installer
+  local install_status
+
   if command -v netdata >/dev/null 2>&1 || has_pkg netdata; then
     echo "Netdata already installed."
     return
   fi
 
   echo "Installing Netdata Agent..."
-  bash <(curl -Ss https://my-netdata.io/kickstart.sh) --stable-channel --disable-telemetry --dont-wait
+  installer="$(mktemp /tmp/netdata-kickstart.XXXXXX.sh)"
+
+  if ! curl -fL --retry 3 --retry-delay 2 \
+    -o "$installer" https://get.netdata.cloud/kickstart.sh; then
+    echo "Failed to download the Netdata installer."
+    rm -f "$installer"
+    return 1
+  fi
+
+  install_status=0
+  DISABLE_TELEMETRY=1 bash "$installer" \
+    --release-channel stable \
+    --non-interactive || install_status=$?
+  rm -f "$installer"
+
+  if [ "$install_status" -ne 0 ]; then
+    echo "Netdata installer failed with exit code $install_status."
+    return "$install_status"
+  fi
 }
 
 configure_netdata_auth() {
