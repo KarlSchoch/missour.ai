@@ -95,12 +95,12 @@ services:
 
   certbot:
     image: certbot/certbot:latest
+    entrypoint: ["/bin/sh", "/docker/certbot-renew.sh"]
     volumes:
       - ./docker/certbot-renew.sh:/docker/certbot-renew.sh:ro
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/www/certbot
       - ./logs/certbot:/var/log/letsencrypt
-    command: ["/bin/sh", "/docker/certbot-renew.sh"]
     logging: *default-logging
 
 volumes:

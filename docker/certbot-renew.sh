@@ -9,5 +9,5 @@ while :; do
   certbot renew \
     --webroot -w /var/www/certbot \
     --deploy-hook "date -u +%Y-%m-%dT%H:%M:%SZ > ${reload_signal_file}"
-  sleep 12h & wait "${!}"
+  sleep 12h & wait "$!"
 done
