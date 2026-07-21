@@ -24,7 +24,7 @@ The web application combines a Django backend that exposes APIs and serves the H
    - `cd missour.ai`
 2) On a new Ubuntu 24.04 LTS server, run the setup script. This installs Docker, Netdata, basic-auth tooling, and UFW firewall rules. Reference the [Logging and Monitoring section of the README](#logging) for Netdata access and security details.
    - `chmod +x server-setup.sh`
-   - `sudo ./server-setup.sh`
+   - `sudo CONFIGURE_UFW=true ./server-setup.sh`
 3) Copy data from the old droplet to the new one (two options):
    - Pull from the old server:
       - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" root@OLD_IP:~/missour.ai/.env ./missour.ai/`

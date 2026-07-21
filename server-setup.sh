@@ -14,61 +14,64 @@ if [ "${ID:-}" != "ubuntu" ]; then
   echo "Warning: this script is tested on Ubuntu."
 fi
 
-if command -v snap >/dev/null 2>&1 && snap list docker >/dev/null 2>&1; then
-  echo "Snap Docker detected. Remove it to avoid conflicts:"
-  echo "  sudo snap remove docker"
-  exit 1
-fi
-
 has_pkg() {
   dpkg -s "$1" >/dev/null 2>&1
 }
 
 install_base_packages() {
   apt update
-  apt install -y ca-certificates curl gnupg apache2-utils openssl ufw
-}
-
-docker_source="none"
-if has_pkg docker-ce || has_pkg docker-ce-cli; then
-  docker_source="docker-ce"
-elif has_pkg docker.io; then
-  docker_source="docker-io"
-fi
-
-install_prereqs() {
-  install_base_packages
+  apt install -y ca-certificates curl gnupg apache2-utils openssl
 }
 
 install_docker_repo() {
   install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg
   chmod a+r /etc/apt/keyrings/docker.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME:-} stable" \
     | tee /etc/apt/sources.list.d/docker.list > /dev/null
 }
 
-if [ "$docker_source" = "none" ]; then
+docker_available() {
+  command -v docker >/dev/null 2>&1 && docker --version >/dev/null 2>&1
+}
+
+compose_available() {
+  docker compose version >/dev/null 2>&1
+}
+
+install_base_packages
+
+# An existing Docker installation may come from Docker's repository, Ubuntu,
+# Snap, or another source. Do not mix package sources or alter a working setup.
+if docker_available; then
+  echo "Existing Docker installation detected; leaving it unchanged."
+  if ! compose_available; then
+    echo "Docker is installed, but 'docker compose' is unavailable."
+    echo "Refusing to modify the existing Docker installation automatically."
+    echo "Install a Compose v2 plugin compatible with this Docker installation, then rerun."
+    exit 1
+  fi
+else
+  if command -v snap >/dev/null 2>&1 && snap list docker >/dev/null 2>&1; then
+    echo "Snap Docker is installed but is not currently usable."
+    echo "Refusing to install a second Docker distribution alongside it."
+    exit 1
+  fi
+
   echo "Installing Docker Engine and Compose v2 plugin..."
-  install_prereqs
   install_docker_repo
   apt update
-  apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-else
-  echo "Docker already installed ($docker_source). Installing Compose v2 plugin if needed..."
-  install_base_packages
-  apt install -y docker-compose-plugin
+  apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  systemctl enable --now docker
 fi
 
 if command -v docker-compose >/dev/null 2>&1; then
   echo "Note: docker-compose (v1) detected. Prefer 'docker compose'."
 fi
 
-systemctl enable --now docker
-
 echo "Docker installed:"
 docker --version
-if docker compose version >/dev/null 2>&1; then
+if compose_available; then
   docker compose version
 else
   echo "Compose v2 plugin not available. Check docker-compose-plugin installation."
@@ -76,7 +79,7 @@ else
 fi
 
 install_netdata() {
-  if command -v netdata >/dev/null 2>&1; then
+  if command -v netdata >/dev/null 2>&1 || has_pkg netdata; then
     echo "Netdata already installed."
     return
   fi
@@ -115,6 +118,11 @@ configure_netdata_auth() {
 
 configure_netdata_docker_access() {
   if id netdata >/dev/null 2>&1 && getent group docker >/dev/null 2>&1; then
+    if id -nG netdata | tr ' ' '\n' | grep -qx docker; then
+      echo "Netdata already belongs to the Docker group."
+      return
+    fi
+
     usermod -aG docker netdata
     systemctl restart netdata || true
     echo "Granted Netdata access to Docker metrics through the docker group."
@@ -138,6 +146,13 @@ configure_firewall() {
 install_netdata
 configure_netdata_auth
 configure_netdata_docker_access
-configure_firewall
+
+if [ "${CONFIGURE_UFW:-false}" = "true" ]; then
+  apt install -y ufw
+  configure_firewall
+else
+  echo "Leaving the existing firewall configuration unchanged."
+  echo "Set CONFIGURE_UFW=true to configure and enable UFW."
+fi
 
 echo "Netdata installed. Access it through the app Nginx proxy at /netdata/ after deploying the updated compose and nginx config."
