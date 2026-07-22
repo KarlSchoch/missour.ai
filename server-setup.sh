@@ -168,6 +168,26 @@ configure_netdata_docker_access() {
   fi
 }
 
+ensure_netdata_running() {
+  echo "Ensuring the Netdata service is enabled and running..."
+  systemctl enable --now netdata
+
+  if ! systemctl is-active --quiet netdata; then
+    echo "Netdata is installed but the service is not active."
+    systemctl status netdata --no-pager || true
+    return 1
+  fi
+
+  if ! curl -fsS --max-time 5 \
+    http://127.0.0.1:19999/api/v1/info >/dev/null; then
+    echo "Netdata is active but its local API is not responding on port 19999."
+    journalctl -u netdata -n 50 --no-pager || true
+    return 1
+  fi
+
+  echo "Netdata is responding locally on port 19999."
+}
+
 configure_firewall() {
   echo "Configuring UFW firewall for SSH, HTTP, HTTPS, and private Netdata access..."
   ufw default deny incoming
@@ -191,5 +211,6 @@ fi
 install_netdata
 configure_netdata_auth
 configure_netdata_docker_access
+ensure_netdata_running
 
 echo "Netdata installed. Access it through the app Nginx proxy at /netdata/ after deploying the updated compose and nginx config."

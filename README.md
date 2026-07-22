@@ -624,6 +624,21 @@ access model:
 This keeps Netdata reachable through Nginx at `/netdata/` while avoiding direct
 public access to `http://server-ip:19999`.
 
+If authenticated requests to `/netdata/` return `502 Bad Gateway`, verify the
+host service and then test the same upstream from inside Nginx:
+
+```bash
+sudo systemctl status netdata --no-pager
+curl -fsS http://127.0.0.1:19999/api/v1/info >/dev/null && echo "Netdata local API OK"
+docker compose exec -T nginx wget -qO- http://host.docker.internal:19999/api/v1/info >/dev/null && echo "Nginx upstream OK"
+docker compose logs --tail=100 nginx
+sudo ufw status numbered
+```
+
+If the local API succeeds but the Nginx upstream check fails, inspect the
+Docker network address and UFW rule order. If the local API fails, inspect
+`sudo journalctl -u netdata -n 100 --no-pager`.
+
 Before enabling firewall changes manually, stop one-off diagnostic listeners
 such as `iperf3` unless you intentionally want to allow their ports.
 
