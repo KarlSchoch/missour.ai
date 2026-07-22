@@ -114,6 +114,7 @@ configure_netdata_auth() {
   local credential_file="/root/netdata-basic-auth.txt"
   local user="${NETDATA_AUTH_USER:-netdata}"
   local password="${NETDATA_AUTH_PASSWORD:-}"
+  local generated_password="false"
 
   install -m 0755 -d /etc/nginx
 
@@ -122,8 +123,25 @@ configure_netdata_auth() {
     return
   fi
 
+  # Docker creates a directory at a missing bind-mount source path. This can
+  # happen when the Nginx container starts before the htpasswd file exists.
+  if [ -d "$htpasswd_file" ]; then
+    if ! rmdir "$htpasswd_file"; then
+      echo "$htpasswd_file is a non-empty directory; refusing to replace it."
+      return 1
+    fi
+    echo "Removed the empty directory Docker created at $htpasswd_file."
+  fi
+
   if [ -z "$password" ]; then
     password="$(openssl rand -base64 24)"
+    generated_password="true"
+  fi
+
+  htpasswd -bc "$htpasswd_file" "$user" "$password"
+  chmod 0644 "$htpasswd_file"
+
+  if [ "$generated_password" = "true" ]; then
     umask 077
     {
       echo "Netdata basic-auth credentials"
@@ -131,10 +149,8 @@ configure_netdata_auth() {
       echo "password: $password"
     } > "$credential_file"
     echo "Generated Netdata basic-auth credentials at $credential_file."
+    echo "Read them with: sudo cat $credential_file"
   fi
-
-  htpasswd -bc "$htpasswd_file" "$user" "$password"
-  chmod 0644 "$htpasswd_file"
 }
 
 configure_netdata_docker_access() {
@@ -164,10 +180,6 @@ configure_firewall() {
   ufw --force enable
 }
 
-install_netdata
-configure_netdata_auth
-configure_netdata_docker_access
-
 if [ "${CONFIGURE_UFW:-false}" = "true" ]; then
   apt install -y ufw
   configure_firewall
@@ -175,5 +187,9 @@ else
   echo "Leaving the existing firewall configuration unchanged."
   echo "Set CONFIGURE_UFW=true to configure and enable UFW."
 fi
+
+install_netdata
+configure_netdata_auth
+configure_netdata_docker_access
 
 echo "Netdata installed. Access it through the app Nginx proxy at /netdata/ after deploying the updated compose and nginx config."

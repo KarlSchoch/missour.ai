@@ -587,6 +587,22 @@ with a generated password and writes the generated credentials to:
 /root/netdata-basic-auth.txt
 ```
 
+Read the root-only credential file with:
+
+```bash
+sudo cat /root/netdata-basic-auth.txt
+```
+
+Run `server-setup.sh` before starting the production Nginx container for the
+first time. If Nginx was started first, Docker may create an empty directory at
+the missing `.htpasswd` bind-mount path. The setup script detects and repairs
+that empty-directory case. Recreate the Nginx container afterward so it sees
+the generated file:
+
+```bash
+docker compose up -d --force-recreate nginx
+```
+
 To rotate the password later:
 
 ```bash
@@ -596,7 +612,8 @@ docker compose restart nginx
 
 #### Firewall
 
-`server-setup.sh` enables UFW with this public access model:
+Run `sudo CONFIGURE_UFW=true ./server-setup.sh` to enable UFW with this public
+access model:
 
 - allow SSH/OpenSSH
 - allow HTTP on `80/tcp`
