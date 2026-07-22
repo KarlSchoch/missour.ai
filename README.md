@@ -573,8 +573,14 @@ Nginx protects `/netdata/` with basic auth using:
 /etc/nginx/.htpasswd
 ```
 
-`server-setup.sh` creates this file if it does not exist. To set explicit
-credentials during setup:
+`server-setup.sh` converges this path conservatively. It preserves a valid,
+non-empty password file; regenerates a missing or empty regular file; and
+repairs the empty directory Docker may create when the bind-mount source is
+missing. It refuses to overwrite a symlink, non-empty directory, special file,
+or malformed non-empty file.
+
+To set explicit credentials during setup, or update one user without removing
+other users from an existing password file:
 
 ```bash
 sudo NETDATA_AUTH_USER=your-user NETDATA_AUTH_PASSWORD='your-password' ./server-setup.sh
@@ -595,9 +601,10 @@ sudo cat /root/netdata-basic-auth.txt
 
 Run `server-setup.sh` before starting the production Nginx container for the
 first time. If Nginx was started first, Docker may create an empty directory at
-the missing `.htpasswd` bind-mount path. The setup script detects and repairs
-that empty-directory case. Recreate the Nginx container afterward so it sees
-the generated file:
+the missing `.htpasswd` bind-mount path. The setup script repairs that safe
+empty-directory case and checks the mount inside a running Nginx container. If
+the container still has the stale directory mount, the script fails its final
+validation and reports this required command without running it automatically:
 
 ```bash
 docker compose up -d --force-recreate nginx
@@ -623,6 +630,26 @@ access model:
 
 This keeps Netdata reachable through Nginx at `/netdata/` while avoiding direct
 public access to `http://server-ip:19999`.
+
+At the end of each run, the script reports pass, warning, and failure results
+for:
+
+- Netdata being enabled and active
+- the local Netdata API responding
+- the host `.htpasswd` file's contents, ownership, and permissions
+- root-only permissions on generated plaintext credentials, when present
+- UFW activation, public web rules, and the ordered private-allow/public-deny
+  rules for port `19999` when `CONFIGURE_UFW=true`
+- the running Nginx container seeing the password file and reaching Netdata
+
+Warnings cover intentionally unverifiable or not-yet-deployed components. A
+failed postcondition makes the script exit unsuccessfully after printing the
+recommended remediation. Public blocking of port `19999` must still be tested
+from a separate machine because a same-host public-IP test can be misleading:
+
+```bash
+curl --connect-timeout 5 -I http://SERVER_PUBLIC_IP:19999/
+```
 
 If authenticated requests to `/netdata/` return `502 Bad Gateway`, verify the
 host service and then test the same upstream from inside Nginx:
