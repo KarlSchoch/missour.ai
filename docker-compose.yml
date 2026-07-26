@@ -18,7 +18,7 @@ services:
       DJANGO_VITE_DEV: "false"
       MODEL_ENV: "prod"
       DEBUG: "False"
-      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 4
+      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 8
       DJANGO_LOG_DIR: "/var/log/missourai"
     expose:
       - "8000"
@@ -50,7 +50,7 @@ services:
       DJANGO_VITE_DEV: "false"
       DEBUG: "False"
       MODEL_ENV: "prod"
-      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 4
+      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 8
       DJANGO_LOG_DIR: "/var/log/missourai"
     volumes:
       - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
