@@ -22,9 +22,9 @@ The web application combines a Django backend that exposes APIs and serves the H
 1) Clone the repo on the server:
    - `git clone https://github.com/KarlSchoch/missour.ai.git`
    - `cd missour.ai`
-2) On a new Ubuntu 24.04 LTS server, run the setup script:
+2) On a new Ubuntu 24.04 LTS server, run the setup script. This installs Docker, Netdata, basic-auth tooling, and UFW firewall rules. Reference the [Logging and Monitoring section of the README](#logging) for Netdata access and security details.
    - `chmod +x server-setup.sh`
-   - `sudo ./server-setup.sh`
+   - `sudo CONFIGURE_UFW=true ./server-setup.sh`
 3) Copy data from the old droplet to the new one (two options):
    - Pull from the old server:
       - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" root@OLD_IP:~/missour.ai/.env ./missour.ai/`
@@ -57,6 +57,21 @@ The web application combines a Django backend that exposes APIs and serves the H
   - Runs `manage.py migrate` on startup, then uvicorn serving ASGI (internally on `web:8000`).  
   - Nginx terminates TLS and proxies requests to the Django container.  
   - `missourai_django/db.sqlite3` and `missourai_django/media` are bind-mounted for persistence.
+  - Production logs are bind-mounted under `logs/` so they survive `docker compose down`: Django web-process logs are in `logs/web/transcription.log`, Celery transcription warnings and errors are in `logs/celery/transcription.log`, Nginx access/error logs are in `logs/nginx/`, and Certbot logs are in `logs/certbot/`. Transcription performance metrics are stored in the database rather than these operational log files.
+- Configure log rotation on the host so bind-mounted log files do not grow indefinitely. For example, create a `logrotate` config on the production server and replace `/path/to/missour.ai` with the deployed repo path:
+  ```conf
+  /path/to/missour.ai/logs/web/*.log
+  /path/to/missour.ai/logs/celery/*.log
+  /path/to/missour.ai/logs/nginx/*.log
+  /path/to/missour.ai/logs/certbot/*.log {
+      daily
+      rotate 14
+      compress
+      missingok
+      notifempty
+      copytruncate
+  }
+  ```
 - First-time cert issuance (once per server):  
   - Comment out port 443 portion of nginx `default.conf` (container will fail due to cert not existing)
   - Create cert: `docker compose run --rm --entrypoint certbot certbot certonly --webroot -w /var/www/certbot -d missour.ai -d www.missour.ai --email you@example.com --agree-tos --no-eff-email`
@@ -122,6 +137,142 @@ The web application combines a Django backend that exposes APIs and serves the H
 - **Initial payloads come from Django views.** Each page view returns an `initial_payload` dictionary that gets serialized with `{{ initial_payload|json_script:"initial-payload" }}` and can be read by React via `document.getElementById('initial-payload')`.  This `initial_payload ` is generated from the view
 - **CSRF stays consistent across fetches.** Frontend code imports `getCsrfToken` from `frontend/src/utils/csrf.js`, ensuring POST/PUT/PATCH requests include the same `csrftoken` cookie Django issued.
 - **Model Environment**: Since this project relies upon calls to external APIs, we have created the infrastructure to bypass these calls and thus incur inference costs.  To do this, we have created `Manager` Classes that encompass the various AI functionalities (currently only a [`TranscriptionManager`](/missourai_django/transcription/transcription_utils/transcription_manager.py) and  [`TaggingManager`](/missourai_django/transcription/tagging/tagging_manager.py), possibly more capabilities eventually).  This allows us to centralize any AI calls within one location within the code base, thus simplifying maintenance and mocking.  While building out initial capabilities, set the `MODEL_ENV` variable within your `.env` file to `dev` to take advantage of mocked responses.  When you want to do more integration-testing and ensure that your code works well with the model and eventually put the application into production, you can set the `MODEL_ENV` variable to `test` or `prod`
+- **Celery separates long-running work from page requests.** Django queues work through RabbitMQ using `CELERY_BROKER_URL`, and Celery stores task state/results in the Django database because `CELERY_RESULT_BACKEND = "django-db"` and `django_celery_results` is installed.
+
+### Long Running Tasks
+This application has a number of long running tasks, most notably transcribing an audio file.  In order for this to not impact the performance of the application that users experience, we have begun to work on moving those tasks out of Django's Request/Response cycle and into Celery.  This section of the documentation provides an overview of the process and should serve as guidance for transitioning long-running tasks within the application into Celery going forward (currently only the **Upload Audio**/**Transcription Manager** utilizes Celery)
+
+```mermaid
+flowchart TB
+   subgraph frontend
+      some_component["some_component"]
+      subgraph base_html["base.html"]
+         background_job_notifications['src/background-job-notifications.jsx']
+         background_job_notifications-->backgroundjob_list
+      end
+   end
+   some_component-->some_view
+   subgraph backend
+      subgraph apis
+         backgroundjob_list["api:backgroundjob-list"]
+      end
+      subgraph views["views.py"]
+         subgraph some_view["some_view(request)"]
+            some_long_running_task_apply_async["some_long_running_task.apply_async()"]
+         end
+      end
+      subgraph tasks["tasks.py"]
+         some_long_running_task["some_long_running_task"]
+      end
+      some_long_running_task-.|"import"|.->views
+   end
+   RabbitMQ
+   some_long_running_task_apply_async--|"Sends message"|-->RabbitMQ
+   CeleryWorker["Celery Worker"]
+   subgraph Database
+      celery_results_tables["Celery Results Tables"]
+      application_data_tables[""]
+   end
+   CeleryWorker-->celery_results_tables
+   CeleryWorker-->application_data_tables
+```
+
+#### Core Components
+##### RabbitMQ
+RabbitMQ functions as the intermediary between your Django backend and the celery workers.
+
+Django transparently integrates RabbitMQ and Celery for developers (e.g. you don't need to explicity send tasks to RabbitMQ from the Django backend), but know that when you call `some_celery_task.apply_async()` (see `transcribe_uploaded_audio.apply_async()` within `views.py::upload_audio` for an illustration), _Celery is sending a message from your backend to RabbitMQ that there is a task for the Celery Workers to perform._
+
+##### Celery Workers
+The Celery Workers constantly monitor RabbitMQ and, once they receive a message that the backend has assigned them work, they perform the work laid out in the task defined in [`tasks.py`](./missourai_django/transcription/tasks.py).  In order to do this, the Celery worker and the backend have **shared storage volumes**
+
+##### Shared Storage Volumes
+As you can see in both the [`docker-compose.dev.yml`](./docker-compose.dev.yml) and [`docker-compose.yml`](./docker-compose.yml), the `celery-worker` and `web` services share the same `volumes` configuration
+
+```yml
+volumes:
+   - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
+   - ./missourai_django/media:/app/missourai_django/media
+```
+
+The `media` portion of the shared volume is used to share large files that are downloaded to the backend that a celery worker needs to be able to access in order to finish its task .  We do this because sending large data files from the backend to RabbitMQ, persisting them on RabbitMQ, and then moving them onto the Celery Worker would be untenable for a number of reasons.  
+
+-The `db.sqlite3` portion is used so that the Celery worker has access to the application's database.  That matters for two related but separate reasons: the worker writes application data through Django models (e.g. placing the transcribed text within a `Transcript` object), and Celery writes task metadata/results to the same database because `CELERY_RESULT_BACKEND` is set to `django-db` within [`settings.py`](./missourai_django/missourai_web_app/settings.py). 
+
+
+##### BackgroundJob Model
+The [`BackgroundJob` model](./missourai_django/transcription/models.py) acts as the connective tissue within the application's DataModel to link Celery Tasks to the actual application object that they create (e.g. Transcripts) and provide useful information for debugging why tasks failed or allowing portions of the application (e.g. the frontend's notifications capability) to check on the status of a given task.
+
+##### Notifications
+Users are provided with Mantine UI toast notifcations when background jobs are started, succeed, or fail (see [`background-job-notifications.jsx`](./frontend/src/background-job-notifications.jsx)).  These notifications query the `BackgroundJob` model which we discussed above through the `api:backgroundjob-list` url, exposing a **Read Only** `BackgroundJobViewSet` defined in [`api_views.py`](./missourai_django/transcription/api_views.py) 
+
+In order to ensure that notifications are visible across the entire application (i.e. a user can receive a notification that their audio file has been transcribed while looking at the summaries for another transcript), the `BackgroundJobNotifications` component is mounted within the [`base.html` template](./missourai_django/transcription/templates/transcription/base.html) that acts as the parent for all other Django templates, custom JavaScript, etc.  If you were to put it *lower* within the tree, you would have to remount the `BackgroundJobNotifications` component everywhere that you want it to be visible.
+
+#### Process
+Within this section, we go over the "processes" for long running tasks within this application, I have broken up the "Process" section into two different components: Development and Operational.
+
+The rationale for this is that we need to not only succinctly provide developers the information they need to utilize Celery for executing long running within the expectations of this application, but also provide them with an understanding of the process works behind the scenes
+
+##### Development
+###### Step 1. Define Task
+For any long running tasks that are naturally grouped together like transcribing an audio file, developers should first go into [`tasks.py`](./missourai_django/transcription/tasks.py) and write the logic for that task as if you were in a view.
+
+The key nuance to note here is the `@shared_task` decorator that you should use instead of the `@app.task` decorator.  The `@shared_task` decorator allows for greater import flexibility when compared to `@app.task`, and while that does not currently matter since we are only using the `transcription` application within our larger `missourai_django` project, it provides more flexibility going forward in case we want to use some of these tasks within another application.
+
+###### Step 2. Decide on User Routing
+This is important to consider because it has implications on when to create the database object that your Celery task interacts with.
+
+If you are planning on sending a user to a generic page that is independent of the DB object the task is operating on (e.g. you want to send them to `/transcripts` while the job completes), you can create the database object within the Celery Task.
+
+If instead, you want to send them to a page related to the database object the task is geenrating (e.g. you want to send them to the `view_transcripts` page for the Transcript that the Celery task is creating), then you will need to create the transcript object PRIOR TO running the Celery Task and likely add placeholder value(s).  You can see an example of how this is implemented and how it provides necessary information to the next two steps (Creating the `BackgroundJob` instance and Invoking the Task) within the [`upload_audio` view from `views.py`](./missourai_django/transcription/views.py).
+
+```python
+transcript = Transcript.objects.create(
+      name=name,
+      transcript_text=TRANSCRIPTION_PENDING_TEXT,
+      created_by=request.user,
+)
+task_id = celery_uuid()
+job = BackgroundJob.objects.create(
+      created_by=request.user,
+      task_id=task_id,
+      kind=BackgroundJob.Kind.TRANSCRIPTION,
+      label=f"Transcribe {name}",
+      related_object_id=transcript.id,
+)
+
+transcribe_uploaded_audio.apply_async(
+      args=[
+         job.id,
+         upload_storage_name,
+         transcript.id,
+         [topic.id for topic in selected_topics],
+      ],
+      task_id=task_id,
+)
+```
+
+###### Step 3. Create BackgroundJob Instance
+Still within [`views.py`](./missourai_django/transcription/views.py), create an instance of the `BackgroundJob` model that will hold the relevant information about a job.
+
+One important consideration for the `BackgroundJob` instance is that since it is the expected location to store error data within your application, even though you are creating the instance of the model within `views.py`, you should ensure to store any error data from a failed job within the `tasks.py` file's task definition.
+
+###### Step 4. Invoke Task
+Now you can invoke the task, which we recommend doing with `.apply_async()` as opposed to `.delay()`.  The reason for this is because we are using `BackgroundJob`'s `task_id` attribute to look up the status of the Celery Task from the `CELERY_RESULT_BACKEND` (see `BackgroundJobViewSet.list()`'s call to `AsyncResult()` within [`api_views.py`](./missourai_django/transcription/api_views.py)), and `.apply_async()` provides us the ability to specify a `task_id` for when the job is enqued that is not available within `.delay()`.  This allows us to ensure that the services have a common identifier that they can use to communicate.
+
+###### Step 5. Route User
+
+
+##### Operational
+(Complete the mermaid diagram)
+1. Define Task
+
+2. Invoke Task
+
+#### Error Visibility
+Currently, we provide some feedback on errors within the `BackgroundJob` model through its `error_message` attribute.
+
+An important future improvement, however, is to provide 
 
 ### Nginx + Certbot
 - The production compose file includes Nginx and Certbot containers with shared volumes for `/etc/letsencrypt` and the webroot challenge.
@@ -356,6 +507,181 @@ Sometimes, you may need to integrate a react component within an existing Django
 #### Authentication
 - Django Pages/Views:
 - Django REST Framework: Requiring Login is set as the default behavior within [setting.py](./missourai_django/missourai_web_app/settings.py) (reference the `REST_FRAMEWORK.DEFAULT_PERMISSIONS_CLASSES` setting).
+
+#### User Data Isolation
+
+### Logging
+
+The production server uses host-installed Netdata for server and container
+monitoring. Netdata is intentionally separate from the Django application:
+Django stores application/job metrics in its database, while Netdata stores
+host-level CPU, memory, disk, network, process, and container telemetry in
+Netdata's own metrics database.
+
+#### Netdata Installation
+
+On a new Ubuntu server, run:
+
+```bash
+sudo ./server-setup.sh
+```
+
+The setup script installs:
+
+- Docker Engine and the Compose v2 plugin
+- Netdata Agent
+- `apache2-utils` for Nginx basic-auth password files
+- `ufw` for host firewall rules
+
+The script also adds the `netdata` user to the `docker` group when both exist
+so Netdata can read Docker/container metrics from the host. Membership in the
+`docker` group is privileged, so treat Netdata as a trusted host service.
+
+Netdata retention uses the Netdata defaults. No custom retention setting is
+applied by this project.
+
+#### Netdata Access
+
+Netdata runs on the droplet host and listens on port `19999`. The public entry
+point is through the production Nginx container:
+
+```text
+https://missour.ai/netdata/
+```
+
+The production `nginx` service includes:
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+This lets containerized Nginx proxy to Netdata on the host through:
+
+```nginx
+proxy_pass http://host.docker.internal:19999/;
+```
+
+Do not proxy Netdata to `127.0.0.1:19999` from the Nginx container. Inside the
+container, `127.0.0.1` refers to the container itself, not the droplet host.
+
+#### Netdata Basic Auth
+
+Nginx protects `/netdata/` with basic auth using:
+
+```text
+/etc/nginx/.htpasswd
+```
+
+`server-setup.sh` converges this path conservatively. It preserves a valid,
+non-empty password file; regenerates a missing or empty regular file; and
+repairs the empty directory Docker may create when the bind-mount source is
+missing. It refuses to overwrite a symlink, non-empty directory, special file,
+or malformed non-empty file.
+
+To set explicit credentials during setup, or update one user without removing
+other users from an existing password file:
+
+```bash
+sudo NETDATA_AUTH_USER=your-user NETDATA_AUTH_PASSWORD='your-password' ./server-setup.sh
+```
+
+If those environment variables are omitted, the script creates a `netdata` user
+with a generated password and writes the generated credentials to:
+
+```text
+/root/netdata-basic-auth.txt
+```
+
+Read the root-only credential file with:
+
+```bash
+sudo cat /root/netdata-basic-auth.txt
+```
+
+Run `server-setup.sh` before starting the production Nginx container for the
+first time. If Nginx was started first, Docker may create an empty directory at
+the missing `.htpasswd` bind-mount path. The setup script repairs that safe
+empty-directory case and checks the mount inside a running Nginx container. If
+the container still has the stale directory mount, the script fails its final
+validation and reports this required command without running it automatically:
+
+```bash
+docker compose up -d --force-recreate nginx
+```
+
+To rotate the password later:
+
+```bash
+sudo htpasswd -bc /etc/nginx/.htpasswd netdata 'new-password'
+docker compose restart nginx
+```
+
+#### Firewall
+
+Run `sudo CONFIGURE_UFW=true ./server-setup.sh` to enable UFW with this public
+access model:
+
+- allow SSH/OpenSSH
+- allow HTTP on `80/tcp`
+- allow HTTPS on `443/tcp`
+- allow Docker bridge addresses to reach Netdata on `19999/tcp`
+- deny public access to `19999/tcp`
+
+This keeps Netdata reachable through Nginx at `/netdata/` while avoiding direct
+public access to `http://server-ip:19999`.
+
+At the end of each run, the script reports pass, warning, and failure results
+for:
+
+- Netdata being enabled and active
+- the local Netdata API responding
+- the host `.htpasswd` file's contents, ownership, and permissions
+- root-only permissions on generated plaintext credentials, when present
+- UFW activation, public web rules, and the ordered private-allow/public-deny
+  rules for port `19999` when `CONFIGURE_UFW=true`
+- the running Nginx container seeing the password file and reaching Netdata
+
+Warnings cover intentionally unverifiable or not-yet-deployed components. A
+failed postcondition makes the script exit unsuccessfully after printing the
+recommended remediation. Public blocking of port `19999` must still be tested
+from a separate machine because a same-host public-IP test can be misleading:
+
+```bash
+curl --connect-timeout 5 -I http://SERVER_PUBLIC_IP:19999/
+```
+
+If authenticated requests to `/netdata/` return `502 Bad Gateway`, verify the
+host service and then test the same upstream from inside Nginx:
+
+```bash
+sudo systemctl status netdata --no-pager
+curl -fsS http://127.0.0.1:19999/api/v1/info >/dev/null && echo "Netdata local API OK"
+docker compose exec -T nginx wget -qO- http://host.docker.internal:19999/api/v1/info >/dev/null && echo "Nginx upstream OK"
+docker compose logs --tail=100 nginx
+sudo ufw status numbered
+```
+
+If the local API succeeds but the Nginx upstream check fails, inspect the
+Docker network address and UFW rule order. If the local API fails, inspect
+`sudo journalctl -u netdata -n 100 --no-pager`.
+
+Before enabling firewall changes manually, stop one-off diagnostic listeners
+such as `iperf3` unless you intentionally want to allow their ports.
+
+#### Experiment Correlation
+
+Use Django's transcription metric tables for application-level timing:
+
+- `TranscriptionJobMetric.started_at`
+- `TranscriptionJobMetric.finished_at`
+- `TranscriptionChunkMetric.ffmpeg_duration_sec`
+- `TranscriptionChunkMetric.openai_duration_sec`
+
+Then inspect the same time window in Netdata to understand host pressure during
+that job: CPU, memory, disk I/O, network throughput, process count, and Docker
+container usage.
+
 
 ## ML Environment
 To use the ML Experiments environment, do the following

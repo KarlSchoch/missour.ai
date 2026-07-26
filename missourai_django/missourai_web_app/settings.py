@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from django.core.management.utils import get_random_secret_key
 from dotenv import load_dotenv
+from urllib.parse import quote
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -53,7 +54,8 @@ INSTALLED_APPS = [
     'django_vite',
     'rest_framework',
     'corsheaders',
-    'django_filters'
+    'django_filters',
+    'django_celery_results'
 ]
 
 MIDDLEWARE = [
@@ -180,3 +182,52 @@ CORS_ALLOW_CREDENTIALS = True
 if DEBUG:
     WHITENOISE_USE_FINDERS = True
     WHITENOISE_AUTOREFRESH = True
+
+# --- Celery ---
+RABBITMQ_DEFAULT_USER = quote(os.getenv("RABBITMQ_DEFAULT_USER", "guest"), safe="")
+RABBITMQ_DEFAULT_PASS = quote(os.getenv("RABBITMQ_DEFAULT_PASS", "guest"), safe="")
+
+CELERY_BROKER_URL = os.getenv(
+    "CELERY_BROKER_URL",
+    f"amqp://{RABBITMQ_DEFAULT_USER}:{RABBITMQ_DEFAULT_PASS}@rabbitmq:5672//",
+)
+
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_RESULT_BACKEND = 'django-db' # Sets backend to default database in Settings
+CELERY_WORKER_PREFETCH_MULTIPLIER = int(os.getenv("CELERY_WORKER_PREFETCH_MULTIPLIER", "1"))
+DJANGO_LOG_DIR = os.getenv("DJANGO_LOG_DIR")
+
+# --- Application logging ---
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "console": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "console",
+        },
+    },
+    "loggers": {
+        "transcription": {
+            "handlers": ["console"],
+            "level": os.getenv("DJANGO_TRANSCRIPTION_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+    },
+}
+
+if DJANGO_LOG_DIR:
+    os.makedirs(DJANGO_LOG_DIR, exist_ok=True)
+    LOGGING["handlers"]["transcription_file"] = {
+        "class": "logging.FileHandler",
+        "filename": os.path.join(DJANGO_LOG_DIR, "transcription.log"),
+        "formatter": "console",
+    }
+    LOGGING["loggers"]["transcription"]["handlers"].append("transcription_file")

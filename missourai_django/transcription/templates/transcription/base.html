@@ -1,4 +1,4 @@
-{% load static %}
+{% load static django_vite vite_extras %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -61,6 +61,17 @@
     <footer>
         <p>&copy; 2024 missour.ai</p>
     </footer>
+    {% if user.is_authenticated %}
+        <div id="background-job-notifications-root"></div>
+        <script id="background-job-notifications-config" type="application/json">
+            {
+                "apiUrl": "{% url 'api:backgroundjob-list' %}"
+            }
+        </script>
+        {% vite_react_refresh %}
+        {% vite_hmr_client %}
+        {% vite_asset 'src/background-job-notifications.jsx' %}
+    {% endif %}
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

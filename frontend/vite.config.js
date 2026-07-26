@@ -37,6 +37,7 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       // Explicit multi-entry build so Django can load per-page bundles via django-vite
       input: {
+        'src/background-job-notifications.jsx': resolve(__dirname, 'src/background-job-notifications.jsx'),
         'src/analyze-audio-page-section.jsx': resolve(__dirname, 'src/analyze-audio-page-section.jsx'),
         'src/view-topics.jsx': resolve(__dirname, 'src/view-topics.jsx'),
         'src/view-transcript-chunk-page-section.jsx': resolve(__dirname, 'src/view-transcript-chunk-page-section.jsx'),

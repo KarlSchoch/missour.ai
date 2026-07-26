@@ -8,7 +8,7 @@ from django.utils.decorators import method_decorator
 from django.urls import include
 from itertools import count
 from .models import Topic
-from .api_views import TopicViewSet, SummaryViewSet
+from .api_views import BackgroundJobViewSet, TopicViewSet, SummaryViewSet
 
 _ITEMS = []
 _id_counter = count()
@@ -40,6 +40,7 @@ class Items(APIView):
 #         return Response(list(Topic.objects.values("id", "topic", "description")))
 
 router = DefaultRouter()
+router.register(r"background-jobs", BackgroundJobViewSet, basename="backgroundjob")
 router.register(r"topics", TopicViewSet)
 router.register(r"summaries", SummaryViewSet)
 

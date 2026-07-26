@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect
-from django.http import HttpResponse
-from django.core.files.base import ContentFile
+from celery import uuid as celery_uuid
+from celery.result import AsyncResult
+from django.http import HttpResponse, JsonResponse
+from django.core.files.storage import default_storage
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 from django.shortcuts import get_object_or_404
@@ -8,36 +10,18 @@ from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from .forms import TranscriptForm
-from .models import Transcript, Topic
-from .transcription_utils.transcription_manager import (
-    TranscriptionManager,
-    TranscriptionMediaError
-)
+from .models import BackgroundJob, Transcript, Topic
+from .tasks import transcribe_uploaded_audio
 from .tagging.tagging_manager import TaggingManager
 
 import os
 import logging
 import json
-import tempfile
+import uuid
 
 logger = logging.getLogger(__name__)
+TRANSCRIPTION_PENDING_TEXT = "Transcription in progress..."
 
-
-def process_audio(file_path:str) -> str:
-    # Intialize TranscriptionManager with OpenAI API key
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable not set.")
-    
-    # Create the transcript using the TranscriptionManager
-    try:
-        manager = TranscriptionManager(api_key, file_path)
-        return manager.create_transcript()
-    except TranscriptionMediaError:
-        raise
-    except Exception as exc:
-        logging.exception("Unexpected transcription failure for file %s", file_path)
-        raise RuntimeError("An unexpected error occurred while processing the file.") from exc
 
 # Create your views here.
 def index(request):
@@ -59,7 +43,9 @@ def transcripts(request):
 def upload_audio(request):
     if request.method == 'POST':
         form = TranscriptForm(request.POST, request.FILES)
-        if form.is_valid():
+        form_is_valid = form.is_valid()
+
+        if form_is_valid:
             name = form.cleaned_data['name']
             audio_file = form.cleaned_data['audio_file']
 
@@ -69,61 +55,6 @@ def upload_audio(request):
                 selected_topics = json.loads(topics_raw)
             except json.JSONDecodeError:
                 selected_topics = []
-
-            # Reuse Django's temp file for large uploads when available.
-            remove_tmp_file = False
-            if hasattr(audio_file, "temporary_file_path"):
-                tmp_file_path = audio_file.temporary_file_path()
-            else:
-                with tempfile.NamedTemporaryFile(
-                    delete=False,
-                    suffix=os.path.splitext(audio_file.name)[1]
-                ) as tmp_file:
-                    for chunk in audio_file.chunks():
-                        tmp_file.write(chunk)
-                    tmp_file_path = tmp_file.name
-                remove_tmp_file = True
-
-            logger.info(
-                "Processing upload name=%s file=%s size=%s content_type=%s temp_path=%s reused_temp_file=%s",
-                name,
-                getattr(audio_file, "name", "<unknown>"),
-                getattr(audio_file, "size", "<unknown>"),
-                getattr(audio_file, "content_type", "<unknown>"),
-                tmp_file_path,
-                not remove_tmp_file,
-            )
-            
-            # Generate transcript
-            try:
-                transcript_text = process_audio(tmp_file_path)
-            except TranscriptionMediaError as exc:
-                form.add_error("audio_file", str(exc))
-                return render(
-                    request,
-                    "transcription/upload_audio.html",
-                    {"form": form},
-                    status=400,
-                )
-            except (RuntimeError, ValueError):
-                logger.exception(
-                    "Transcription failed for upload name=%s file=%s",
-                    name,
-                    getattr(audio_file, "name", "<unknown>"),
-                )
-                form.add_error(
-                    None,
-                    "Something went wrong while transcribing the uploaded file.",
-                )
-                return render(
-                    request,
-                    "transcription/upload_audio.html",
-                    {"form": form},
-                    status=500,
-                )
-            finally:
-                if remove_tmp_file and os.path.exists(tmp_file_path):
-                    os.remove(tmp_file_path)
 
             selected_topics_ct = len(selected_topics)
             selected_topics = list(
@@ -144,46 +75,46 @@ def upload_audio(request):
                     status=400,
                 )
 
-            # Save the transcript text
-            transcript_obj = Transcript(
+            upload_storage_name = _save_upload_for_background_job(audio_file)
+            transcript = Transcript.objects.create(
                 name=name,
-                transcript_text=transcript_text,
-                created_by=request.user
+                transcript_text=TRANSCRIPTION_PENDING_TEXT,
+                created_by=request.user,
             )
-            transcript_obj.save()
+            task_id = celery_uuid()
+            job = BackgroundJob.objects.create(
+                created_by=request.user,
+                task_id=task_id,
+                kind=BackgroundJob.Kind.TRANSCRIPTION,
+                label=f"Transcribe {name}",
+                related_object_id=transcript.id,
+            )
 
-            # Tag the transcript based on selected topics
-            try:
-                tagging_manager = TaggingManager(
-                    api_key = os.getenv('OPENAI_API_KEY'),
-                    transcript=transcript_obj,
-                    topics = selected_topics
-                )
-                tagging_manager.tag_transcript()
-            except Exception:
-                logger.exception(
-                    "Tagging failed for transcript_id=%s name=%s",
-                    transcript_obj.pk,
-                    transcript_obj.name,
-                )
-                transcript_obj.delete()
-                form.add_error(
-                    None,
-                    "Something went wrong while tagging the transcript.",
-                )
-                return render(
-                    request,
-                    "transcription/upload_audio.html",
-                    {"form": form},
-                    status=500,
-                )
+            transcribe_uploaded_audio.apply_async(
+                args=[
+                    job.id,
+                    upload_storage_name,
+                    transcript.id,
+                    [topic.id for topic in selected_topics],
+                ],
+                task_id=task_id,
+            )
 
-            # Redirect to transcripts page
-            return redirect('transcription:transcripts')
+            return redirect(
+                "transcription:view_transcript",
+                transcript_id=transcript.id,
+            )
     else:
         form = TranscriptForm()
 
     return render(request, 'transcription/upload_audio.html', {'form': form})
+
+
+def _save_upload_for_background_job(audio_file):
+    extension = os.path.splitext(audio_file.name)[1]
+    storage_name = f"background_uploads/{uuid.uuid4()}{extension}"
+
+    return default_storage.save(storage_name, audio_file)
 
 @login_required
 def view_transcript(request, transcript_id):
@@ -256,3 +187,4 @@ def generate_report_page_section(request):
         request,
         "transcription/partials/generate-report-page-section.html",
     )
+
