@@ -26,6 +26,15 @@ main
 
 This PR establishes the schema and accounting service without instrumenting API calls yet.
 
+**Implementation Tracking**
+- [] Centralize active model configuration
+- [] Add `ModelPrice`
+- [] Add `TaskPricing`
+- [] Add the immutable `UsageEvent` ledger
+- [] Add permissions
+- [] Add the pricing service
+- [] Seed initial pricing
+
 ### 1. Centralize active model configuration
 
 - Add these settings to `missourai_web_app/settings.py`:
