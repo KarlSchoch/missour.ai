@@ -4,6 +4,24 @@ This plan implements usage-based billing for transcription, summary generation, 
 
 Test implementation is intentionally excluded from these to-dos. Creating and validating tests will be handled separately.
 
+## PR Strategy and Tracking
+### PR Strategy
+```
+main
+ ├── 40-usage-tracking              → PR 1 → main
+ ├── 40-usage-instrumentation       → PR 2 → main
+ ├── 40-usage-reporting-api         → PR 3 → main
+ ├── 40-usage-dashboard             → PR 4 → main
+ └── 40-usage-pricing-admin         → PR 5 → main
+```
+
+### PR tracking
+- [ ] PR 1 — Model configuration and billing foundation
+- [ ] PR 2 — Model-call instrumentation
+- [ ] PR 3 — Usage reporting API and page shell
+- [ ] PR 4 — React usage dashboard
+- [ ] PR 5 — Pricing administration and rollout controls
+
 ## PR 1 — Model Configuration and Billing Foundation
 
 This PR establishes the schema and accounting service without instrumenting API calls yet.
