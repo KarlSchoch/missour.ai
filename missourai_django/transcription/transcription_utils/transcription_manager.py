@@ -17,7 +17,7 @@ from openai import OpenAI
 from transcription.models import TranscriptionChunkMetric, TranscriptionJobMetric
 
 logger = logging.getLogger(__name__)
-TRANSCRIPTION_MODEL_NAME = "gpt-4o-mini-transcribe"
+TRANSCRIPTION_MODEL_NAME = "gpt-transcribe"
 
 class TranscriptionMediaError(Exception):
     pass
