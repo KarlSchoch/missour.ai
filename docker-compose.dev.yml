@@ -8,12 +8,9 @@ services:
       - rabbitmq
     working_dir: /app/missourai_django
     command: ["/app/.venv/bin/python", "manage.py", "runserver", "0.0.0.0:8000"]
-    env_file: .env
-    environment:
-      DJANGO_VITE_DEV: "true"
-      DEBUG: "True"
-      MODEL_ENV: "dev"
-      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 2
+    env_file:
+      - .env
+      - .env.dev
     volumes:
       - .:/app
       - venv:/app/.venv
@@ -39,11 +36,9 @@ services:
       - worker
       - --loglevel=INFO
       - --concurrency=1
-    env_file: .env
-    environment:
-      DEBUG: "True"
-      MODEL_ENV: "dev"
-      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 2
+    env_file:
+      - .env
+      - .env.dev
     volumes:
       - .:/app
       - venv:/app/.venv

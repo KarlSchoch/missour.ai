@@ -3,6 +3,7 @@ from transcription.models import Transcript, Chunk, Topic, Tag
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from typing import List
 import os
+from django.conf import settings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages.base import BaseMessage
 from langchain.chat_models import init_chat_model
@@ -28,12 +29,12 @@ class TaggingManager:
             topics:list[Topic] = [],
             chunk_size:int = 500,
             chunk_overlap:int = 50,
-            tagging_model:str = 'gpt-4.1-mini',
+            tagging_model:str = None,
             model_provider:str = 'openai'
         ):
         self.client = OpenAI(api_key=api_key)
         self.model_provider = model_provider
-        self.tagging_model = tagging_model
+        self.tagging_model = tagging_model or settings.TAGGING_MODEL
         self.transcript = transcript
         self.chunker = RecursiveCharacterTextSplitter(
             chunk_size = chunk_size,

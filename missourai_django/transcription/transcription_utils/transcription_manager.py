@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 import openai
+from django.conf import settings
 from django.db import close_old_connections
 from django.utils import timezone
 from openai import OpenAI
@@ -17,7 +18,6 @@ from openai import OpenAI
 from transcription.models import TranscriptionChunkMetric, TranscriptionJobMetric
 
 logger = logging.getLogger(__name__)
-TRANSCRIPTION_MODEL_NAME = "gpt-transcribe"
 
 class TranscriptionMediaError(Exception):
     pass
@@ -33,8 +33,10 @@ class TranscriptionManager:
         min_chunk_duration_sec: int = 15,
         max_concurrent_chunks: int = 2,
         job_metric: Optional[TranscriptionJobMetric] = None,
+        model_name: Optional[str] = None,
     ):
         self.client = OpenAI(api_key=api_key)
+        self.model_name = model_name or settings.TRANSCRIPTION_MODEL
         self.max_file_size = max_file_size
         self.file_path = file_path
         self.max_split_depth = max_split_depth
@@ -88,7 +90,7 @@ class TranscriptionManager:
                 audio_duration_sec=raw_file_duration,
                 normalized_duration_sec=self.file_duration,
                 max_concurrent_chunks=self.max_concurrent_chunks,
-                model_name=TRANSCRIPTION_MODEL_NAME,
+                model_name=self.model_name,
             )
         except Exception:
             self._cleanup_normalized_audio()
@@ -207,7 +209,7 @@ class TranscriptionManager:
 
         with open(chunk_path, "rb") as audio_file:
             transcript = self.client.audio.transcriptions.create(
-                model=TRANSCRIPTION_MODEL_NAME,
+                model=self.model_name,
                 file=audio_file,
             )
 

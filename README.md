@@ -28,18 +28,24 @@ The web application combines a Django backend that exposes APIs and serves the H
 3) Copy data from the old droplet to the new one (two options):
    - Pull from the old server:
       - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" root@OLD_IP:~/missour.ai/.env ./missour.ai/`
+      - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" root@OLD_IP:~/missour.ai/.env.prod ./missour.ai/`
       - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" root@OLD_IP:~/missour.ai/missourai_django/db.sqlite3 ./missour.ai/missourai_django/`
       - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" root@OLD_IP:~/missour.ai/missourai_django/media/ ./missour.ai/missourai_django/media/`
    - Push to the new server:
       - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" ./missour.ai/.env root@NEW_IP:~/missour.ai/`
+      - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" ./missour.ai/.env.prod root@NEW_IP:~/missour.ai/`
       - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" ./missour.ai/missourai_django/db.sqlite3 root@NEW_IP:~/missour.ai/missourai_django/`
       - `rsync -av -e "ssh -i ~/.ssh/id_missour_ai" ./missour.ai/missourai_django/media/ root@NEW_IP:~/missour.ai/missourai_django/media/`
    - `rsync` uses SSH for transport; authenticate with a key in `~/.ssh/authorized_keys` on each droplet (agent forwarding avoids copying private keys to servers).
 
 **Development**
-1) Copy env template and fill secrets: `cp .env.example .env` then set `SECRET_KEY`, `OPENAI_API_KEY`, etc.
-   - A number of key security-related environment variables, specifically `MODEUL_ENV` are controlled within the `docker-compose.dev.yml` file rather than within the `.env` file to avoid accidental API spend.
-   - This means that to control whether model calls are mocked or actually made to external vendors, you need to update the `model_env` variable within the [docker-compose.dev.yml](./docker-compose.dev.yml) and then recreate the containers by appending `--force-recreate` to your `docker compose up` command
+1) Create the shared secrets file and the development runtime file:
+   - `cp .env.example .env`
+   - `cp .env.dev.example .env.dev`
+   - Set `SECRET_KEY`, `OPENAI_API_KEY`, and the other secrets in `.env`.
+   - Keep development behavior, model selection, and concurrency settings in `.env.dev`.
+   - `MODEL_ENV=dev` prevents external model calls. Change it deliberately to `test` or `prod` only when real calls are intended.
+   - Recreate the containers after changing either environment file by adding `--force-recreate` to the `docker compose up` command.
 2) Start dev stack with hot reload (Django + Vite):  
    `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`  
    - Binds the whole repo into the container for live code/template changes.  
@@ -52,6 +58,7 @@ The web application combines a Django backend that exposes APIs and serves the H
    - Frontend deps (`frontend/package.json`): run `docker compose -f docker-compose.dev.yml run --rm frontend npm install`. If you see Rollup optional-deps errors, remove `frontend/node_modules` on the host before reinstalling.
 
 **Production**
+- Create `.env` from `.env.example` for secrets and host-specific values, and create `.env.prod` from `.env.prod.example` for production runtime and model settings.
 - Build and run the app behind Nginx (HTTPS, clean URLs):  
   `docker compose up --build`
   - Runs `manage.py migrate` on startup, then uvicorn serving ASGI (internally on `web:8000`).  
@@ -136,7 +143,7 @@ The web application combines a Django backend that exposes APIs and serves the H
 - **Dev traffic proxies through Django.** The Vite dev server proxies `'/api'` to `http://localhost:8000/` to reuse Django's session and CSRF cookies while developing React apps (`frontend/vite.config.js` -> `server.proxy`).
 - **Initial payloads come from Django views.** Each page view returns an `initial_payload` dictionary that gets serialized with `{{ initial_payload|json_script:"initial-payload" }}` and can be read by React via `document.getElementById('initial-payload')`.  This `initial_payload ` is generated from the view
 - **CSRF stays consistent across fetches.** Frontend code imports `getCsrfToken` from `frontend/src/utils/csrf.js`, ensuring POST/PUT/PATCH requests include the same `csrftoken` cookie Django issued.
-- **Model Environment**: Since this project relies upon calls to external APIs, we have created the infrastructure to bypass these calls and thus incur inference costs.  To do this, we have created `Manager` Classes that encompass the various AI functionalities (currently only a [`TranscriptionManager`](/missourai_django/transcription/transcription_utils/transcription_manager.py) and  [`TaggingManager`](/missourai_django/transcription/tagging/tagging_manager.py), possibly more capabilities eventually).  This allows us to centralize any AI calls within one location within the code base, thus simplifying maintenance and mocking.  While building out initial capabilities, set the `MODEL_ENV` variable within your `.env` file to `dev` to take advantage of mocked responses.  When you want to do more integration-testing and ensure that your code works well with the model and eventually put the application into production, you can set the `MODEL_ENV` variable to `test` or `prod`
+- **Model Environment**: Since this project relies upon calls to external APIs, manager classes centralize the AI functionality and make it possible to bypass paid calls in development. Set `MODEL_ENV` in `.env.dev` or `.env.prod`: `dev` uses mocked responses, while `test` and `prod` make external calls. Active models are also configured in those runtime files through `TRANSCRIPTION_MODEL`, `SUMMARY_MODEL`, and `TAGGING_MODEL`. Django exposes these values through settings, and the transcription, summary, and tagging managers use them unless an explicit model is supplied by a caller.
 - **Celery separates long-running work from page requests.** Django queues work through RabbitMQ using `CELERY_BROKER_URL`, and Celery stores task state/results in the Django database because `CELERY_RESULT_BACKEND = "django-db"` and `django_celery_results` is installed.
 
 ### Long Running Tasks

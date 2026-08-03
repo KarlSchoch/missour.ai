@@ -199,6 +199,11 @@ CELERY_RESULT_BACKEND = 'django-db' # Sets backend to default database in Settin
 CELERY_WORKER_PREFETCH_MULTIPLIER = int(os.getenv("CELERY_WORKER_PREFETCH_MULTIPLIER", "1"))
 DJANGO_LOG_DIR = os.getenv("DJANGO_LOG_DIR")
 
+# --- OpenAI model configuration ---
+TRANSCRIPTION_MODEL = os.getenv("TRANSCRIPTION_MODEL", "gpt-transcribe")
+SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "gpt-4.1-mini")
+TAGGING_MODEL = os.getenv("TAGGING_MODEL", "gpt-4.1-mini")
+
 # --- Application logging ---
 LOGGING = {
     "version": 1,

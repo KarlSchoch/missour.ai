@@ -2,6 +2,7 @@ from langchain.chat_models import init_chat_model
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import os
+from django.conf import settings
 from ..tests.test_utils import FakeLLM
 from ..models import Summary, Transcript, Topic
 
@@ -12,10 +13,11 @@ class SummaryManager:
     def __init__(
             self,
             api_key:str,
-            summary_model:str = 'gpt-4.1-mini',
+            summary_model:str = None,
             model_provider:str = 'openai'
         ):
         self.model_provider = model_provider
+        self.summary_model = summary_model or settings.SUMMARY_MODEL
         fake_summary_responses = [
             'Concise summary of a deep and engaging hearing.',
         ] * 5
@@ -24,7 +26,7 @@ class SummaryManager:
             self.llm = FakeLLM(fake_summary_responses)
         elif os.getenv("MODEL_ENV") in ['test', 'prod']:
             self.llm = init_chat_model(
-                summary_model,
+                self.summary_model,
                 model_provider=self.model_provider,
                 api_key=api_key
             )
