@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 def _overlapping_effective_periods(queryset, effective_from, effective_to):
@@ -13,6 +14,42 @@ def _overlapping_effective_periods(queryset, effective_from, effective_to):
     if effective_to is not None:
         queryset = queryset.filter(effective_from__lt=effective_to)
     return queryset
+
+
+def _validate_referenced_pricing_change(instance, original):
+    if not instance.usage_events.exists():
+        return
+
+    immutable_fields = [
+        field.attname
+        for field in instance._meta.concrete_fields
+        if field.name not in {"effective_to", "created_at"}
+    ]
+    changed_fields = [
+        field_name
+        for field_name in immutable_fields
+        if getattr(instance, field_name) != getattr(original, field_name)
+    ]
+    if changed_fields:
+        raise ValidationError(
+            "Pricing referenced by usage events cannot be changed. "
+            "Create a new effective-dated pricing record instead."
+        )
+
+    if instance.effective_to == original.effective_to:
+        return
+    if original.effective_to is not None or instance.effective_to is None:
+        raise ValidationError(
+            {"effective_to": "A referenced pricing period can only be closed once."}
+        )
+    if instance.usage_events.filter(occurred_at__gte=instance.effective_to).exists():
+        raise ValidationError(
+            {
+                "effective_to": (
+                    "The pricing period cannot end before an existing usage event."
+                )
+            }
+        )
 
 
 class ModelPrice(models.Model):
@@ -178,8 +215,18 @@ class ModelPrice(models.Model):
             raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            original = ModelPrice.objects.get(pk=self.pk)
+            _validate_referenced_pricing_change(self, original)
         self.full_clean()
         return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.usage_events.exists():
+            raise ValidationError(
+                "Pricing referenced by usage events cannot be deleted."
+            )
+        return super().delete(*args, **kwargs)
 
     def __str__(self):
         return (
@@ -269,8 +316,18 @@ class TaskPricing(models.Model):
             raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            original = TaskPricing.objects.get(pk=self.pk)
+            _validate_referenced_pricing_change(self, original)
         self.full_clean()
         return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.usage_events.exists():
+            raise ValidationError(
+                "Pricing referenced by usage events cannot be deleted."
+            )
+        return super().delete(*args, **kwargs)
 
     def __str__(self):
         return (
@@ -476,3 +533,348 @@ class Summary(models.Model):
                 )
             )
         ]
+
+
+class UsageEventQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError(
+            "Usage events must be updated through their validated lifecycle."
+        )
+
+    def delete(self):
+        raise ValidationError("Usage events are immutable and cannot be deleted.")
+
+
+class UsageEvent(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        RECONCILIATION_REQUIRED = (
+            "reconciliation_required",
+            "Reconciliation required",
+        )
+        SIMULATED = "simulated", "Simulated"
+
+    class UsageSource(models.TextChoices):
+        PROVIDER = "provider", "Provider"
+        DURATION = "duration", "Duration"
+        SIMULATED = "simulated", "Simulated"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="usage_events",
+    )
+    task_type = models.CharField(
+        max_length=30,
+        choices=TaskPricing.TaskType.choices,
+    )
+    provider = models.CharField(
+        max_length=50,
+        choices=ModelPrice.Provider.choices,
+        default=ModelPrice.Provider.OPENAI,
+    )
+    model_name = models.CharField(max_length=100)
+    occurred_at = models.DateTimeField(default=timezone.now)
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    billing_unit = models.CharField(
+        max_length=30,
+        choices=ModelPrice.BillingUnit.choices,
+    )
+    usage_source = models.CharField(max_length=20, choices=UsageSource.choices)
+
+    input_tokens = models.PositiveBigIntegerField(null=True, blank=True)
+    cached_input_tokens = models.PositiveBigIntegerField(null=True, blank=True)
+    output_tokens = models.PositiveBigIntegerField(null=True, blank=True)
+    audio_duration_seconds = models.DecimalField(
+        max_digits=20,
+        decimal_places=6,
+        null=True,
+        blank=True,
+    )
+
+    model_price = models.ForeignKey(
+        ModelPrice,
+        on_delete=models.PROTECT,
+        related_name="usage_events",
+    )
+    task_pricing = models.ForeignKey(
+        TaskPricing,
+        on_delete=models.PROTECT,
+        related_name="usage_events",
+    )
+    base_cost = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+    )
+    multiplier = models.DecimalField(max_digits=12, decimal_places=6)
+    billed_cost = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+    )
+    currency = models.CharField(max_length=3, default="USD")
+    calculation_details = models.JSONField(default=dict, blank=True)
+
+    provider_request_id = models.CharField(max_length=255, blank=True, default="")
+    idempotency_key = models.CharField(max_length=255, unique=True)
+
+    transcript = models.ForeignKey(
+        Transcript,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usage_events",
+    )
+    summary = models.ForeignKey(
+        Summary,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usage_events",
+    )
+    tag = models.ForeignKey(
+        Tag,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usage_events",
+    )
+    transcription_chunk = models.ForeignKey(
+        TranscriptionChunkMetric,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usage_events",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = UsageEventQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-occurred_at", "-id"]
+        indexes = [
+            models.Index(fields=["user", "occurred_at"]),
+            models.Index(fields=["task_type", "occurred_at"]),
+            models.Index(fields=["status", "occurred_at"]),
+            models.Index(fields=["transcript", "occurred_at"]),
+            models.Index(fields=["summary", "occurred_at"]),
+            models.Index(fields=["tag", "occurred_at"]),
+            models.Index(fields=["transcription_chunk", "occurred_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                name="usage_event_nonnegative_values",
+                condition=(
+                    (
+                        Q(audio_duration_seconds__isnull=True)
+                        | Q(audio_duration_seconds__gte=0)
+                    )
+                    & (Q(base_cost__isnull=True) | Q(base_cost__gte=0))
+                    & (Q(billed_cost__isnull=True) | Q(billed_cost__gte=0))
+                    & Q(multiplier__gt=0)
+                ),
+            ),
+            models.CheckConstraint(
+                name="usage_event_quantity_matches_unit",
+                condition=(
+                    Q(
+                        billing_unit="text_tokens",
+                        audio_duration_seconds__isnull=True,
+                    )
+                    | Q(
+                        billing_unit="audio_duration",
+                        input_tokens__isnull=True,
+                        cached_input_tokens__isnull=True,
+                        output_tokens__isnull=True,
+                    )
+                ),
+            ),
+            models.CheckConstraint(
+                name="usage_event_succeeded_has_costs",
+                condition=(
+                    ~Q(status="succeeded")
+                    | Q(base_cost__isnull=False, billed_cost__isnull=False)
+                ),
+            ),
+            models.CheckConstraint(
+                name="usage_event_simulated_is_zero",
+                condition=(
+                    ~Q(status="simulated")
+                    | Q(
+                        usage_source="simulated",
+                        base_cost=0,
+                        billed_cost=0,
+                    )
+                ),
+            ),
+        ]
+
+    @property
+    def is_billable(self):
+        return self.status == self.Status.SUCCEEDED
+
+    def clean(self):
+        super().clean()
+        self.provider = self.provider.strip().lower()
+        self.model_name = self.model_name.strip()
+        self.currency = self.currency.strip().upper()
+
+        errors = {}
+        for field_name in (
+            "audio_duration_seconds",
+            "base_cost",
+            "billed_cost",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and value < Decimal("0"):
+                errors[field_name] = "Value cannot be negative."
+        if self.multiplier is not None and self.multiplier <= Decimal("0"):
+            errors["multiplier"] = "Multiplier must be greater than zero."
+
+        if self.billing_unit == ModelPrice.BillingUnit.TEXT_TOKENS:
+            if self.audio_duration_seconds is not None:
+                errors["audio_duration_seconds"] = (
+                    "Text-token usage cannot include audio duration."
+                )
+        elif self.billing_unit == ModelPrice.BillingUnit.AUDIO_DURATION:
+            for field_name in (
+                "input_tokens",
+                "cached_input_tokens",
+                "output_tokens",
+            ):
+                if getattr(self, field_name) is not None:
+                    errors[field_name] = (
+                        "Audio-duration usage cannot include token quantities."
+                    )
+
+        if self.status == self.Status.SUCCEEDED:
+            if self.base_cost is None:
+                errors["base_cost"] = "Succeeded usage requires a base cost."
+            if self.billed_cost is None:
+                errors["billed_cost"] = "Succeeded usage requires a billed cost."
+            if (
+                self.billing_unit == ModelPrice.BillingUnit.TEXT_TOKENS
+                and (self.input_tokens is None or self.output_tokens is None)
+            ):
+                errors["status"] = (
+                    "Succeeded text-token usage requires input and output counts."
+                )
+            if (
+                self.billing_unit == ModelPrice.BillingUnit.AUDIO_DURATION
+                and self.audio_duration_seconds is None
+            ):
+                errors["status"] = (
+                    "Succeeded audio-duration usage requires an audio duration."
+                )
+
+        if self.status == self.Status.SIMULATED:
+            if self.usage_source != self.UsageSource.SIMULATED:
+                errors["usage_source"] = "Simulated usage requires a simulated source."
+            if self.base_cost != Decimal("0") or self.billed_cost != Decimal("0"):
+                errors["status"] = "Simulated usage must have zero costs."
+        elif self.usage_source == self.UsageSource.SIMULATED:
+            errors["usage_source"] = "A simulated source requires simulated status."
+
+        model_price = self.model_price if self.model_price_id else None
+        task_pricing = self.task_pricing if self.task_pricing_id else None
+        if model_price is not None:
+            if self.provider != model_price.provider:
+                errors["provider"] = "Provider must match the selected model price."
+            if self.model_name != model_price.model_name:
+                errors["model_name"] = "Model must match the selected model price."
+            if self.billing_unit != model_price.billing_unit:
+                errors["billing_unit"] = (
+                    "Billing unit must match the selected model price."
+                )
+            if self.currency != model_price.currency:
+                errors["currency"] = "Currency must match the selected model price."
+            if self.occurred_at is not None and (
+                self.occurred_at < model_price.effective_from
+                or (
+                    model_price.effective_to is not None
+                    and self.occurred_at >= model_price.effective_to
+                )
+            ):
+                errors["model_price"] = (
+                    "Model price was not effective when the usage occurred."
+                )
+
+        if task_pricing is not None:
+            if task_pricing.model_price_id != self.model_price_id:
+                errors["task_pricing"] = (
+                    "Task pricing must reference the selected model price."
+                )
+            if task_pricing.task_type != self.task_type:
+                errors["task_type"] = "Task must match the selected task pricing."
+            if self.multiplier != task_pricing.multiplier:
+                errors["multiplier"] = (
+                    "Multiplier must match the selected task pricing."
+                )
+            if self.occurred_at is not None and (
+                self.occurred_at < task_pricing.effective_from
+                or (
+                    task_pricing.effective_to is not None
+                    and self.occurred_at >= task_pricing.effective_to
+                )
+            ):
+                errors["task_pricing"] = (
+                    "Task pricing was not effective when the usage occurred."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            original = UsageEvent.objects.get(pk=self.pk)
+            if original.status in {
+                self.Status.SUCCEEDED,
+                self.Status.FAILED,
+                self.Status.SIMULATED,
+            }:
+                raise ValidationError(
+                    "Completed usage events are immutable and cannot be changed."
+                )
+            immutable_fields = (
+                "user_id",
+                "task_type",
+                "provider",
+                "model_name",
+                "occurred_at",
+                "billing_unit",
+                "usage_source",
+                "model_price_id",
+                "task_pricing_id",
+                "multiplier",
+                "currency",
+                "idempotency_key",
+            )
+            if any(
+                getattr(self, field_name) != getattr(original, field_name)
+                for field_name in immutable_fields
+            ):
+                raise ValidationError(
+                    "Usage identity and pricing snapshots cannot be changed."
+                )
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Usage events are immutable and cannot be deleted.")
+
+    def __str__(self):
+        return (
+            f"{self.get_task_type_display()} usage for user {self.user_id} "
+            f"at {self.occurred_at:%Y-%m-%d %H:%M:%S}"
+        )

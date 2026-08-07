@@ -12,6 +12,7 @@ from .models import (
     Transcript,
     TranscriptionChunkMetric,
     TranscriptionJobMetric,
+    UsageEvent,
 )
 
 
@@ -51,6 +52,32 @@ class TaskPricingAdmin(admin.ModelAdmin):
         if obj.created_by_id is None:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+
+@admin.register(UsageEvent)
+class UsageEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "occurred_at",
+        "user",
+        "task_type",
+        "model_name",
+        "status",
+        "base_cost",
+        "billed_cost",
+        "currency",
+    )
+    list_filter = ("status", "task_type", "billing_unit", "usage_source")
+    search_fields = ("idempotency_key", "provider_request_id", "model_name")
+    readonly_fields = tuple(field.name for field in UsageEvent._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 admin.site.register([
     BackgroundJob,
