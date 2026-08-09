@@ -59,6 +59,7 @@ The web application combines a Django backend that exposes APIs and serves the H
 
 **Production**
 - Create `.env` from `.env.example` for secrets and host-specific values, and create `.env.prod` from `.env.prod.example` for production runtime and model settings.
+- After migrations run, assign users who need organization-wide usage access to the `Usage Viewers` Django group. Assign users who maintain model and task pricing to `Usage Pricing Managers`. These groups are intentionally independent; superusers receive both permissions through Django automatically.
 - Build and run the app behind Nginx (HTTPS, clean URLs):  
   `docker compose up --build`
   - Runs `manage.py migrate` on startup, then uvicorn serving ASGI (internally on `web:8000`).  

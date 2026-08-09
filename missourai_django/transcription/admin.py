@@ -16,8 +16,31 @@ from .models import (
 )
 
 
+VIEW_ALL_USAGE_PERMISSION = "transcription.view_all_usage"
+MANAGE_USAGE_PRICING_PERMISSION = "transcription.manage_usage_pricing"
+
+
+class PricingPermissionAdmin(admin.ModelAdmin):
+    def has_module_permission(self, request):
+        return request.user.has_perm(
+            VIEW_ALL_USAGE_PERMISSION
+        ) or request.user.has_perm(MANAGE_USAGE_PRICING_PERMISSION)
+
+    def has_view_permission(self, request, obj=None):
+        return self.has_module_permission(request)
+
+    def has_add_permission(self, request):
+        return request.user.has_perm(MANAGE_USAGE_PRICING_PERMISSION)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(ModelPrice)
-class ModelPriceAdmin(admin.ModelAdmin):
+class ModelPriceAdmin(PricingPermissionAdmin):
     list_display = (
         "model_name",
         "provider",
@@ -28,7 +51,7 @@ class ModelPriceAdmin(admin.ModelAdmin):
     )
     list_filter = ("provider", "billing_unit", "currency")
     search_fields = ("model_name",)
-    readonly_fields = ("created_at",)
+    readonly_fields = ("created_by", "created_at")
 
     def save_model(self, request, obj, form, change):
         if obj.created_by_id is None:
@@ -37,7 +60,7 @@ class ModelPriceAdmin(admin.ModelAdmin):
 
 
 @admin.register(TaskPricing)
-class TaskPricingAdmin(admin.ModelAdmin):
+class TaskPricingAdmin(PricingPermissionAdmin):
     list_display = (
         "task_type",
         "model_price",
@@ -46,7 +69,7 @@ class TaskPricingAdmin(admin.ModelAdmin):
         "effective_to",
     )
     list_filter = ("task_type",)
-    readonly_fields = ("created_at",)
+    readonly_fields = ("created_by", "created_at")
 
     def save_model(self, request, obj, form, change):
         if obj.created_by_id is None:
@@ -69,6 +92,12 @@ class UsageEventAdmin(admin.ModelAdmin):
     list_filter = ("status", "task_type", "billing_unit", "usage_source")
     search_fields = ("idempotency_key", "provider_request_id", "model_name")
     readonly_fields = tuple(field.name for field in UsageEvent._meta.fields)
+
+    def has_module_permission(self, request):
+        return request.user.has_perm(VIEW_ALL_USAGE_PERMISSION)
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.has_perm(VIEW_ALL_USAGE_PERMISSION)
 
     def has_add_permission(self, request):
         return False

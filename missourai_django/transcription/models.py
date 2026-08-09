@@ -663,6 +663,10 @@ class UsageEvent(models.Model):
 
     class Meta:
         ordering = ["-occurred_at", "-id"]
+        permissions = [
+            ("view_all_usage", "Can view usage for all users"),
+            ("manage_usage_pricing", "Can manage usage pricing"),
+        ]
         indexes = [
             models.Index(fields=["user", "occurred_at"]),
             models.Index(fields=["task_type", "occurred_at"]),
