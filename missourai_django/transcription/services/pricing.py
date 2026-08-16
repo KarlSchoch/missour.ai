@@ -147,6 +147,55 @@ def create_pending_usage_event(
     )
 
 
+@transaction.atomic
+def create_simulated_usage_event(
+    *,
+    user,
+    task_type,
+    provider,
+    model_name,
+    idempotency_key,
+    occurred_at=None,
+    provider_request_id="",
+    transcript=None,
+    summary=None,
+    tag=None,
+    transcription_chunk=None,
+    calculation_details=None,
+):
+    """Record a development-mode model call without creating billable usage."""
+    occurred_at = occurred_at or timezone.now()
+    model_price, task_pricing = resolve_pricing(
+        task_type, provider, model_name, occurred_at
+    )
+    details = dict(calculation_details or {})
+    details["pricing"] = _pricing_snapshot(model_price, task_pricing)
+    details["simulation"] = {"reason": "MODEL_ENV=dev"}
+    return UsageEvent.objects.create(
+        user=user,
+        task_type=task_type,
+        provider=model_price.provider,
+        model_name=model_price.model_name,
+        occurred_at=occurred_at,
+        status=UsageEvent.Status.SIMULATED,
+        billing_unit=model_price.billing_unit,
+        usage_source=UsageEvent.UsageSource.SIMULATED,
+        model_price=model_price,
+        task_pricing=task_pricing,
+        base_cost=Decimal("0"),
+        multiplier=task_pricing.multiplier,
+        billed_cost=Decimal("0"),
+        currency=model_price.currency,
+        calculation_details=details,
+        provider_request_id=provider_request_id,
+        idempotency_key=idempotency_key,
+        transcript=transcript,
+        summary=summary,
+        tag=tag,
+        transcription_chunk=transcription_chunk,
+    )
+
+
 def _as_nonnegative_integer(value, field_name):
     if isinstance(value, bool):
         raise ValidationError({field_name: "Value must be a nonnegative integer."})
@@ -203,6 +252,8 @@ def complete_token_event(
     cached_input_tokens=0,
     provider_request_id="",
     calculation_details=None,
+    summary=None,
+    tag=None,
 ):
     """Complete text usage; input_tokens is the provider's total input count."""
     event = _lock_transitionable_event(usage_event)
@@ -252,6 +303,10 @@ def complete_token_event(
     event.base_cost = base_cost
     event.billed_cost = billed_cost
     event.status = UsageEvent.Status.SUCCEEDED
+    if summary is not None:
+        event.summary = summary
+    if tag is not None:
+        event.tag = tag
     if provider_request_id:
         event.provider_request_id = provider_request_id
     _merge_details(
@@ -285,6 +340,8 @@ def complete_duration_event(
     audio_duration_seconds,
     provider_request_id="",
     calculation_details=None,
+    transcript=None,
+    transcription_chunk=None,
 ):
     """Complete an audio-duration usage event and calculate its cost."""
     event = _lock_transitionable_event(usage_event)
@@ -306,6 +363,10 @@ def complete_duration_event(
     event.base_cost = base_cost
     event.billed_cost = billed_cost
     event.status = UsageEvent.Status.SUCCEEDED
+    if transcript is not None:
+        event.transcript = transcript
+    if transcription_chunk is not None:
+        event.transcription_chunk = transcription_chunk
     if provider_request_id:
         event.provider_request_id = provider_request_id
     _merge_details(
