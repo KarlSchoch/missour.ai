@@ -13,13 +13,9 @@ services:
       target: runtime
     depends_on:
       - rabbitmq
-    env_file: .env
-    environment:
-      DJANGO_VITE_DEV: "false"
-      MODEL_ENV: "prod"
-      DEBUG: "False"
-      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 8
-      DJANGO_LOG_DIR: "/var/log/missourai"
+    env_file:
+      - .env
+      - .env.prod
     expose:
       - "8000"
     volumes:
@@ -45,13 +41,9 @@ services:
       - worker
       - --loglevel=INFO
       - --concurrency=2
-    env_file: .env
-    environment:
-      DJANGO_VITE_DEV: "false"
-      DEBUG: "False"
-      MODEL_ENV: "prod"
-      TRANSCRIPTION_MAX_CONCURRENT_CHUNKS: 8
-      DJANGO_LOG_DIR: "/var/log/missourai"
+    env_file:
+      - .env
+      - .env.prod
     volumes:
       - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
       - ./missourai_django/media:/app/missourai_django/media
