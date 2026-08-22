@@ -565,6 +565,44 @@ class TaggingTests(TestCase):
             event.calculation_details["lifecycle"]["reason"],
         )
 
+    def test_tag_transcript_missing_token_usage_keys_requires_reconciliation(self):
+        for missing_key in ("input_tokens", "output_tokens"):
+            with self.subTest(missing_key=missing_key):
+                transcript = self._make_transcript(f"missing {missing_key}")
+                Chunk.objects.create(
+                    transcript=transcript, chunk_text=transcript.transcript_text
+                )
+                response = self._response(
+                    Classification(tag=True, relevant_section="missing metadata"),
+                    f"tag-request-missing-{missing_key}",
+                )
+                del response["raw"].usage_metadata[missing_key]
+                self.mock_init.return_value = FakeLLM([response])
+                manager = TaggingManager(
+                    os.getenv("OPENAI_API_KEY"),
+                    transcript=transcript,
+                    topics=[self.topic_it],
+                )
+
+                with patch.dict(os.environ, {"MODEL_ENV": "production"}):
+                    tags = manager.tag_transcript()
+
+                self.assertEqual(tags, [])
+                self.assertFalse(
+                    Tag.objects.filter(chunk__transcript=transcript).exists()
+                )
+                event = UsageEvent.objects.get(transcript=transcript)
+                self.assertEqual(
+                    event.status, UsageEvent.Status.RECONCILIATION_REQUIRED
+                )
+                self.assertEqual(event.provider_request_id, "")
+                self.assertIsNone(event.input_tokens)
+                self.assertIsNone(event.output_tokens)
+                self.assertTrue(
+                    event.calculation_details["lifecycle"]
+                    ["provider_response_received"]
+                )
+
     def test_tag_chunk_uses_text_values_for_prompt_inputs(self):
         transcript = self._make_transcript("alpha beta gamma")
         chunk = Chunk.objects.create(transcript=transcript, chunk_text="alpha beta")

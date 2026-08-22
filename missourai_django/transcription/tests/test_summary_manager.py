@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import os
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -135,6 +136,42 @@ class SummaryManagerSummarizeTests(TestCase):
 
     def test_summarize_token_usage_failure_requires_reconciliation(self):
         self._assert_extraction_failure_requires_reconciliation("token_usage")
+
+    def test_summarize_missing_token_usage_keys_requires_reconciliation(self):
+        for missing_key in ("input_tokens", "output_tokens"):
+            with self.subTest(missing_key=missing_key):
+                llm = Mock()
+                response = self.response()
+                del response.usage_metadata[missing_key]
+                llm.invoke.return_value = response
+
+                with patch.dict(os.environ, {"MODEL_ENV": "production"}):
+                    with self.assertRaisesRegex(ValueError, "valid .*token count"):
+                        self.manager(llm).summarize(
+                            self.transcript.transcript_text,
+                            self.transcript,
+                            operation_id=f"missing-{missing_key}",
+                        )
+
+                self.assertFalse(Summary.objects.exists())
+                event = UsageEvent.objects.get(
+                    idempotency_key=(
+                        f"summary:{self.transcript.pk}:general:general:"
+                        f"missing-{missing_key}"
+                    )
+                )
+                self.assertEqual(
+                    event.status, UsageEvent.Status.RECONCILIATION_REQUIRED
+                )
+                # Completion did not have enough trustworthy usage data to
+                # persist response metadata onto the pending ledger row.
+                self.assertEqual(event.provider_request_id, "")
+                self.assertIsNone(event.input_tokens)
+                self.assertIsNone(event.output_tokens)
+                self.assertTrue(
+                    event.calculation_details["lifecycle"]
+                    ["provider_response_received"]
+                )
 
     def _assert_extraction_failure_requires_reconciliation(self, helper_name):
         llm = Mock()
