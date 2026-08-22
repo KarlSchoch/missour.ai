@@ -24,6 +24,8 @@ from transcription.models import (
 from transcription.services.model_calls import (
     is_simulated_model_environment,
     provider_request_id,
+    validate_provider_request_id,
+    validate_response_text,
 )
 from transcription.services.pricing import (
     complete_duration_event,
@@ -336,8 +338,15 @@ class TranscriptionManager:
             )
             raise
 
-        request_id = provider_request_id(response)
+        request_id = ""
         try:
+            request_id = validate_provider_request_id(
+                provider_request_id(response)
+            )
+            transcript_text = validate_response_text(
+                getattr(response, "text", response),
+                allow_empty=True,
+            )
             if simulated:
                 usage_event = create_simulated_usage_event(
                     user=transcript.created_by,
@@ -351,6 +360,7 @@ class TranscriptionManager:
                     calculation_details={
                         "submitted_audio_duration_seconds": str(submitted_duration),
                         "split_depth": split_depth,
+                        "provider_request_id_present": bool(request_id),
                     },
                 )
             else:
@@ -360,7 +370,10 @@ class TranscriptionManager:
                     provider_request_id=request_id,
                     transcript=transcript,
                     transcription_chunk=chunk_metric,
-                    calculation_details={"split_depth": split_depth},
+                    calculation_details={
+                        "split_depth": split_depth,
+                        "provider_request_id_present": bool(request_id),
+                    },
                 )
         except Exception as exc:
             if usage_event is not None and not simulated:
@@ -390,7 +403,7 @@ class TranscriptionManager:
             chunk_metric.pk if chunk_metric else None,
             usage_event.status,
         )
-        return getattr(response, "text", response)
+        return transcript_text
 
     def _should_split_on_error(self, exc: Exception) -> bool:
         if isinstance(exc, TranscriptionMediaError):

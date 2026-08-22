@@ -1,5 +1,4 @@
 import logging
-import os
 from uuid import uuid4
 
 from django.conf import settings
@@ -10,9 +9,13 @@ from langchain_core.prompts import ChatPromptTemplate
 from transcription.models import Summary, TaskPricing, Transcript, Topic
 from transcription.services.model_calls import (
     is_simulated_model_environment,
+    is_test_model_environment,
     provider_request_id,
     response_text,
     token_usage,
+    validate_provider_request_id,
+    validate_response_text,
+    validate_token_usage,
 )
 from transcription.services.pricing import (
     create_pending_usage_event,
@@ -145,10 +148,19 @@ class SummaryManager:
                 )
             raise
 
-        request_id = provider_request_id(raw_result)
+        request_id = ""
         try:
-            summary_text = response_text(raw_result)
-            input_tokens, cached_tokens, output_tokens = token_usage(raw_result)
+            request_id = validate_provider_request_id(
+                provider_request_id(raw_result)
+            )
+            summary_text = validate_response_text(response_text(raw_result))
+            usage_values = token_usage(raw_result)
+            input_tokens, cached_tokens, output_tokens = validate_token_usage(
+                *usage_values,
+                allow_all_missing=(
+                    simulated or is_test_model_environment()
+                ),
+            )
             with transaction.atomic():
                 summary_obj = Summary.objects.create(
                     transcript=tgt_transcript,
@@ -166,6 +178,9 @@ class SummaryManager:
                         provider_request_id=request_id,
                         transcript=tgt_transcript,
                         summary=summary_obj,
+                        calculation_details={
+                            "provider_request_id_present": bool(request_id),
+                        },
                     )
                 else:
                     usage_event = complete_token_event(
@@ -175,6 +190,9 @@ class SummaryManager:
                         output_tokens=output_tokens,
                         provider_request_id=request_id,
                         summary=summary_obj,
+                        calculation_details={
+                            "provider_request_id_present": bool(request_id),
+                        },
                     )
         except Exception as exc:
             if usage_event is not None and not simulated:

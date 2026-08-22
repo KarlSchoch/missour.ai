@@ -12,9 +12,12 @@ from pydantic import BaseModel, Field
 from transcription.models import Chunk, Tag, TaskPricing, Topic, Transcript
 from transcription.services.model_calls import (
     is_simulated_model_environment,
+    is_test_model_environment,
     parsed_response,
     provider_request_id,
     token_usage,
+    validate_provider_request_id,
+    validate_token_usage,
 )
 from transcription.services.pricing import (
     complete_token_event,
@@ -218,12 +221,21 @@ class TaggingManager:
                 )
                 continue
 
-            request_id = provider_request_id(raw_result)
+            request_id = ""
             try:
+                request_id = validate_provider_request_id(
+                    provider_request_id(raw_result)
+                )
                 result = parsed_response(raw_result)
                 if not isinstance(result, Classification):
                     result = Classification.model_validate(result)
-                input_tokens, cached_tokens, output_tokens = token_usage(raw_result)
+                usage_values = token_usage(raw_result)
+                input_tokens, cached_tokens, output_tokens = validate_token_usage(
+                    *usage_values,
+                    allow_all_missing=(
+                        simulated or is_test_model_environment()
+                    ),
+                )
                 with transaction.atomic():
                     if existing_tag is None:
                         tag_obj = Tag.objects.create(
@@ -254,6 +266,7 @@ class TaggingManager:
                                 "tagging_run_id": run_id,
                                 "chunk_id": chunk.pk,
                                 "topic_id": topic.pk,
+                                "provider_request_id_present": bool(request_id),
                             },
                         )
                     else:
@@ -268,6 +281,7 @@ class TaggingManager:
                                 "tagging_run_id": run_id,
                                 "chunk_id": chunk.pk,
                                 "topic_id": topic.pk,
+                                "provider_request_id_present": bool(request_id),
                             },
                         )
             except Exception as exc:
