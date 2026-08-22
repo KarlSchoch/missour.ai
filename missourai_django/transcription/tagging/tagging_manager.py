@@ -3,7 +3,6 @@ from typing import List
 from uuid import uuid4
 
 from django.conf import settings
-from django.db import transaction
 from langchain.chat_models import init_chat_model
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -221,69 +220,10 @@ class TaggingManager:
                 )
                 continue
 
-            request_id = ""
             try:
-                request_id = validate_provider_request_id(
-                    provider_request_id(raw_result)
-                )
                 result = parsed_response(raw_result)
                 if not isinstance(result, Classification):
                     result = Classification.model_validate(result)
-                usage_values = token_usage(raw_result)
-                input_tokens, cached_tokens, output_tokens = validate_token_usage(
-                    *usage_values,
-                    allow_all_missing=(
-                        simulated or is_test_model_environment()
-                    ),
-                )
-                with transaction.atomic():
-                    if existing_tag is None:
-                        tag_obj = Tag.objects.create(
-                            topic=topic,
-                            chunk=chunk,
-                            topic_present=result.tag,
-                            relevant_section=result.relevant_section,
-                        )
-                    else:
-                        existing_tag.topic_present = result.tag
-                        existing_tag.relevant_section = result.relevant_section
-                        existing_tag.save(
-                            update_fields=["topic_present", "relevant_section"]
-                        )
-                        tag_obj = existing_tag
-
-                    if simulated:
-                        usage_event = create_simulated_usage_event(
-                            user=self.transcript.created_by,
-                            task_type=TaskPricing.TaskType.TAGGING,
-                            provider=self.model_provider,
-                            model_name=self.tagging_model,
-                            idempotency_key=idempotency_key,
-                            provider_request_id=request_id,
-                            transcript=self.transcript,
-                            tag=tag_obj,
-                            calculation_details={
-                                "tagging_run_id": run_id,
-                                "chunk_id": chunk.pk,
-                                "topic_id": topic.pk,
-                                "provider_request_id_present": bool(request_id),
-                            },
-                        )
-                    else:
-                        usage_event = complete_token_event(
-                            usage_event,
-                            input_tokens=input_tokens,
-                            cached_input_tokens=cached_tokens,
-                            output_tokens=output_tokens,
-                            provider_request_id=request_id,
-                            tag=tag_obj,
-                            calculation_details={
-                                "tagging_run_id": run_id,
-                                "chunk_id": chunk.pk,
-                                "topic_id": topic.pk,
-                                "provider_request_id_present": bool(request_id),
-                            },
-                        )
             except Exception as exc:
                 if usage_event is not None and not simulated:
                     mark_reconciliation_required(
@@ -293,6 +233,97 @@ class TaggingManager:
                     )
                 self.failed_pairs.append((chunk.pk, topic.pk, exc))
                 logger.exception(
+                    "tagging_response_invalid usage_event_id=%s transcript_id=%s "
+                    "chunk_id=%s topic_id=%s",
+                    usage_event.pk if usage_event else None,
+                    self.transcript.pk,
+                    chunk.pk,
+                    topic.pk,
+                )
+                continue
+
+            if existing_tag is None:
+                tag_obj = Tag.objects.create(
+                    topic=topic,
+                    chunk=chunk,
+                    topic_present=result.tag,
+                    relevant_section=result.relevant_section,
+                )
+            else:
+                existing_tag.topic_present = result.tag
+                existing_tag.relevant_section = result.relevant_section
+                existing_tag.save(
+                    update_fields=["topic_present", "relevant_section"]
+                )
+                tag_obj = existing_tag
+
+            request_id = ""
+            try:
+                request_id = validate_provider_request_id(
+                    provider_request_id(raw_result)
+                )
+                usage_values = token_usage(raw_result)
+                input_tokens, cached_tokens, output_tokens = validate_token_usage(
+                    *usage_values,
+                    allow_all_missing=(
+                        simulated or is_test_model_environment()
+                    ),
+                )
+                if simulated:
+                    usage_event = create_simulated_usage_event(
+                        user=self.transcript.created_by,
+                        task_type=TaskPricing.TaskType.TAGGING,
+                        provider=self.model_provider,
+                        model_name=self.tagging_model,
+                        idempotency_key=idempotency_key,
+                        provider_request_id=request_id,
+                        transcript=self.transcript,
+                        tag=tag_obj,
+                        calculation_details={
+                            "tagging_run_id": run_id,
+                            "chunk_id": chunk.pk,
+                            "topic_id": topic.pk,
+                            "provider_request_id_present": bool(request_id),
+                        },
+                    )
+                else:
+                    usage_event = complete_token_event(
+                        usage_event,
+                        input_tokens=input_tokens,
+                        cached_input_tokens=cached_tokens,
+                        output_tokens=output_tokens,
+                        provider_request_id=request_id,
+                        tag=tag_obj,
+                        calculation_details={
+                            "tagging_run_id": run_id,
+                            "chunk_id": chunk.pk,
+                            "topic_id": topic.pk,
+                            "provider_request_id_present": bool(request_id),
+                        },
+                    )
+            except Exception as exc:
+                if usage_event is not None and not simulated:
+                    try:
+                        usage_event = mark_reconciliation_required(
+                            usage_event,
+                            reason=exc,
+                            provider_request_id=request_id,
+                            tag=tag_obj,
+                            calculation_details={
+                                "provider_response_received": True,
+                                "provider_request_id_present": bool(request_id),
+                                "tag_id": tag_obj.pk,
+                                "tagging_run_id": run_id,
+                                "chunk_id": chunk.pk,
+                                "topic_id": topic.pk,
+                            },
+                        )
+                    except Exception:
+                        logger.exception(
+                            "usage_reconciliation_marking_failed usage_event_id=%s",
+                            usage_event.pk,
+                        )
+                logger.exception(
                     "usage_reconciliation_required usage_event_id=%s "
                     "provider_request_id=%s transcript_id=%s chunk_id=%s topic_id=%s",
                     usage_event.pk if usage_event else None,
@@ -301,18 +332,17 @@ class TaggingManager:
                     chunk.pk,
                     topic.pk,
                 )
-                continue
 
             self.tags.append(tag_obj)
             logger.info(
                 "usage_event_transition usage_event_id=%s user_id=%s task=tagging "
                 "model=%s provider_request_id=%s artifact_id=%s status=%s",
-                usage_event.pk,
+                usage_event.pk if usage_event else None,
                 self.transcript.created_by_id,
                 self.tagging_model,
                 request_id,
                 tag_obj.pk,
-                usage_event.status,
+                usage_event.status if usage_event else "reconciliation_required",
             )
 
         return self.tags

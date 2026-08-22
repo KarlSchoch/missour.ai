@@ -388,9 +388,24 @@ def complete_duration_event(
     return event
 
 
-def _transition_without_cost(usage_event, status, reason, calculation_details):
+def _transition_without_cost(
+    usage_event,
+    status,
+    reason,
+    calculation_details,
+    *,
+    provider_request_id="",
+    summary=None,
+    tag=None,
+):
     event = _lock_transitionable_event(usage_event)
     event.status = status
+    if provider_request_id:
+        event.provider_request_id = provider_request_id
+    if summary is not None:
+        event.summary = summary
+    if tag is not None:
+        event.tag = tag
     _merge_details(
         event,
         {
@@ -414,7 +429,13 @@ def mark_failed(usage_event, *, reason, calculation_details=None):
 
 @transaction.atomic
 def mark_reconciliation_required(
-    usage_event, *, reason, calculation_details=None
+    usage_event,
+    *,
+    reason,
+    calculation_details=None,
+    provider_request_id="",
+    summary=None,
+    tag=None,
 ):
     """Flag an event whose final usage or cost could not be determined safely."""
     return _transition_without_cost(
@@ -422,4 +443,7 @@ def mark_reconciliation_required(
         UsageEvent.Status.RECONCILIATION_REQUIRED,
         reason,
         calculation_details,
+        provider_request_id=provider_request_id,
+        summary=summary,
+        tag=tag,
     )

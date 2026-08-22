@@ -338,14 +338,24 @@ class TranscriptionManager:
             )
             raise
 
+        try:
+            transcript_text = validate_response_text(
+                getattr(response, "text", response),
+                allow_empty=True,
+            )
+        except Exception as exc:
+            if usage_event is not None and not simulated:
+                mark_reconciliation_required(
+                    usage_event,
+                    reason=exc,
+                    calculation_details={"provider_response_received": True},
+                )
+            raise
+
         request_id = ""
         try:
             request_id = validate_provider_request_id(
                 provider_request_id(response)
-            )
-            transcript_text = validate_response_text(
-                getattr(response, "text", response),
-                allow_empty=True,
             )
             if simulated:
                 usage_event = create_simulated_usage_event(
@@ -377,11 +387,22 @@ class TranscriptionManager:
                 )
         except Exception as exc:
             if usage_event is not None and not simulated:
-                mark_reconciliation_required(
-                    usage_event,
-                    reason=exc,
-                    calculation_details={"provider_response_received": True},
-                )
+                try:
+                    usage_event = mark_reconciliation_required(
+                        usage_event,
+                        reason=exc,
+                        provider_request_id=request_id,
+                        calculation_details={
+                            "provider_response_received": True,
+                            "provider_request_id_present": bool(request_id),
+                            "split_depth": split_depth,
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "usage_reconciliation_marking_failed usage_event_id=%s",
+                        usage_event.pk,
+                    )
             logger.exception(
                 "usage_reconciliation_required usage_event_id=%s "
                 "provider_request_id=%s background_job_id=%s",
@@ -389,19 +410,18 @@ class TranscriptionManager:
                 request_id,
                 self.job_metric.background_job_id,
             )
-            raise
 
         logger.info(
             "usage_event_transition usage_event_id=%s user_id=%s "
             "task=transcription model=%s background_job_id=%s "
             "provider_request_id=%s artifact_id=%s status=%s",
-            usage_event.pk,
+            usage_event.pk if usage_event else None,
             transcript.created_by_id,
             self.model_name,
             self.job_metric.background_job_id,
             request_id,
             chunk_metric.pk if chunk_metric else None,
-            usage_event.status,
+            usage_event.status if usage_event else "reconciliation_required",
         )
         return transcript_text
 

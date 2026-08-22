@@ -2,7 +2,6 @@ import logging
 from uuid import uuid4
 
 from django.conf import settings
-from django.db import transaction
 from langchain.chat_models import init_chat_model
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -148,52 +147,8 @@ class SummaryManager:
                 )
             raise
 
-        request_id = ""
         try:
-            request_id = validate_provider_request_id(
-                provider_request_id(raw_result)
-            )
             summary_text = validate_response_text(response_text(raw_result))
-            usage_values = token_usage(raw_result)
-            input_tokens, cached_tokens, output_tokens = validate_token_usage(
-                *usage_values,
-                allow_all_missing=(
-                    simulated or is_test_model_environment()
-                ),
-            )
-            with transaction.atomic():
-                summary_obj = Summary.objects.create(
-                    transcript=tgt_transcript,
-                    summary_type=summary_type,
-                    topic=tgt_topic,
-                    text=summary_text,
-                )
-                if simulated:
-                    usage_event = create_simulated_usage_event(
-                        user=tgt_transcript.created_by,
-                        task_type=TaskPricing.TaskType.SUMMARY,
-                        provider=self.model_provider,
-                        model_name=self.summary_model,
-                        idempotency_key=idempotency_key,
-                        provider_request_id=request_id,
-                        transcript=tgt_transcript,
-                        summary=summary_obj,
-                        calculation_details={
-                            "provider_request_id_present": bool(request_id),
-                        },
-                    )
-                else:
-                    usage_event = complete_token_event(
-                        usage_event,
-                        input_tokens=input_tokens,
-                        cached_input_tokens=cached_tokens,
-                        output_tokens=output_tokens,
-                        provider_request_id=request_id,
-                        summary=summary_obj,
-                        calculation_details={
-                            "provider_request_id_present": bool(request_id),
-                        },
-                    )
         except Exception as exc:
             if usage_event is not None and not simulated:
                 mark_reconciliation_required(
@@ -201,23 +156,88 @@ class SummaryManager:
                     reason=exc,
                     calculation_details={"provider_response_received": True},
                 )
-                logger.exception(
-                    "usage_reconciliation_required usage_event_id=%s "
-                    "provider_request_id=%s transcript_id=%s",
-                    usage_event.pk,
-                    request_id,
-                    tgt_transcript.pk,
-                )
             raise
+
+        summary_obj = Summary.objects.create(
+            transcript=tgt_transcript,
+            summary_type=summary_type,
+            topic=tgt_topic,
+            text=summary_text,
+        )
+
+        request_id = ""
+        try:
+            request_id = validate_provider_request_id(
+                provider_request_id(raw_result)
+            )
+            usage_values = token_usage(raw_result)
+            input_tokens, cached_tokens, output_tokens = validate_token_usage(
+                *usage_values,
+                allow_all_missing=(
+                    simulated or is_test_model_environment()
+                ),
+            )
+            if simulated:
+                usage_event = create_simulated_usage_event(
+                    user=tgt_transcript.created_by,
+                    task_type=TaskPricing.TaskType.SUMMARY,
+                    provider=self.model_provider,
+                    model_name=self.summary_model,
+                    idempotency_key=idempotency_key,
+                    provider_request_id=request_id,
+                    transcript=tgt_transcript,
+                    summary=summary_obj,
+                    calculation_details={
+                        "provider_request_id_present": bool(request_id),
+                    },
+                )
+            else:
+                usage_event = complete_token_event(
+                    usage_event,
+                    input_tokens=input_tokens,
+                    cached_input_tokens=cached_tokens,
+                    output_tokens=output_tokens,
+                    provider_request_id=request_id,
+                    summary=summary_obj,
+                    calculation_details={
+                        "provider_request_id_present": bool(request_id),
+                    },
+                )
+        except Exception as exc:
+            if usage_event is not None and not simulated:
+                try:
+                    usage_event = mark_reconciliation_required(
+                        usage_event,
+                        reason=exc,
+                        provider_request_id=request_id,
+                        summary=summary_obj,
+                        calculation_details={
+                            "provider_response_received": True,
+                            "provider_request_id_present": bool(request_id),
+                            "summary_id": summary_obj.pk,
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "usage_reconciliation_marking_failed usage_event_id=%s",
+                        usage_event.pk,
+                    )
+            logger.exception(
+                "usage_reconciliation_required usage_event_id=%s "
+                "provider_request_id=%s transcript_id=%s",
+                usage_event.pk if usage_event else None,
+                request_id,
+                tgt_transcript.pk,
+            )
 
         logger.info(
             "usage_event_transition usage_event_id=%s user_id=%s task=summary "
             "model=%s provider_request_id=%s artifact_id=%s status=%s",
-            usage_event.pk,
+            usage_event.pk if usage_event else None,
             tgt_transcript.created_by_id,
             self.summary_model,
             request_id,
             summary_obj.pk,
-            usage_event.status,
+            usage_event.status if usage_event else "reconciliation_required",
         )
         return summary_obj
