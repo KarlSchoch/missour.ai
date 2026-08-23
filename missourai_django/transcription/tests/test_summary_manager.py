@@ -131,11 +131,36 @@ class SummaryManagerSummarizeTests(TestCase):
         self.assertEqual(event.status, UsageEvent.Status.FAILED)
         self.assertIn("provider unavailable", event.calculation_details["lifecycle"]["reason"])
 
-    def test_summarize_response_text_failure_requires_reconciliation(self):
-        self._assert_extraction_failure_requires_reconciliation("response_text")
+    def test_summarize_response_text_failure_raises_and_requires_reconciliation(self):
+        llm = Mock()
+        llm.invoke.return_value = self.response()
+
+        with patch(
+            "transcription.summary.summary_manager.response_text",
+            side_effect=ValueError("invalid response_text"),
+        ):
+            with self.assertRaisesRegex(ValueError, "invalid response_text"):
+                self.manager(llm).summarize(
+                    self.transcript.transcript_text,
+                    self.transcript,
+                    operation_id="response_text-failure",
+                )
+
+        self.assertFalse(Summary.objects.exists())
+        event = UsageEvent.objects.get()
+        self.assertEqual(event.status, UsageEvent.Status.RECONCILIATION_REQUIRED)
+        self.assertEqual(event.provider_request_id, "")
+        self.assertTrue(
+            event.calculation_details["lifecycle"]["provider_response_received"]
+        )
+        self.assertIn(
+            "response_text", event.calculation_details["lifecycle"]["reason"]
+        )
 
     def test_summarize_token_usage_failure_requires_reconciliation(self):
-        self._assert_extraction_failure_requires_reconciliation("token_usage")
+        self._assert_billing_extraction_failure_requires_reconciliation(
+            "token_usage"
+        )
 
     def test_summarize_missing_token_usage_keys_requires_reconciliation(self):
         for missing_key in ("input_tokens", "output_tokens"):
@@ -146,14 +171,13 @@ class SummaryManagerSummarizeTests(TestCase):
                 llm.invoke.return_value = response
 
                 with patch.dict(os.environ, {"MODEL_ENV": "production"}):
-                    with self.assertRaisesRegex(ValueError, "valid .*token count"):
-                        self.manager(llm).summarize(
-                            self.transcript.transcript_text,
-                            self.transcript,
-                            operation_id=f"missing-{missing_key}",
-                        )
+                    self.manager(llm).summarize(
+                        self.transcript.transcript_text,
+                        self.transcript,
+                        operation_id=f"missing-{missing_key}",
+                    )
 
-                self.assertFalse(Summary.objects.exists())
+                self.assertTrue(Summary.objects.exists())
                 event = UsageEvent.objects.get(
                     idempotency_key=(
                         f"summary:{self.transcript.pk}:general:general:"
@@ -165,7 +189,7 @@ class SummaryManagerSummarizeTests(TestCase):
                 )
                 # Completion did not have enough trustworthy usage data to
                 # persist response metadata onto the pending ledger row.
-                self.assertEqual(event.provider_request_id, "")
+                self.assertEqual(event.provider_request_id, "summary-request-123")
                 self.assertIsNone(event.input_tokens)
                 self.assertIsNone(event.output_tokens)
                 self.assertTrue(
@@ -173,7 +197,9 @@ class SummaryManagerSummarizeTests(TestCase):
                     ["provider_response_received"]
                 )
 
-    def _assert_extraction_failure_requires_reconciliation(self, helper_name):
+    def _assert_billing_extraction_failure_requires_reconciliation(
+        self, helper_name
+    ):
         llm = Mock()
         llm.invoke.return_value = self.response()
         error = ValueError(f"invalid {helper_name}")
@@ -182,23 +208,22 @@ class SummaryManagerSummarizeTests(TestCase):
             f"transcription.summary.summary_manager.{helper_name}",
             side_effect=error,
         ):
-            with self.assertRaisesRegex(ValueError, f"invalid {helper_name}"):
-                self.manager(llm).summarize(
-                    self.transcript.transcript_text,
-                    self.transcript,
-                    operation_id=f"{helper_name}-failure",
-                )
+            self.manager(llm).summarize(
+                self.transcript.transcript_text,
+                self.transcript,
+                operation_id=f"{helper_name}-failure",
+            )
 
-        self.assertFalse(Summary.objects.exists())
+        self.assertTrue(Summary.objects.exists())
         event = UsageEvent.objects.get()
         self.assertEqual(event.status, UsageEvent.Status.RECONCILIATION_REQUIRED)
-        self.assertEqual(event.provider_request_id, "")
+        self.assertEqual(event.provider_request_id, "summary-request-123")
         self.assertTrue(
             event.calculation_details["lifecycle"]["provider_response_received"]
         )
         self.assertIn(helper_name, event.calculation_details["lifecycle"]["reason"])
 
-    def test_summarize_completion_failure_rolls_back_summary_and_requires_reconciliation(self):
+    def test_summarize_completion_failure_requires_reconciliation(self):
         llm = Mock()
         llm.invoke.return_value = self.response()
 
@@ -206,18 +231,17 @@ class SummaryManagerSummarizeTests(TestCase):
             "transcription.summary.summary_manager.complete_token_event",
             side_effect=RuntimeError("ledger completion failed"),
         ):
-            with self.assertRaisesRegex(RuntimeError, "ledger completion failed"):
-                self.manager(llm).summarize(
-                    self.transcript.transcript_text,
-                    self.transcript,
-                    operation_id="completion-failure",
-                )
+            self.manager(llm).summarize(
+                self.transcript.transcript_text,
+                self.transcript,
+                operation_id="completion-failure",
+            )
 
-        # Summary creation and ledger completion intentionally share an atomic block.
-        self.assertFalse(Summary.objects.exists())
+        # The usable summary remains available when only ledger completion fails.
+        self.assertTrue(Summary.objects.exists())
         event = UsageEvent.objects.get()
         self.assertEqual(event.status, UsageEvent.Status.RECONCILIATION_REQUIRED)
-        self.assertIsNone(event.summary)
+        self.assertIsNotNone(event.summary)
         self.assertTrue(
             event.calculation_details["lifecycle"]["provider_response_received"]
         )
