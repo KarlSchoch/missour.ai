@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -184,6 +184,73 @@ class CreateTranscriptTests(TestCase):
             "provider unavailable",
             event.calculation_details["lifecycle"]["reason"],
         )
+
+    @patch(
+        "transcription.transcription_utils.transcription_manager.validate_response_text",
+        side_effect=RuntimeError("invalid response text"),
+    )
+    def test_response_text_validation_failure_propagates_without_text_and_reconciles(
+        self,
+        _validate_response_text,
+    ):
+        manager = self.make_manager()
+        manager._transcribe_chunk_file.return_value = SimpleNamespace(
+            text="provider transcript",
+            id="request-1",
+        )
+
+        # The validation error propagates instead of returning the provider's text.
+        with self.assertRaisesRegex(RuntimeError, "invalid response text"):
+            manager.create_transcript()
+
+        manager._cleanup_chunk.assert_called_once_with("chunk-0.wav")
+        manager._cleanup_normalized_audio.assert_called_once_with()
+        event = UsageEvent.objects.get(transcript=self.transcript)
+        self.assertEqual(event.status, UsageEvent.Status.RECONCILIATION_REQUIRED)
+
+    @patch(
+        "transcription.transcription_utils.transcription_manager.validate_provider_request_id",
+        side_effect=RuntimeError("invalid provider request id"),
+    )
+    def test_provider_request_id_validation_failure_returns_text_and_reconciles(
+        self,
+        _validate_provider_request_id,
+    ):
+        manager = self.make_manager()
+        manager._transcribe_chunk_file.return_value = SimpleNamespace(
+            text="provider transcript",
+            id="request-1",
+        )
+
+        result = manager.create_transcript()
+
+        self.assertEqual(result, "provider transcript")
+        manager._cleanup_chunk.assert_called_once_with("chunk-0.wav")
+        manager._cleanup_normalized_audio.assert_called_once_with()
+        event = UsageEvent.objects.get(transcript=self.transcript)
+        self.assertEqual(event.status, UsageEvent.Status.RECONCILIATION_REQUIRED)
+
+    @patch(
+        "transcription.transcription_utils.transcription_manager.complete_duration_event",
+        side_effect=RuntimeError("could not complete duration event"),
+    )
+    def test_duration_completion_failure_returns_text_and_reconciles(
+        self,
+        _complete_duration_event,
+    ):
+        manager = self.make_manager()
+        manager._transcribe_chunk_file.return_value = SimpleNamespace(
+            text="provider transcript",
+            id="request-1",
+        )
+
+        result = manager.create_transcript()
+
+        self.assertEqual(result, "provider transcript")
+        manager._cleanup_chunk.assert_called_once_with("chunk-0.wav")
+        manager._cleanup_normalized_audio.assert_called_once_with()
+        event = UsageEvent.objects.get(transcript=self.transcript)
+        self.assertEqual(event.status, UsageEvent.Status.RECONCILIATION_REQUIRED)
 
     def test_pricing_resolution_failure_propagates_and_creates_no_usage(self):
         manager = self.make_manager(model_name="model-with-no-price")
