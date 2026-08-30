@@ -2,7 +2,16 @@ from rest_framework import serializers
 from celery.result import AsyncResult
 from django.urls import reverse
 
-from .models import BackgroundJob, Topic, Summary, Tag, Transcript
+from .models import (
+    BackgroundJob,
+    ModelPrice,
+    Summary,
+    Tag,
+    TaskPricing,
+    Topic,
+    Transcript,
+    UsageEvent,
+)
 
 
 class BackgroundJobSerializer(serializers.ModelSerializer):
@@ -124,3 +133,173 @@ class SummarySerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+
+class InternalCostFieldsMixin:
+    internal_cost_fields = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.context.get("include_internal_costs", False):
+            for field_name in self.internal_cost_fields:
+                self.fields.pop(field_name, None)
+
+
+class UsageCostTotalsSerializer(InternalCostFieldsMixin, serializers.Serializer):
+    internal_cost_fields = ("base_cost",)
+    event_count = serializers.IntegerField()
+    base_cost = serializers.DecimalField(max_digits=20, decimal_places=10)
+    billed_cost = serializers.DecimalField(max_digits=20, decimal_places=10)
+
+
+class MonthlyTaskTotalSerializer(UsageCostTotalsSerializer):
+    task_type = serializers.ChoiceField(choices=TaskPricing.TaskType.choices)
+
+
+class UserMonthlyTotalSerializer(UsageCostTotalsSerializer):
+    user_id = serializers.IntegerField()
+    username = serializers.CharField(source="user__username")
+
+
+class OverallMonthlyTotalSerializer(UsageCostTotalsSerializer):
+    pass
+
+
+class UsageStatusCountSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=UsageEvent.Status.choices)
+    event_count = serializers.IntegerField()
+
+
+class AppliedPricingPeriodSerializer(UsageCostTotalsSerializer):
+    internal_cost_fields = ()
+    task_type = serializers.ChoiceField(choices=TaskPricing.TaskType.choices)
+    provider = serializers.CharField()
+    model_name = serializers.CharField()
+    billing_unit = serializers.ChoiceField(choices=ModelPrice.BillingUnit.choices)
+    currency = serializers.CharField()
+    model_price_id = serializers.IntegerField()
+    model_price_effective_from = serializers.DateTimeField(
+        source="model_price__effective_from"
+    )
+    model_price_effective_to = serializers.DateTimeField(
+        source="model_price__effective_to", allow_null=True
+    )
+    input_rate_per_million = serializers.DecimalField(
+        source="model_price__input_rate_per_million",
+        max_digits=20,
+        decimal_places=10,
+        allow_null=True,
+    )
+    cached_input_rate_per_million = serializers.DecimalField(
+        source="model_price__cached_input_rate_per_million",
+        max_digits=20,
+        decimal_places=10,
+        allow_null=True,
+    )
+    output_rate_per_million = serializers.DecimalField(
+        source="model_price__output_rate_per_million",
+        max_digits=20,
+        decimal_places=10,
+        allow_null=True,
+    )
+    rate_per_minute = serializers.DecimalField(
+        source="model_price__rate_per_minute",
+        max_digits=20,
+        decimal_places=10,
+        allow_null=True,
+    )
+    task_pricing_id = serializers.IntegerField()
+    task_pricing_effective_from = serializers.DateTimeField(
+        source="task_pricing__effective_from"
+    )
+    task_pricing_effective_to = serializers.DateTimeField(
+        source="task_pricing__effective_to", allow_null=True
+    )
+    multiplier = serializers.DecimalField(max_digits=12, decimal_places=6)
+
+
+class UsageEventDetailSerializer(InternalCostFieldsMixin, serializers.ModelSerializer):
+    internal_cost_fields = (
+        "base_cost",
+        "multiplier",
+        "model_price_id",
+        "task_pricing_id",
+    )
+    username = serializers.CharField(source="user.get_username", read_only=True)
+
+    class Meta:
+        model = UsageEvent
+        fields = [
+            "id",
+            "user_id",
+            "username",
+            "task_type",
+            "provider",
+            "model_name",
+            "occurred_at",
+            "status",
+            "billing_unit",
+            "usage_source",
+            "input_tokens",
+            "cached_input_tokens",
+            "output_tokens",
+            "audio_duration_seconds",
+            "base_cost",
+            "multiplier",
+            "billed_cost",
+            "currency",
+            "provider_request_id",
+            "model_price_id",
+            "task_pricing_id",
+            "transcript_id",
+            "summary_id",
+            "tag_id",
+            "transcription_chunk_id",
+        ]
+
+
+class UsageUserChoiceSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+
+
+class ModelPriceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ModelPrice
+        fields = [
+            "id",
+            "provider",
+            "model_name",
+            "billing_unit",
+            "input_rate_per_million",
+            "cached_input_rate_per_million",
+            "output_rate_per_million",
+            "rate_per_minute",
+            "currency",
+            "effective_from",
+            "effective_to",
+            "created_by_id",
+            "created_at",
+        ]
+
+
+class TaskPricingSerializer(serializers.ModelSerializer):
+    provider = serializers.CharField(source="model_price.provider", read_only=True)
+    model_name = serializers.CharField(source="model_price.model_name", read_only=True)
+    currency = serializers.CharField(source="model_price.currency", read_only=True)
+
+    class Meta:
+        model = TaskPricing
+        fields = [
+            "id",
+            "task_type",
+            "model_price_id",
+            "provider",
+            "model_name",
+            "currency",
+            "multiplier",
+            "effective_from",
+            "effective_to",
+            "created_by_id",
+            "created_at",
+        ]

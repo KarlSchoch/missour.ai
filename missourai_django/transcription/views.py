@@ -173,6 +173,36 @@ def view_topics(request):
         {"initial_payload": payload}
     )
 
+
+@login_required
+def usage(request):
+    payload = {
+        "apiUrls": {
+            "summary": reverse("api:usage-summary"),
+            "events": reverse("api:usage-events"),
+            "users": reverse("api:usage-users"),
+            "modelPrices": reverse("api:usage-model-prices"),
+            "taskPricing": reverse("api:usage-task-pricing"),
+        },
+        "capabilities": {
+            "canViewAllUsage": request.user.has_perm(
+                "transcription.view_all_usage"
+            ),
+            "canManagePricing": request.user.has_perm(
+                "transcription.manage_usage_pricing"
+            ),
+        },
+        "defaults": {
+            "currency": "USD",
+            "timezone": "UTC",
+        },
+    }
+    return render(
+        request,
+        "transcription/usage.html",
+        {"initial_payload": payload},
+    )
+
 @login_required
 def analyze_audio_page_section(request):
 

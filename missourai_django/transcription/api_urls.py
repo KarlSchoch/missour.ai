@@ -8,7 +8,16 @@ from django.utils.decorators import method_decorator
 from django.urls import include
 from itertools import count
 from .models import Topic
-from .api_views import BackgroundJobViewSet, TopicViewSet, SummaryViewSet
+from .api_views import (
+    BackgroundJobViewSet,
+    ModelPriceListAPIView,
+    SummaryViewSet,
+    TaskPricingListAPIView,
+    TopicViewSet,
+    UsageEventListAPIView,
+    UsageSummaryAPIView,
+    UsageUserListAPIView,
+)
 
 _ITEMS = []
 _id_counter = count()
@@ -45,7 +54,20 @@ router.register(r"topics", TopicViewSet)
 router.register(r"summaries", SummaryViewSet)
 
 urlpatterns = [
-    path("", include(router.urls))
+    path("", include(router.urls)),
+    path("usage/summary/", UsageSummaryAPIView.as_view(), name="usage-summary"),
+    path("usage/events/", UsageEventListAPIView.as_view(), name="usage-events"),
+    path("usage/users/", UsageUserListAPIView.as_view(), name="usage-users"),
+    path(
+        "usage/model-prices/",
+        ModelPriceListAPIView.as_view(),
+        name="usage-model-prices",
+    ),
+    path(
+        "usage/task-pricing/",
+        TaskPricingListAPIView.as_view(),
+        name="usage-task-pricing",
+    ),
     # path("ping/", Ping.as_view(), name="ping"),
     # path("items/", Items.as_view(), name="items"),
     # path("topics/", Topics.as_view(), name="topics"),

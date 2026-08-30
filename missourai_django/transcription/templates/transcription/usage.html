@@ -1,0 +1,15 @@
+{% extends "transcription/base.html" %}
+{% load django_vite vite_extras %}
+
+{% block title %}Usage - missour.ai{% endblock %}
+
+{% block content %}
+<div id="usage-root"></div>
+{{ initial_payload|json_script:"initial-payload-usage" }}
+{% endblock %}
+
+{% block extra_scripts %}
+    {% vite_react_refresh %}
+    {% vite_hmr_client %}
+    {% vite_asset 'src/usage.jsx' %}
+{% endblock %}

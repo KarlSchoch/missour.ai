@@ -1,6 +1,11 @@
 from rest_framework import viewsets, status
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from celery.result import AsyncResult
+from django.contrib.auth import get_user_model
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from os import environ
@@ -10,12 +15,206 @@ from .serializers import (
     TopicSerializer,
     SummarySerializer,
     TagSerializer,
+    AppliedPricingPeriodSerializer,
+    ModelPriceSerializer,
+    MonthlyTaskTotalSerializer,
+    OverallMonthlyTotalSerializer,
+    TaskPricingSerializer,
+    UsageEventDetailSerializer,
+    UsageStatusCountSerializer,
+    UsageUserChoiceSerializer,
+    UserMonthlyTotalSerializer,
 )
-from .models import BackgroundJob, Topic, Summary, Transcript, Tag
+from .models import (
+    BackgroundJob,
+    ModelPrice,
+    Summary,
+    Tag,
+    TaskPricing,
+    Topic,
+    Transcript,
+    UsageEvent,
+)
+from .services.usage_reporting import (
+    DEFAULT_CURRENCY,
+    UsageReportFilterError,
+    apply_event_filters,
+    get_applied_pricing_periods,
+    get_event_details,
+    get_month_bounds,
+    get_organization_summary,
+    get_report_month_label,
+    get_status_counts,
+    get_task_breakdown,
+    get_usage_queryset,
+    get_user_summary,
+    get_user_totals,
+)
 from transcription.summary.summary_manager import SummaryManager
 from transcription.tagging.tagging_manager import TaggingManager
 
 summary_manager = SummaryManager(api_key=environ['OPENAI_API_KEY'])
+
+VIEW_ALL_USAGE_PERMISSION = "transcription.view_all_usage"
+
+
+class UsagePagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 200
+
+
+class UsageAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _can_view_all(self, request):
+        return request.user.has_perm(VIEW_ALL_USAGE_PERMISSION)
+
+    def _target_user(self, request):
+        requested_id = request.query_params.get("user_id")
+        can_view_all = self._can_view_all(request)
+        if requested_id is None:
+            return None if can_view_all else request.user
+
+        try:
+            requested_id = int(requested_id)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({"user_id": "user_id must be an integer."}) from exc
+
+        if requested_id != request.user.pk and not can_view_all:
+            raise PermissionDenied("You cannot view another user's usage.")
+
+        user = get_user_model().objects.filter(pk=requested_id).first()
+        if user is None:
+            raise NotFound("The requested user does not exist.")
+        return user
+
+    def _report_context(self, request):
+        try:
+            start, end = get_month_bounds(request.query_params.get("month"))
+        except UsageReportFilterError as exc:
+            raise ValidationError({"month": str(exc)}) from exc
+
+        task_type = request.query_params.get("task_type")
+        event_status = request.query_params.get("status")
+        valid_task_types = {choice for choice, _ in TaskPricing.TaskType.choices}
+        valid_statuses = {choice for choice, _ in UsageEvent.Status.choices}
+        errors = {}
+        if task_type and task_type not in valid_task_types:
+            errors["task_type"] = "Unknown task_type."
+        if event_status and event_status not in valid_statuses:
+            errors["status"] = "Unknown status."
+        if errors:
+            raise ValidationError(errors)
+
+        target_user = self._target_user(request)
+        queryset = get_usage_queryset(start=start, end=end, user=target_user)
+        queryset = apply_event_filters(
+            queryset,
+            task_type=task_type,
+            model_name=request.query_params.get("model_name"),
+            status=event_status,
+        )
+        return start, end, target_user, queryset
+
+
+class UsageSummaryAPIView(UsageAPIView):
+    def get(self, request):
+        start, end, target_user, queryset = self._report_context(request)
+        totals = (
+            get_user_summary(queryset)
+            if target_user is not None
+            else get_organization_summary(queryset)
+        )
+        serializer_context = {
+            "include_internal_costs": self._can_view_all(request),
+        }
+        payload = {
+            "period": {
+                "month": get_report_month_label(start),
+                "start": start,
+                "end": end,
+                "currency": DEFAULT_CURRENCY,
+            },
+            "scope": {
+                "kind": "user" if target_user is not None else "organization",
+                "user_id": target_user.pk if target_user is not None else None,
+                "username": (
+                    target_user.get_username() if target_user is not None else None
+                ),
+            },
+            "totals": OverallMonthlyTotalSerializer(
+                totals, context=serializer_context
+            ).data,
+            "tasks": MonthlyTaskTotalSerializer(
+                get_task_breakdown(queryset),
+                many=True,
+                context=serializer_context,
+            ).data,
+            "status_counts": UsageStatusCountSerializer(
+                get_status_counts(queryset), many=True
+            ).data,
+        }
+        if self._can_view_all(request):
+            payload["pricing_periods"] = AppliedPricingPeriodSerializer(
+                get_applied_pricing_periods(queryset),
+                many=True,
+                context=serializer_context,
+            ).data
+        if target_user is None:
+            payload["users"] = UserMonthlyTotalSerializer(
+                get_user_totals(queryset),
+                many=True,
+                context=serializer_context,
+            ).data
+        return Response(payload)
+
+
+class UsageEventListAPIView(UsageAPIView):
+    def get(self, request):
+        _, _, _, queryset = self._report_context(request)
+        paginator = UsagePagination()
+        page = paginator.paginate_queryset(get_event_details(queryset), request)
+        serializer = UsageEventDetailSerializer(
+            page,
+            many=True,
+            context={"include_internal_costs": self._can_view_all(request)},
+        )
+        return paginator.get_paginated_response(serializer.data)
+
+
+class UsageUserListAPIView(UsageAPIView):
+    def get(self, request):
+        if not self._can_view_all(request):
+            raise PermissionDenied("Viewing the usage user list requires permission.")
+        users = (
+            get_user_model().objects.filter(usage_events__isnull=False)
+            .distinct()
+            .order_by("username", "pk")
+            .values("id", "username")
+        )
+        return Response(UsageUserChoiceSerializer(users, many=True).data)
+
+
+class UsagePricingAPIView(UsageAPIView):
+    def _require_permission(self, request):
+        if not self._can_view_all(request):
+            raise PermissionDenied("Viewing usage pricing requires permission.")
+
+
+class ModelPriceListAPIView(UsagePricingAPIView):
+    def get(self, request):
+        self._require_permission(request)
+        queryset = ModelPrice.objects.select_related("created_by").all()
+        return Response(ModelPriceSerializer(queryset, many=True).data)
+
+
+class TaskPricingListAPIView(UsagePricingAPIView):
+    def get(self, request):
+        self._require_permission(request)
+        queryset = TaskPricing.objects.select_related("model_price", "created_by").all()
+        return Response(TaskPricingSerializer(queryset, many=True).data)
+
 
 class BackgroundJobViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BackgroundJobSerializer

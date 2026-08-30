@@ -43,6 +43,7 @@ export default defineConfig(({ mode }) => ({
         'src/view-transcript-chunk-page-section.jsx': resolve(__dirname, 'src/view-transcript-chunk-page-section.jsx'),
         'src/topic-selector.jsx': resolve(__dirname, 'src/topic-selector.jsx'),
         'src/generate-report-page-section.jsx': resolve(__dirname, 'src/generate-report-page-section.jsx'),
+        'src/usage.jsx': resolve(__dirname, 'src/usage.jsx'),
       },
     },
   }
