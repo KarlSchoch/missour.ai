@@ -255,7 +255,6 @@ class TranscriptionManager:
         start_time: float,
         duration: float,
         split_depth: int,
-        attempt: int = 1,
     ) -> str:
         job_identity = (
             self.job_metric.background_job_id if self.job_metric else "untracked"
@@ -264,7 +263,9 @@ class TranscriptionManager:
             f"transcription:{job_identity}:chunk:{chunk_index}:"
             f"start:{round(start_time * 1_000_000)}:"
             f"duration:{round(duration * 1_000_000)}:"
-            f"depth:{split_depth}:attempt:{attempt}"
+            # Retries are not currently implemented. Keep the attempt segment fixed
+            # at 1 to preserve the existing idempotency-key format.
+            f"depth:{split_depth}:attempt:1"
         )
 
     def _billable_transcription_call(
