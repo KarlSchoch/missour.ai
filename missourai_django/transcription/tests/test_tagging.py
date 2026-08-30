@@ -1,7 +1,13 @@
 import os
+from datetime import datetime, timezone
+from decimal import Decimal
+from types import SimpleNamespace
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from transcription.models import Transcript, Chunk, Topic, Tag
+from transcription.models import (
+    Transcript, Chunk, Topic, Tag, ModelPrice, TaskPricing, UsageEvent,
+)
+from transcription.services.pricing import PricingResolutionError
 from transcription.tagging.tagging_manager import TaggingManager, Classification
 from unittest.mock import patch
 from transcription.tests.test_utils import FakeLLM
@@ -51,6 +57,8 @@ class FakeLLMWithExceptions(FakeLLM):
 
 # Create your tests here.
 class TaggingTests(TestCase):
+    model_name = "tagging-manager-test-model"
+
     def setUp(self):
         # Call TestCase's setUp() 
         super().setUp()
@@ -65,6 +73,12 @@ class TaggingTests(TestCase):
         )
         self.env_patcher.start()
         self.addCleanup(self.env_patcher.stop)
+        model_patcher = patch(
+            "transcription.tagging.tagging_manager.settings.TAGGING_MODEL",
+            self.model_name,
+        )
+        model_patcher.start()
+        self.addCleanup(model_patcher.stop)
 
         # Create fakeLLM with 8 fake responses
         fake_responses = [
@@ -86,6 +100,35 @@ class TaggingTests(TestCase):
         )
         self.addCleanup(patcher.stop)
         self.mock_init = patcher.start()
+
+        self.model_price = ModelPrice.objects.create(
+            provider=ModelPrice.Provider.OPENAI,
+            model_name=self.model_name,
+            billing_unit=ModelPrice.BillingUnit.TEXT_TOKENS,
+            input_rate_per_million=Decimal("1.00"),
+            cached_input_rate_per_million=Decimal("0.25"),
+            output_rate_per_million=Decimal("2.00"),
+            currency="USD",
+            effective_from=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        )
+        self.task_pricing = TaskPricing.objects.create(
+            task_type=TaskPricing.TaskType.TAGGING,
+            model_price=self.model_price,
+            multiplier=Decimal("1.0"),
+            effective_from=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        )
+
+    def _response(self, classification, request_id):
+        raw = SimpleNamespace(
+            id=request_id,
+            usage_metadata={
+                "input_tokens": 100,
+                "output_tokens": 20,
+                "input_token_details": {"cache_read": 10},
+            },
+            response_metadata={},
+        )
+        return {"parsed": classification, "raw": raw}
 
     def _make_transcript(self, text=""):
         payload = text or (IT_VOCAB + " " + WF_VOCAB)
@@ -149,7 +192,8 @@ class TaggingTests(TestCase):
         blah = TaggingManager(
             os.getenv('OPENAI_API_KEY'),
             transcript = self.transcript,
-            topics = [self.topic_it, self.topic_wf]
+            topics = [self.topic_it, self.topic_wf],
+            tagging_model=self.model_name,
         )
         created_chunks = blah.chunk()
         tgt_chunk = created_chunks[0]
@@ -181,7 +225,8 @@ class TaggingTests(TestCase):
         blah = TaggingManager(
             os.getenv('OPENAI_API_KEY'),
             transcript = self.transcript,
-            topics = [self.topic_it, self.topic_wf]
+            topics = [self.topic_it, self.topic_wf],
+            tagging_model=self.model_name,
         )
         created_records = blah.tag_transcript()
         # Validated that you did not reach out to the API
@@ -206,6 +251,19 @@ class TaggingTests(TestCase):
             chunk__transcript__name="Dummy Transcript", topic__topic="Information Technology"
         )
         self.assertEqual(4, len(it_tags))
+        # Ensure that the usage events are tracked
+        events = UsageEvent.objects.filter(transcript=self.transcript)
+        self.assertEqual(events.count(), len(created_records))
+        self.assertTrue(events.exists())
+        # Validate specific elements within the usage events records
+        ## No Failed/In Progress records exist
+        self.assertFalse(events.exclude(status=UsageEvent.Status.SUCCEEDED).exists())
+        ## Usage Event records are associated with tags
+        self.assertFalse(events.filter(tag__isnull=True).exists())
+        self.assertEqual(
+            set(events.values_list("tag_id", flat=True)),
+            {tag.pk for tag in created_records},
+        )
 
     def test_tag_transcript_creates_chunks_when_none_exist(self):
         transcript = self._make_transcript(IT_VOCAB)
@@ -366,6 +424,184 @@ class TaggingTests(TestCase):
             Tag.objects.filter(chunk__transcript=transcript, topic=self.topic_it).count(),
             1,
         )
+
+    def test_tag_transcript_pricing_failure_creates_no_usage_event(self):
+        transcript = self._make_transcript("missing pricing")
+        Chunk.objects.create(transcript=transcript, chunk_text=transcript.transcript_text)
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"),
+            transcript=transcript,
+            topics=[self.topic_it],
+            tagging_model="model-with-no-price",
+        )
+
+        with self.assertRaises(PricingResolutionError):
+            manager.tag_transcript()
+
+        self.assertFalse(UsageEvent.objects.filter(transcript=transcript).exists())
+        self.assertFalse(Tag.objects.filter(chunk__transcript=transcript).exists())
+        self.assertEqual(len(self.fake_llm.invocations), 0)
+
+    def test_tag_transcript_llm_failure_marks_usage_event_failed(self):
+        transcript = self._make_transcript("provider failure")
+        Chunk.objects.create(transcript=transcript, chunk_text=transcript.transcript_text)
+        llm = FakeLLMWithExceptions([RuntimeError("provider unavailable")])
+        self.mock_init.return_value = llm
+
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"), transcript=transcript, topics=[self.topic_it]
+        )
+        tags = manager.tag_transcript()
+
+        self.assertEqual(tags, [])
+        self.assertFalse(Tag.objects.filter(chunk__transcript=transcript).exists())
+        event = UsageEvent.objects.get(transcript=transcript)
+        self.assertEqual(event.status, UsageEvent.Status.FAILED)
+        self.assertIn(
+            "provider unavailable",
+            event.calculation_details["lifecycle"]["reason"],
+        )
+
+    def test_tag_transcript_regenerate_false_is_noop(self):
+        transcript = self._make_transcript("existing classification")
+        chunk = Chunk.objects.create(
+            transcript=transcript, chunk_text=transcript.transcript_text
+        )
+        tag = Tag.objects.create(
+            chunk=chunk,
+            topic=self.topic_it,
+            topic_present=True,
+            relevant_section="original",
+        )
+        llm = FakeLLM([Classification(tag=False, relevant_section="replacement")])
+        self.mock_init.return_value = llm
+
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"), transcript=transcript, topics=[self.topic_it]
+        )
+        result = manager.tag_transcript(regenerate=False)
+
+        tag.refresh_from_db()
+        self.assertEqual(result, [])
+        self.assertEqual(tag.relevant_section, "original")
+        self.assertEqual(len(llm.invocations), 0)
+        self.assertFalse(UsageEvent.objects.filter(transcript=transcript).exists())
+
+    def test_tag_transcript_regenerate_true_updates_tag_and_creates_new_usage(self):
+        transcript = self._make_transcript("existing classification")
+        chunk = Chunk.objects.create(
+            transcript=transcript, chunk_text=transcript.transcript_text
+        )
+        tag = Tag.objects.create(
+            chunk=chunk,
+            topic=self.topic_it,
+            topic_present=False,
+            relevant_section="original",
+        )
+        first_llm = FakeLLM([
+            self._response(
+                Classification(tag=True, relevant_section="first replacement"),
+                "tag-request-1",
+            )
+        ])
+        self.mock_init.return_value = first_llm
+        TaggingManager(
+            os.getenv("OPENAI_API_KEY"), transcript=transcript, topics=[self.topic_it]
+        ).tag_transcript(regenerate=True)
+
+        second_llm = FakeLLM([
+            self._response(
+                Classification(tag=False, relevant_section="second replacement"),
+                "tag-request-2",
+            )
+        ])
+        self.mock_init.return_value = second_llm
+        TaggingManager(
+            os.getenv("OPENAI_API_KEY"), transcript=transcript, topics=[self.topic_it]
+        ).tag_transcript(regenerate=True)
+
+        tag.refresh_from_db()
+        events = UsageEvent.objects.filter(transcript=transcript).order_by("created_at")
+        self.assertEqual(Tag.objects.filter(chunk=chunk, topic=self.topic_it).count(), 1)
+        self.assertFalse(tag.topic_present)
+        self.assertEqual(tag.relevant_section, "second replacement")
+        self.assertEqual(events.count(), 2)
+        self.assertEqual(
+            list(events.values_list("provider_request_id", flat=True)),
+            ["tag-request-1", "tag-request-2"],
+        )
+        self.assertEqual(events.filter(tag=tag).count(), 2)
+
+    def test_tag_transcript_completion_failure_maintains_tag_ands_requires_reconciliation(self):
+        transcript = self._make_transcript("ledger failure")
+        Chunk.objects.create(transcript=transcript, chunk_text=transcript.transcript_text)
+        llm = FakeLLM([
+            self._response(
+                Classification(tag=True, relevant_section="ledger"),
+                "tag-request-reconcile",
+            )
+        ])
+        self.mock_init.return_value = llm
+        manager = TaggingManager(
+            os.getenv("OPENAI_API_KEY"), transcript=transcript, topics=[self.topic_it]
+        )
+
+        with patch(
+            "transcription.tagging.tagging_manager.complete_token_event",
+            side_effect=RuntimeError("ledger completion failed"),
+        ):
+            tags = manager.tag_transcript()
+
+        self.assertGreater(len(tags), 0)
+        self.assertTrue(Tag.objects.filter(chunk__transcript=transcript).exists())
+        event = UsageEvent.objects.get(transcript=transcript)
+        self.assertEqual(event.status, UsageEvent.Status.RECONCILIATION_REQUIRED)
+        self.assertIsNotNone(event.tag)
+        self.assertTrue(
+            event.calculation_details["lifecycle"]["provider_response_received"]
+        )
+        self.assertIn(
+            "ledger completion failed",
+            event.calculation_details["lifecycle"]["reason"],
+        )
+
+    def test_tag_transcript_missing_token_usage_keys_requires_reconciliation(self):
+        for missing_key in ("input_tokens", "output_tokens"):
+            with self.subTest(missing_key=missing_key):
+                transcript = self._make_transcript(f"missing {missing_key}")
+                Chunk.objects.create(
+                    transcript=transcript, chunk_text=transcript.transcript_text
+                )
+                response = self._response(
+                    Classification(tag=True, relevant_section="missing metadata"),
+                    f"tag-request-missing-{missing_key}",
+                )
+                del response["raw"].usage_metadata[missing_key]
+                self.mock_init.return_value = FakeLLM([response])
+                manager = TaggingManager(
+                    os.getenv("OPENAI_API_KEY"),
+                    transcript=transcript,
+                    topics=[self.topic_it],
+                )
+
+                with patch.dict(os.environ, {"MODEL_ENV": "production"}):
+                    tags = manager.tag_transcript()
+
+                self.assertGreater(len(tags), 0)
+                self.assertTrue(
+                    Tag.objects.filter(chunk__transcript=transcript).exists()
+                )
+                event = UsageEvent.objects.get(transcript=transcript)
+                self.assertEqual(
+                    event.status, UsageEvent.Status.RECONCILIATION_REQUIRED
+                )
+                self.assertIsNotNone(event.provider_request_id)
+                self.assertIsNone(event.input_tokens)
+                self.assertIsNone(event.output_tokens)
+                self.assertTrue(
+                    event.calculation_details["lifecycle"]
+                    ["provider_response_received"]
+                )
 
     def test_tag_chunk_uses_text_values_for_prompt_inputs(self):
         transcript = self._make_transcript("alpha beta gamma")
