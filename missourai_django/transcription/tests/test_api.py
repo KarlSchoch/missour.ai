@@ -270,6 +270,28 @@ class UserScopedSummaryTests(TestCase):
         self.assertIn(self.own_transcript.id, returned_transcript_ids)
         self.assertNotIn(self.other_transcript.id, returned_transcript_ids)
 
+    @patch("transcription.api_views.TaggingManager")
+    @patch("transcription.api_views.summary_manager")
+    def test_topic_summary_reconciles_existing_tags_and_excludes_history(self, summary_manager, tagging_manager):
+        def repair():
+            self.own_chunk.is_superseded = True
+            self.own_chunk.save(update_fields=["is_superseded"])
+            current = Chunk.objects.create(
+                transcript=self.own_transcript, chunk_text=self.own_transcript.transcript_text,
+            )
+            Tag.objects.create(chunk=current, topic=self.own_topic, topic_present=False)
+
+        tagging_manager.return_value.tag_transcript.side_effect = repair
+        response = self.client.post(self.list_url, {
+            "transcript": self.own_transcript.pk,
+            "summary_type": "topic", "topic": self.own_topic.pk,
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+        tagging_manager.return_value.tag_transcript.assert_called_once_with()
+        summary_manager.summarize.assert_not_called()
+        self.assertEqual(response.json()["text"], "No content related to this topic in the transcript.")
+        self.assertTrue(Tag.objects.filter(chunk=self.own_chunk, topic_present=True).exists())
+
     def test_summaries_filter_for_other_user_transcript_returns_empty_list(self):
         res = self.client.get(
             f"{self.list_url}?transcript={self.other_transcript.id}"

@@ -68,6 +68,7 @@ class TagViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return Tag.objects.filter(
             chunk__transcript__created_by=self.request.user,
+            chunk__is_superseded=False,
             topic__created_by=self.request.user,
         )
 
@@ -122,38 +123,23 @@ class SummaryViewSet(viewsets.ModelViewSet):
                 ### Create a summary object: transcript, summary_type, topic, text
             ## Topic Level
             elif summary_type == 'topic':
-                # 1. Through Chunk query the tags for a given transcript (transcript_tags)
-                transcript_tags = Tag.objects.filter(
-                    chunk__transcript=tgt_transcript,
-                    topic__created_by=request.user,
-                ).select_related('topic', 'chunk')
-                # 2. Extract the set of topics tags have been generated for (generated_tag_topics)
-                generated_tag_topics = set(
-                    transcript_tags.values_list("topic_id", flat=True)
-                )
-                # 3. Compare generated_tags against the topic passed
                 topic = data['topic']
                 tgt_topic_obj = get_object_or_404(
                     Topic,
                     pk=int(topic),
                     created_by=request.user,
                 )
-                # 3.a. Topic passed back not in generated_tags
-                if tgt_topic_obj.pk not in generated_tag_topics:
-                    # 3.a.i.  Generate tags for that topic
-                    ## Instantiate the tagging manager
-                    tagging_manager = TaggingManager(
-                        api_key=environ['OPENAI_API_KEY'],
-                        transcript=tgt_transcript,
-                        topics=[tgt_topic_obj]
-                    )
-                    new_transcript_tags = tagging_manager.tag_transcript()
-                    # 3.a.ii. Requery transcript_tags
-                    transcript_tags = Tag.objects.filter(chunk__transcript=tgt_transcript).select_related('topic', 'chunk')
-                # 3.b. Topic passed back in generated_tags
-                else:
-                    # 3.b.i.  Pass
-                    pass
+                # Existing tags do not guarantee full transcript coverage.
+                tagging_manager = TaggingManager(
+                    api_key=environ['OPENAI_API_KEY'],
+                    transcript=tgt_transcript,
+                    topics=[tgt_topic_obj],
+                )
+                tagging_manager.tag_transcript()
+                transcript_tags = Tag.objects.filter(
+                    chunk__transcript=tgt_transcript,
+                    chunk__is_superseded=False,
+                ).select_related('topic', 'chunk').order_by('chunk__position', 'chunk_id')
                 # 4. Filter tags to only where topic_present field == True that are for the tgt_topic
                 transcript_tags = transcript_tags.filter(
                     topic=tgt_topic_obj,

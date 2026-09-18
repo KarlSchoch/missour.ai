@@ -6,6 +6,7 @@ import os
 import subprocess
 import tempfile
 import time
+import wave
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
@@ -15,7 +16,26 @@ from django.db import close_old_connections
 from django.utils import timezone
 from openai import OpenAI
 
-from transcription.models import TranscriptionChunkMetric, TranscriptionJobMetric
+from transcription.models import (
+    TaskPricing,
+    TranscriptionChunkMetric,
+    TranscriptionJobMetric,
+)
+from transcription.services.model_calls import (
+    is_simulated_model_environment,
+    provider_request_id,
+    validate_provider_request_id,
+    validate_response_text,
+)
+from transcription.services.pricing import (
+    complete_duration_event,
+    create_pending_usage_event,
+    create_simulated_usage_event,
+    mark_failed,
+    mark_reconciliation_required,
+    PricingResolutionError,
+    resolve_pricing,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,8 +222,8 @@ class TranscriptionManager:
 
         return chunk_path, ffmpeg_duration_sec
 
-    def _transcribe_chunk_file(self, chunk_path: str) -> str:
-        if os.getenv("MODEL_ENV") == "dev":
+    def _transcribe_chunk_file(self, chunk_path: str):
+        if is_simulated_model_environment():
             logger.info("MODEL_ENV is DEV.  Bypassing external API calls.")
             return "Short transcript text resembling actual API output."
 
@@ -213,7 +233,198 @@ class TranscriptionManager:
                 file=audio_file,
             )
 
-        return transcript.text
+        return transcript
+
+    def _submitted_audio_duration(self, chunk_path: str, fallback: float) -> float:
+        try:
+            with wave.open(chunk_path, "rb") as audio_file:
+                frame_rate = audio_file.getframerate()
+                if frame_rate:
+                    return audio_file.getnframes() / frame_rate
+        except (OSError, EOFError, wave.Error):
+            logger.warning(
+                "Could not inspect submitted chunk duration path=%s; using %.6fs",
+                chunk_path,
+                fallback,
+            )
+        return fallback
+
+    def _transcription_idempotency_key(
+        self,
+        chunk_index: int,
+        start_time: float,
+        duration: float,
+        split_depth: int,
+    ) -> str:
+        job_identity = (
+            self.job_metric.background_job_id if self.job_metric else "untracked"
+        )
+        return (
+            f"transcription:{job_identity}:chunk:{chunk_index}:"
+            f"start:{round(start_time * 1_000_000)}:"
+            f"duration:{round(duration * 1_000_000)}:"
+            # Retries are not currently implemented. Keep the attempt segment fixed
+            # at 1 to preserve the existing idempotency-key format.
+            f"depth:{split_depth}:attempt:1"
+        )
+
+    def _billable_transcription_call(
+        self,
+        chunk_path: str,
+        submitted_duration: float,
+        chunk_metric: Optional[TranscriptionChunkMetric],
+        chunk_index: int,
+        start_time: float,
+        split_depth: int,
+    ) -> str:
+        # Unit-style callers without a persisted job cannot establish ownership.
+        if self.job_metric is None:
+            response = self._transcribe_chunk_file(chunk_path)
+            return getattr(response, "text", response)
+
+        transcript = self.job_metric.transcript
+        simulated = is_simulated_model_environment()
+        idempotency_key = self._transcription_idempotency_key(
+            chunk_index,
+            start_time,
+            submitted_duration,
+            split_depth,
+        )
+        usage_event = None
+        try:
+            if simulated:
+                resolve_pricing(
+                    TaskPricing.TaskType.TRANSCRIPTION,
+                    "openai",
+                    self.model_name,
+                )
+            else:
+                usage_event = create_pending_usage_event(
+                    user=transcript.created_by,
+                    task_type=TaskPricing.TaskType.TRANSCRIPTION,
+                    provider="openai",
+                    model_name=self.model_name,
+                    idempotency_key=idempotency_key,
+                    transcript=transcript,
+                    transcription_chunk=chunk_metric,
+                )
+        except PricingResolutionError:
+            logger.exception(
+                "pricing_resolution_failed user_id=%s task=transcription model=%s "
+                "background_job_id=%s",
+                transcript.created_by_id,
+                self.model_name,
+                self.job_metric.background_job_id,
+            )
+            raise
+        if usage_event is not None:
+            logger.info(
+                "usage_event_created usage_event_id=%s user_id=%s "
+                "task=transcription model=%s background_job_id=%s status=pending",
+                usage_event.pk,
+                transcript.created_by_id,
+                self.model_name,
+                self.job_metric.background_job_id,
+            )
+
+        try:
+            response = self._transcribe_chunk_file(chunk_path)
+        except Exception as exc:
+            if usage_event is not None:
+                mark_failed(usage_event, reason=exc)
+            logger.exception(
+                "transcription_call_failed usage_event_id=%s background_job_id=%s",
+                usage_event.pk if usage_event else None,
+                self.job_metric.background_job_id,
+            )
+            raise
+
+        try:
+            transcript_text = validate_response_text(
+                getattr(response, "text", response),
+                allow_empty=True,
+            )
+        except Exception as exc:
+            if usage_event is not None and not simulated:
+                mark_reconciliation_required(
+                    usage_event,
+                    reason=exc,
+                    calculation_details={"provider_response_received": True},
+                )
+            raise
+
+        request_id = ""
+        try:
+            request_id = validate_provider_request_id(
+                provider_request_id(response)
+            )
+            if simulated:
+                usage_event = create_simulated_usage_event(
+                    user=transcript.created_by,
+                    task_type=TaskPricing.TaskType.TRANSCRIPTION,
+                    provider="openai",
+                    model_name=self.model_name,
+                    idempotency_key=idempotency_key,
+                    provider_request_id=request_id,
+                    transcript=transcript,
+                    transcription_chunk=chunk_metric,
+                    calculation_details={
+                        "submitted_audio_duration_seconds": str(submitted_duration),
+                        "split_depth": split_depth,
+                        "provider_request_id_present": bool(request_id),
+                    },
+                )
+            else:
+                usage_event = complete_duration_event(
+                    usage_event,
+                    audio_duration_seconds=submitted_duration,
+                    provider_request_id=request_id,
+                    transcript=transcript,
+                    transcription_chunk=chunk_metric,
+                    calculation_details={
+                        "split_depth": split_depth,
+                        "provider_request_id_present": bool(request_id),
+                    },
+                )
+        except Exception as exc:
+            if usage_event is not None and not simulated:
+                try:
+                    usage_event = mark_reconciliation_required(
+                        usage_event,
+                        reason=exc,
+                        provider_request_id=request_id,
+                        calculation_details={
+                            "provider_response_received": True,
+                            "provider_request_id_present": bool(request_id),
+                            "split_depth": split_depth,
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "usage_reconciliation_marking_failed usage_event_id=%s",
+                        usage_event.pk,
+                    )
+            logger.exception(
+                "usage_reconciliation_required usage_event_id=%s "
+                "provider_request_id=%s background_job_id=%s",
+                usage_event.pk if usage_event else None,
+                request_id,
+                self.job_metric.background_job_id,
+            )
+
+        logger.info(
+            "usage_event_transition usage_event_id=%s user_id=%s "
+            "task=transcription model=%s background_job_id=%s "
+            "provider_request_id=%s artifact_id=%s status=%s",
+            usage_event.pk if usage_event else None,
+            transcript.created_by_id,
+            self.model_name,
+            self.job_metric.background_job_id,
+            request_id,
+            chunk_metric.pk if chunk_metric else None,
+            usage_event.status if usage_event else "reconciliation_required",
+        )
+        return transcript_text
 
     def _should_split_on_error(self, exc: Exception) -> bool:
         if isinstance(exc, TranscriptionMediaError):
@@ -309,7 +520,18 @@ class TranscriptionManager:
                 )
                 chunk_file_size_bytes = self._file_size(chunk_path)
                 openai_started_at = time.perf_counter()
-                transcript = self._transcribe_chunk_file(chunk_path)
+                submitted_duration = self._submitted_audio_duration(
+                    chunk_path,
+                    duration,
+                )
+                transcript = self._billable_transcription_call(
+                    chunk_path=chunk_path,
+                    submitted_duration=submitted_duration,
+                    chunk_metric=chunk_metric,
+                    chunk_index=chunk_index,
+                    start_time=start_time,
+                    split_depth=split_depth,
+                )
                 openai_duration_sec = time.perf_counter() - openai_started_at
                 self._finish_chunk_metric(
                     chunk_metric,
