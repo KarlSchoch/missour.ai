@@ -36,10 +36,11 @@ def render_view_transcript_chunks_section(context):
         Chunk.objects
         .filter(
             transcript=transcript,
+            is_superseded=False,
             transcript__created_by=request.user,
         )
         .values("id", "chunk_text")
-        .order_by("id")  # or your real ordering field
+        .order_by("position", "id")
     )
 
     # 2) pull the tags with topic metadata
@@ -47,6 +48,7 @@ def render_view_transcript_chunks_section(context):
         Tag.objects
         .filter(
             chunk__transcript=transcript,
+            chunk__is_superseded=False,
             chunk__transcript__created_by=request.user,
             topic__created_by=request.user,
         )

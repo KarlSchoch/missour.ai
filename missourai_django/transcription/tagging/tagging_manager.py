@@ -1,8 +1,10 @@
 import logging
+from collections import defaultdict, deque
 from typing import List
 from uuid import uuid4
 
 from django.conf import settings
+from django.db import transaction
 from langchain.chat_models import init_chat_model
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -124,6 +126,53 @@ class TaggingManager:
             f"tagging:{self.transcript.pk}:{chunk.pk}:{topic.pk}:"
             f"{run_id}:invocation"
         )
+
+    def reconcile_chunks(self) -> List[Chunk]:
+        """Atomically restore full coverage without discarding tagged history."""
+        with transaction.atomic():
+            # Serialize reconciliation for this transcript, including empty sets.
+            # Select the transcript while creating a lock on the row
+            transcript = Transcript.objects.select_for_update().get(pk=self.transcript.pk)
+            # Split into the desired chunks in transcript order. These are
+            # in-memory documents, not saved Chunk database records yet.
+            new_chunks = self.chunker.create_documents([transcript.transcript_text])
+            # Select the transcript's chunks that are not superseded.
+            existing_chunks = list(
+                Chunk.objects.filter(transcript=transcript, is_superseded=False)
+                .prefetch_related("tags").order_by("position", "pk")
+            )
+            by_text = defaultdict(deque)
+            # Group existing records into queues by text, with tagged records
+            # first. Keep duplicates: identical text may occur more than once.
+            for chunk in sorted(existing_chunks, key=lambda chunk: not bool(chunk.tags.all())):
+                by_text[chunk.chunk_text.strip()].append(chunk)
+            current = []
+            for position, new_chunk in enumerate(new_chunks):
+                # position is the zero-based order in the complete transcript.
+                matches = by_text[new_chunk.page_content.strip()]
+                if matches:
+                    # Consume one existing record so it cannot be reused for
+                    # another occurrence or processed as a leftover below.
+                    chunk = matches.popleft()
+                    chunk.position = position
+                    chunk.save(update_fields=["position"])
+                else:
+                    chunk = Chunk.objects.create(
+                        transcript=transcript, chunk_text=new_chunk.page_content,
+                        position=position,
+                    )
+                current.append(chunk)
+            # Only unused existing records remain in the queues.
+            for matches in by_text.values():
+                for chunk in matches:
+                    if chunk.tags.all():
+                        chunk.is_superseded = True
+                        chunk.save(update_fields=["is_superseded"])
+                    else:
+                        chunk.delete()
+        # Do not expose partially created objects if the transaction rolls back.
+        self.chunks = current
+        return current
 
     def _prompt(self, chunk, topic):
         template = ChatPromptTemplate.from_template(
@@ -357,14 +406,9 @@ class TaggingManager:
         topics = topics or self.topics
         self._validate_topic_ownership(topics)
         run_id = run_id or self.run_id
-        self.chunks = list(Chunk.objects.filter(transcript=self.transcript))
-        has_single_partial_legacy_chunk = (
-            len(self.chunks) == 1
-            and self.chunks[0].chunk_text != self.transcript.transcript_text
-        )
-        if not self.chunks or has_single_partial_legacy_chunk:
-            self.chunks = []
-            self.chunk()
+        self.tags = []
+        self.failed_pairs = []
+        self.reconcile_chunks()
         for chunk in self.chunks:
             self.tag_chunk(
                 chunk,

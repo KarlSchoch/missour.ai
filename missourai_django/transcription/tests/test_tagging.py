@@ -286,8 +286,91 @@ class TaggingTests(TestCase):
         self.assertGreater(chunk_count, 0)
         self.assertEqual(tag_count, chunk_count)
 
+    def test_reconciliation_preserves_tagged_history_and_is_repeatable(self):
+        transcript = self._make_transcript("alpha beta\n\ngamma delta\n\nepsilon zeta")
+        stale = Chunk.objects.create(transcript=transcript, chunk_text="alpha")
+        historical = Tag.objects.create(
+            chunk=stale, topic=self.topic_it, topic_present=True,
+            relevant_section="alpha", user_validation=True,
+        )
+        from transcription.services.pricing import create_pending_usage_event, complete_token_event
+        event = create_pending_usage_event(
+            user=transcript.created_by, transcript=transcript, tag=historical,
+            task_type=TaskPricing.TaskType.TAGGING, provider="openai",
+            model_name=self.model_name, idempotency_key="historical-tag",
+        )
+        event = complete_token_event(event, input_tokens=10, output_tokens=2)
+        original_cost = event.billed_cost
+        reusable = Chunk.objects.create(transcript=transcript, chunk_text="gamma delta")
+        negative = Tag.objects.create(chunk=reusable, topic=self.topic_it, topic_present=False)
+        unused = Chunk.objects.create(transcript=transcript, chunk_text="epsilon")
+        llm = FakeLLM([Classification(tag=True, relevant_section="hit")] * 2)
+        self.mock_init.return_value = llm
+        manager = TaggingManager("test-key", transcript, [self.topic_it], chunk_size=14, chunk_overlap=0)
+        manager.tag_transcript()
+        stale.refresh_from_db()
+        historical.refresh_from_db()
+        event.refresh_from_db()
+        self.assertEqual(event.tag_id, historical.pk)
+        self.assertEqual(event.billed_cost, original_cost)
+        self.assertEqual(event.status, UsageEvent.Status.SUCCEEDED)
+        negative.refresh_from_db()
+        self.assertTrue(stale.is_superseded)
+        self.assertTrue(historical.user_validation)
+        self.assertFalse(negative.topic_present)
+        self.assertFalse(Chunk.objects.filter(pk=unused.pk).exists())
+        current = list(Chunk.objects.filter(transcript=transcript, is_superseded=False).order_by("position"))
+        self.assertEqual([c.chunk_text for c in current], ["alpha beta", "gamma delta", "epsilon zeta"])
+        self.assertEqual(current[1].pk, reusable.pk)
+        self.assertEqual(len(llm.invocations), 2)
+        self.assertEqual(manager.tag_transcript(), [])
+        self.assertEqual(len(llm.invocations), 2)
+        self.assertEqual(Chunk.objects.filter(transcript=transcript).count(), 4)
+        from transcription.api_views import TagViewSet
+        from transcription.templatetags.transcription_tags import render_view_transcript_chunks_section
+
+        request = SimpleNamespace(user=transcript.created_by)
+        view = TagViewSet()
+        view.request = request
+        self.assertNotIn(historical.pk, view.get_queryset().values_list("pk", flat=True))
+        payload = render_view_transcript_chunks_section({"request": request, "transcript": transcript})
+        self.assertEqual(
+            [row["chunk_id"] for row in payload["initial_payload"]["rows"]],
+            [c.pk for c in current],
+        )
+
+    def test_reconciliation_rolls_back_partial_creation(self):
+        transcript = self._make_transcript("alpha beta\n\ngamma delta")
+        original = Chunk.objects.create(transcript=transcript, chunk_text="alpha")
+        manager = TaggingManager("test-key", transcript, chunk_size=12, chunk_overlap=0)
+        create = Chunk.objects.create
+        calls = 0
+
+        def fail_second(**kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError("interrupted chunk creation")
+            return create(**kwargs)
+
+        with patch.object(Chunk.objects, "create", side_effect=fail_second):
+            with self.assertRaisesRegex(RuntimeError, "interrupted"):
+                manager.reconcile_chunks()
+        self.assertEqual(list(Chunk.objects.filter(transcript=transcript)), [original])
+        self.assertEqual(manager.chunks, [])
+
+    def test_reconciliation_preserves_repeated_text_occurrences(self):
+        transcript = self._make_transcript("alpha beta\n\nalpha beta")
+        original = Chunk.objects.create(transcript=transcript, chunk_text="  alpha beta  ")
+        manager = TaggingManager("test-key", transcript, chunk_size=12, chunk_overlap=0)
+        current = manager.reconcile_chunks()
+        self.assertEqual(len(current), 2)
+        self.assertEqual(current[0].pk, original.pk)
+        self.assertNotEqual(current[0].pk, current[1].pk)
+        self.assertEqual([c.pk for c in manager.reconcile_chunks()], [c.pk for c in current])
+
     def test_tag_transcript_reuses_existing_chunks_without_creating_new_ones(self):
-        transcript = self._make_transcript("alpha beta gamma delta epsilon zeta eta theta")
+        transcript = self._make_transcript("alpha beta gamma\n\ndelta epsilon zeta")
         chunk_one = Chunk.objects.create(transcript=transcript, chunk_text="alpha beta gamma")
         chunk_two = Chunk.objects.create(transcript=transcript, chunk_text="delta epsilon zeta")
 
@@ -301,6 +384,7 @@ class TaggingTests(TestCase):
             os.getenv("OPENAI_API_KEY"),
             transcript=transcript,
             topics=[self.topic_it],
+            chunk_size=20, chunk_overlap=0,
         )
         manager.tag_transcript()
         after = Chunk.objects.filter(transcript=transcript).count()
@@ -329,6 +413,7 @@ class TaggingTests(TestCase):
             os.getenv("OPENAI_API_KEY"),
             transcript=transcript,
             topics=[self.topic_it],
+            chunk_size=13, chunk_overlap=0,
         )
         manager.tag_transcript()
 
@@ -371,6 +456,7 @@ class TaggingTests(TestCase):
             os.getenv("OPENAI_API_KEY"),
             transcript=transcript,
             topics=[self.topic_it],
+            chunk_size=10, chunk_overlap=0,
         )
         manager.tag_transcript()
 
@@ -400,7 +486,7 @@ class TaggingTests(TestCase):
         self.assertEqual(self.mock_init.call_count, 1)
 
     def test_tag_transcript_records_failed_pairs_without_crashing_run(self):
-        transcript = self._make_transcript("lorem ipsum dolor sit amet consectetur")
+        transcript = self._make_transcript("lorem ipsum\n\ndolor sit amet")
         Chunk.objects.create(transcript=transcript, chunk_text="lorem ipsum")
         Chunk.objects.create(transcript=transcript, chunk_text="dolor sit amet")
 
@@ -414,6 +500,7 @@ class TaggingTests(TestCase):
             os.getenv("OPENAI_API_KEY"),
             transcript=transcript,
             topics=[self.topic_it],
+            chunk_size=16, chunk_overlap=0,
         )
 
         tags = manager.tag_transcript()

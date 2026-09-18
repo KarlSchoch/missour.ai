@@ -465,6 +465,8 @@ class Topic(models.Model):
         return f"Topic: {self.topic}; Description: {self.description[:50]}"
 
 class Chunk(models.Model):
+    is_superseded = models.BooleanField(default=False)
+    position = models.PositiveIntegerField(default=0)
     transcript = models.ForeignKey(Transcript, on_delete=models.CASCADE)
     chunk_text = models.TextField(default='')
     topics = models.ManyToManyField(Topic, through="Tag", related_name="chunks")
