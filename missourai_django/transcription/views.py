@@ -23,6 +23,26 @@ logger = logging.getLogger(__name__)
 TRANSCRIPTION_PENDING_TEXT = "Transcription in progress..."
 
 
+@login_required
+def usage(request):
+    payload = {
+        'apiUrls': {
+            key: reverse('api:' + name)
+            for key, name in {
+                'summary': 'usage-summary', 'events': 'usage-events',
+                'users': 'usage-users', 'modelPrices': 'usage-model-prices',
+                'taskPricing': 'usage-task-pricing',
+            }.items()
+        },
+        'capabilities': {
+            'canViewAllUsage': request.user.has_perm('transcription.view_all_usage'),
+            'canManagePricing': request.user.has_perm('transcription.manage_usage_pricing'),
+        },
+        'defaults': {'currency': 'USD', 'timezone': 'UTC'},
+    }
+    return render(request, 'transcription/usage.html', {'initial_payload': payload})
+
+
 # Create your views here.
 def index(request):
     return render(request, 'transcription/index.html')
