@@ -4,6 +4,7 @@ from . import views
 app_name = 'transcription'
 
 urlpatterns = [
+    path('usage/', views.usage, name='usage'),
     path('', views.index, name='index'),
     path('upload/', views.upload_audio, name='upload_audio'),
     path('transcripts/', views.transcripts, name='transcripts'),
