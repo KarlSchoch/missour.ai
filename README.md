@@ -86,6 +86,14 @@ The web application combines a Django backend that exposes APIs and serves the H
   - After issuance, comment nginx 443 block within `default.conf` and restart Nginx so it picks up the certs: `docker compose restart nginx`.
 - Ensure `.env` includes `DJANGO_ALLOWED_HOSTS=missour.ai,www.missour.ai` and `CSRF_TRUSTED_ORIGINS=https://missour.ai,https://www.missour.ai`.
 
+### SQLite concurrency
+
+Django uses SQLite `IMMEDIATE` transactions with a 20-second lock timeout for both web and Celery processes. This acquires writer access at the start of an explicit atomic transaction, avoiding deferred read-to-write upgrades. SQLite still allows only one writer at a time; the timeout is a lock wait, not a provider-request deadline, and does not add application-level retries.
+
+Keep atomic blocks short and external model calls outside them. Pending usage creation commits before the provider request; billing finalization uses a separate transaction. PostgreSQL remains the longer-term solution for higher write concurrency.
+
+After deploying this settings change, let active jobs finish and restart both web and Celery processes (rebuild production images). No database migration is required. Before deployment, validate simultaneous jobs and chunk writes against a separate database, including usage finalization and lock-timeout behavior. Do not blindly retry whole jobs after database failures: some paid provider calls may already have completed.
+
 **Testing**
 - _Django tests_: Place tests within `missourai_django/transcription/tests/` directory and run them with executing `poetry run manage.py tests transcription`
 - _React/Frontend Tests_: TBD

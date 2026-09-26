@@ -97,6 +97,12 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            # Acquire writer access when an atomic transaction starts, before reads.
+            # Keep atomic blocks short and provider requests outside transactions.
+            'transaction_mode': 'IMMEDIATE',
+            'timeout': 20,  # Seconds to wait for a database lock, not an API timeout.
+        },
     }
 }
 
