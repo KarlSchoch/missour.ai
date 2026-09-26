@@ -691,6 +691,46 @@ that job: CPU, memory, disk I/O, network throughput, process count, and Docker
 container usage.
 
 
+## Usage dashboard demo
+
+Open `/transcription/usage/` after signing in. Personal accounts see their own
+charges; accounts with `transcription.view_all_usage` also see user selection,
+base costs, pricing periods, and task/model/status filters. All month boundaries
+and displayed timestamps are UTC. Expand an event for quantities and identifiers.
+
+To populate the local SQLite database with sample reporting data, run from
+`missourai_django`:
+
+```powershell
+..\.venv\Scripts\python.exe manage.py seed_usage_demo
+```
+
+For the Docker development stack (which mounts the same database):
+
+```sh
+docker compose -f docker-compose.dev.yml exec web python manage.py seed_usage_demo
+```
+
+The command creates four dedicated accounts: `usage-demo-viewer` (organization
+reporting), `usage-demo-alice`, `usage-demo-bob`, and `usage-demo-carol` (personal
+reporting). Random passwords are printed only when accounts are first created.
+Use `python manage.py changepassword usage-demo-viewer` if a password is lost.
+No existing account passwords are changed.
+
+The dataset has 432 events across the current month and two preceding months,
+covering transcription, summaries, tagging, all event statuses, and a multiplier
+change on the 15th of each month. Model names begin with `usage-demo-`; event
+metadata includes `demo: true`. Re-running the command skips existing events.
+No provider API calls are made. Synthetic succeeded events intentionally have
+charges so totals can be explored; these demo accounts therefore contribute to
+organization totals in this local database. Do not use this dataset for invoicing.
+The command is limited to the local `db.sqlite3`; preserve a backup before seeding
+if you want to restore the previous database, since the ledger is immutable.
+
+Try the viewer account, select different months and users, filter on
+`usage-demo-summary`, expand event details, and paginate. Then sign in as Alice
+to compare the personal view. Select an older unseeded month for the empty state.
+
 ## ML Environment
 To use the ML Experiments environment, do the following
 1. Go into the `ml_env` directory.

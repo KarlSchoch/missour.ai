@@ -1,0 +1,28 @@
+.usage-dashboard { max-width: 1400px; margin: 0 auto; padding: 24px; color: #243447; }
+.usage-dashboard h2 { font-size: 2rem; margin-bottom: 8px; }
+.usage-dashboard h3 { margin-top: 28px; }
+.usage-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; padding: 20px; background: #f1f5f9; border-radius: 8px; }
+.usage-filters label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.usage-dashboard input, .usage-dashboard select, .usage-dashboard button { font: inherit; padding: 8px 12px; border: 1px solid #64748b; border-radius: 4px; background: white; color: #243447; }
+.usage-dashboard button { cursor: pointer; }
+.usage-dashboard button:disabled { opacity: .45; cursor: default; }
+.usage-dashboard :focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.usage-period { color: #526174; font-size: .9rem; }
+.usage-cards { display: flex; flex-wrap: wrap; gap: 16px; }
+.usage-cards article { padding: 20px 28px; border: 1px solid #cbd5e1; border-left: 4px solid #2563eb; border-radius: 8px; min-width: 220px; }
+.usage-cards h3 { margin: 0 0 12px; font-size: 1rem; }
+.usage-cards strong { font-size: 2rem; font-variant-numeric: tabular-nums; }
+.usage-counts { display: flex; flex-wrap: wrap; gap: 12px; }
+.usage-counts span { background: #edf2f7; padding: 8px 12px; border-radius: 4px; text-transform: capitalize; }
+.usage-table-scroll { overflow-x: auto; }
+.usage-dashboard table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.usage-dashboard th, .usage-dashboard td { padding: 12px; text-align: left; border-bottom: 1px solid #dce3eb; vertical-align: top; }
+.usage-dashboard th { background: #edf2f7; white-space: nowrap; }
+.usage-dashboard td { overflow-wrap: anywhere; }
+.usage-dashboard summary { cursor: pointer; white-space: nowrap; }
+.usage-dashboard details, .usage-dashboard details:hover { color: #243447; font-weight: normal; padding: 0; }
+.usage-dashboard dt { font-weight: 600; margin-top: 8px; }
+.usage-dashboard dd { margin: 2px 0 0; }
+.usage-pagination { position: static; background: none; z-index: auto; display: flex; align-items: center; justify-content: flex-start; gap: 16px; padding: 20px 0; flex-wrap: wrap; }
+.usage-dashboard [role=alert] { color: #9f1239; padding: 12px; background: #fff1f2; }
+@media (max-width: 640px) { .usage-dashboard { padding: 12px; } .usage-filters label { width: 100%; } }
