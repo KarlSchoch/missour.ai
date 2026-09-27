@@ -16,6 +16,8 @@ Make sure you have the following tools installed:
 Get OpenAI API Key and store in `.env` file as `OPENAI_API_KEY` (ensure that this is in your `.gitignore`!)
 
 ## Web Application
+Pricing operators: see [Pricing administration and model-change procedures](planning/PricingAdministrationOperations.md) for the usage-page workflow, confirmation API, and production startup validation.
+
 The web application combines a Django backend that exposes APIs and serves the HTML shell with a React frontend built with Vite. Django runs inside a container, while Vite handles hot-reload and asset delivery during development.
 
 ### Server Setup

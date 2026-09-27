@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { getInitialData } from './utils/getInitialData'
 import './usage.css'
+import PricingManagement from './pricing-management'
 
 const tasks = { transcription: 'Transcription', summary: 'Summaries', tagging: 'Tagging' }
 const statuses = ['succeeded', 'pending', 'awaiting_delivery', 'reconciliation_required', 'not_billable', 'failed', 'simulated']
@@ -125,6 +126,7 @@ export default function Usage() {
   const [users, setUsers] = useState([])
   const [accessError, setAccessError] = useState('')
   const [usersError, setUsersError] = useState('')
+  const [pricingRevision, setPricingRevision] = useState(0)
   const handlePermissionError = useCallback(message => {
     setUsers([])
     setAccessError(message)
@@ -165,7 +167,8 @@ export default function Usage() {
           </>}
         </form>
         {usersError && <p role="alert">User names could not be loaded. {usersError}</p>}
-        <Report key={JSON.stringify(filters)} api={initialData.apiUrls} filters={filters} privileged={privileged} users={users} onPermissionError={handlePermissionError} />
+        <Report key={`${JSON.stringify(filters)}:${pricingRevision}`} api={initialData.apiUrls} filters={filters} privileged={privileged} users={users} onPermissionError={handlePermissionError} />
+        {(privileged || initialData.capabilities?.canManagePricing) && <PricingManagement api={initialData.apiUrls} canView={privileged} canManage={Boolean(initialData.capabilities?.canManagePricing)} onPermissionError={handlePermissionError} onChanged={() => setPricingRevision(value => value + 1)} />}
       </>}
     </section>
   )

@@ -18,6 +18,12 @@ services:
       - .env.prod
     expose:
       - "8000"
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), timeout=5).close()"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 30s
     volumes:
       - ./missourai_django/db.sqlite3:/app/missourai_django/db.sqlite3
       - ./missourai_django/media:/app/missourai_django/media
@@ -29,6 +35,8 @@ services:
       context: .
       target: runtime
     depends_on:
+      web:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     working_dir: /app/missourai_django

@@ -52,6 +52,12 @@ def _validate_referenced_pricing_change(instance, original):
         )
 
 
+class PricingWriteLock(models.Model):
+    """Singleton mutex for pricing mutations, including the first price in a scope."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+
+
 class ModelPrice(models.Model):
     class Provider(models.TextChoices):
         OPENAI = "openai", "OpenAI"
@@ -172,6 +178,8 @@ class ModelPrice(models.Model):
             "output_rate_per_million": self.output_rate_per_million,
             "rate_per_minute": self.rate_per_minute,
         }
+        if self.currency != "USD":
+            errors["currency"] = "Only USD pricing is supported."
         for field_name, value in rate_fields.items():
             if value is not None and value < Decimal("0"):
                 errors[field_name] = "Rates cannot be negative."
@@ -199,7 +207,6 @@ class ModelPrice(models.Model):
                 ModelPrice.objects.filter(
                     provider=self.provider,
                     model_name=self.model_name,
-                    billing_unit=self.billing_unit,
                     currency=self.currency,
                 ).exclude(pk=self.pk),
                 self.effective_from,
@@ -209,6 +216,8 @@ class ModelPrice(models.Model):
                 errors["__all__"] = (
                     "Effective periods cannot overlap for the same provider, model, "
                     "billing unit, and currency."
+                    if overlapping.filter(billing_unit=self.billing_unit).exists()
+                    else "Effective periods cannot overlap across billing units for the same provider, model, and currency."
                 )
 
         if errors:

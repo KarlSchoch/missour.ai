@@ -1,4 +1,4 @@
-"""Authenticated, read-only usage reporting endpoints."""
+"""Authenticated usage reporting and permissioned pricing endpoints."""
 from django.contrib.auth import get_user_model
 from rest_framework.exceptions import PermissionDenied, ValidationError, NotFound
 from rest_framework.pagination import PageNumberPagination
@@ -89,14 +89,24 @@ class UsageUserListAPIView(PrivilegedUsageListAPIView):
 
 
 class ModelPriceListAPIView(PrivilegedUsageListAPIView):
+    http_method_names = ['get', 'post', 'head', 'options']
     serializer_class = serializers.ModelPriceSerializer
+
+    def post(self, request):
+        from .pricing_admin_api import pricing_post
+        return pricing_post(request, 'model')
 
     def get_queryset(self):
         return ModelPrice.objects.order_by('-effective_from', '-pk')
 
 
 class TaskPricingListAPIView(PrivilegedUsageListAPIView):
+    http_method_names = ['get', 'post', 'head', 'options']
     serializer_class = serializers.TaskPricingSerializer
+
+    def post(self, request):
+        from .pricing_admin_api import pricing_post
+        return pricing_post(request, 'task')
 
     def get_queryset(self):
         return TaskPricing.objects.order_by('-effective_from', '-pk')

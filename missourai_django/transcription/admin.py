@@ -1,10 +1,12 @@
 from django.contrib import admin
+from django.db import transaction
 
 # Register your models here.
 from .models import (
     BackgroundJob,
     Chunk,
     ModelPrice,
+    PricingWriteLock,
     Summary,
     Tag,
     TaskPricing,
@@ -22,6 +24,11 @@ MANAGE_USAGE_PRICING_PERMISSION = "transcription.manage_usage_pricing"
 
 
 class PricingPermissionAdmin(admin.ModelAdmin):
+    def save_model(self, request, obj, form, change):
+        with transaction.atomic():
+            PricingWriteLock.objects.select_for_update().get(pk=1)
+            super().save_model(request, obj, form, change)
+
     def has_module_permission(self, request):
         return request.user.has_perm(
             VIEW_ALL_USAGE_PERMISSION

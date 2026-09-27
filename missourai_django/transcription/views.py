@@ -32,6 +32,7 @@ def usage(request):
                 'summary': 'usage-summary', 'events': 'usage-events',
                 'users': 'usage-users', 'modelPrices': 'usage-model-prices',
                 'taskPricing': 'usage-task-pricing',
+                'pricingReadiness': 'usage-pricing-readiness',
             }.items()
         },
         'capabilities': {

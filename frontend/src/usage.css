@@ -1,6 +1,11 @@
 .usage-dashboard { max-width: 1400px; margin: 0 auto; padding: 24px; color: #243447; }
 .usage-dashboard h2 { font-size: 2rem; margin-bottom: 8px; }
 .usage-dashboard h3 { margin-top: 28px; }
+.pricing-management { margin-top: 36px; border-top: 1px solid #cbd5e1; padding-top: 20px; }
+.pricing-history { overflow-x: auto; }
+.pricing-history table { border-collapse: collapse; width: 100%; }
+.pricing-history th, .pricing-history td { padding: 8px; text-align: left; border-bottom: 1px solid #cbd5e1; }
+.pricing-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f1f5f9; padding: 16px; }
 .usage-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; padding: 20px; background: #f1f5f9; border-radius: 8px; }
 .usage-filters label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
 .usage-dashboard input, .usage-dashboard select, .usage-dashboard button { font: inherit; padding: 8px 12px; border: 1px solid #64748b; border-radius: 4px; background: white; color: #243447; }

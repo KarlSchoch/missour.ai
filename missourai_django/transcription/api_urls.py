@@ -10,6 +10,7 @@ from itertools import count
 from .models import Topic
 from .api_views import BackgroundJobViewSet, TopicViewSet, SummaryViewSet
 from . import usage_api_views as usage
+from .pricing_admin_api import PricingReadinessAPIView
 
 _ITEMS = []
 _id_counter = count()
@@ -46,6 +47,7 @@ router.register(r"topics", TopicViewSet)
 router.register(r"summaries", SummaryViewSet)
 
 urlpatterns = [
+    path('usage/pricing-readiness/', PricingReadinessAPIView.as_view(), name='usage-pricing-readiness'),
     path("", include(router.urls)),
     path('usage/summary/', usage.UsageSummaryAPIView.as_view(), name='usage-summary'),
     path('usage/events/', usage.UsageEventListAPIView.as_view(), name='usage-events'),
