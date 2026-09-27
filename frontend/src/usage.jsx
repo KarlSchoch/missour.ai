@@ -4,11 +4,11 @@ import { getInitialData } from './utils/getInitialData'
 import './usage.css'
 
 const tasks = { transcription: 'Transcription', summary: 'Summaries', tagging: 'Tagging' }
-const statuses = ['succeeded', 'pending', 'reconciliation_required', 'failed', 'simulated']
+const statuses = ['succeeded', 'pending', 'awaiting_delivery', 'reconciliation_required', 'not_billable', 'failed', 'simulated']
 const label = value => value.replaceAll('_', ' ')
 const date = value => value ? new Date(value).toLocaleString(undefined, { timeZone: 'UTC' }) : 'Open-ended'
-const money = (value, currency = 'USD') => value == null ? 'Not finalized' : new Intl.NumberFormat(undefined, {
-  style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 10,
+const money = (value, currency = 'USD', maximumFractionDigits = 10) => value == null ? 'Not finalized' : new Intl.NumberFormat(undefined, {
+  style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits,
 }).format(Number(value))
 
 async function fetchJson(url, signal) {
@@ -75,9 +75,9 @@ function Report({ api, filters, privileged, users, onPermissionError }) {
   return <>
     <p className="usage-period">{summary.period.month} · {date(summary.period.start)} through {date(summary.period.end)} UTC (end exclusive)</p>
     <div className="usage-cards">
-      {currencies.map(total => <article key={total.currency}><h3>Total charged · {total.currency}</h3><strong>{money(total.billed_cost, total.currency)}</strong><p>{total.event_count} completed events</p>{privileged && <p>Base cost: {money(total.base_cost, total.currency)}</p>}</article>)}
+      {currencies.map(total => <article key={total.currency}><h3>Total charged · {total.currency}</h3><strong>{money(total.billed_cost, total.currency, 2)}</strong><p>{total.event_count} completed events</p>{privileged && <p>Base cost: {money(total.base_cost, total.currency)}</p>}</article>)}
     </div>
-    <p>Charges include completed usage only. Pending and reconciliation events have no finalized charge.</p>
+    <p>Transcription charges finalize only after the complete transcript is saved. Pending, awaiting-delivery, and reconciliation events have no finalized charge. Not-billable events are not charged.</p>
     {privileged && <div className="usage-counts" aria-label="Event status counts">{statuses.map(status => <span key={status}>{label(status)}: <b>{summary.status_counts.find(row => row.status === status)?.event_count || 0}</b></span>)}</div>}
     <h3>By task</h3>
     <Table headings={['Task', 'Currency', 'Events', ...(privileged ? ['Base cost'] : []), 'Charged']}>
@@ -105,6 +105,7 @@ function Report({ api, filters, privileged, users, onPermissionError }) {
           <td>{date(event.occurred_at)}</td>{privileged && <td>{username(event.user_id)}</td>}<td>{tasks[event.task_type]}<br />{event.model_name}</td><td>{label(event.status)}</td><td>{money(event.billed_cost, event.currency)}</td>
           <td><details><summary>Event #{event.id}</summary><dl>
             <dt>Source</dt><dd>{event.usage_source}</dd>
+            {event.transcription_attempt_id != null && <><dt>Transcription attempt</dt><dd>{event.transcription_attempt_id}</dd><dt>Provider outcome</dt><dd>{label(event.provider_outcome)}</dd></>}
             {event.billing_unit === 'audio_duration' ? <><dt>Audio seconds</dt><dd>{event.audio_duration_seconds ?? 'Unknown'}</dd></> : <><dt>Uncached input tokens</dt><dd>{event.input_tokens ?? 'Unknown'}</dd><dt>Cached input tokens</dt><dd>{event.cached_input_tokens ?? 'Unknown'}</dd><dt>Output tokens</dt><dd>{event.output_tokens ?? 'Unknown'}</dd></>}
             {privileged && <><dt>Base cost</dt><dd>{money(event.base_cost, event.currency)}</dd><dt>Multiplier</dt><dd>{Number(event.multiplier)}×</dd><dt>Provider request</dt><dd>{event.provider_request_id || 'Unavailable'}</dd></>}
             {['transcript_id', 'summary_id', 'tag_id', 'transcription_chunk_id'].filter(key => event[key] != null).map(key => <React.Fragment key={key}><dt>{label(key)}</dt><dd>{event[key]}</dd></React.Fragment>)}

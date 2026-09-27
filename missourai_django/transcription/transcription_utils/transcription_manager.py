@@ -20,6 +20,7 @@ from transcription.models import (
     TaskPricing,
     TranscriptionChunkMetric,
     TranscriptionJobMetric,
+    TranscriptionBillingAttempt,
 )
 from transcription.services.model_calls import (
     is_simulated_model_environment,
@@ -28,7 +29,6 @@ from transcription.services.model_calls import (
     validate_response_text,
 )
 from transcription.services.pricing import (
-    complete_duration_event,
     create_pending_usage_event,
     create_simulated_usage_event,
     mark_failed,
@@ -36,6 +36,8 @@ from transcription.services.pricing import (
     PricingResolutionError,
     resolve_pricing,
 )
+
+from transcription.services.transcription_billing import record_transcription_usage
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +257,7 @@ class TranscriptionManager:
         start_time: float,
         duration: float,
         split_depth: int,
+        attempt_id: Optional[int] = None,
     ) -> str:
         job_identity = (
             self.job_metric.background_job_id if self.job_metric else "untracked"
@@ -263,9 +266,7 @@ class TranscriptionManager:
             f"transcription:{job_identity}:chunk:{chunk_index}:"
             f"start:{round(start_time * 1_000_000)}:"
             f"duration:{round(duration * 1_000_000)}:"
-            # Retries are not currently implemented. Keep the attempt segment fixed
-            # at 1 to preserve the existing idempotency-key format.
-            f"depth:{split_depth}:attempt:1"
+            f"depth:{split_depth}:attempt:{attempt_id or 1}"
         )
 
     def _billable_transcription_call(
@@ -283,12 +284,14 @@ class TranscriptionManager:
             return getattr(response, "text", response)
 
         transcript = self.job_metric.transcript
+        attempt = TranscriptionBillingAttempt.objects.get(background_job_id=self.job_metric.background_job_id)
         simulated = is_simulated_model_environment()
         idempotency_key = self._transcription_idempotency_key(
             chunk_index,
             start_time,
             submitted_duration,
             split_depth,
+            attempt_id=attempt.pk,
         )
         usage_event = None
         try:
@@ -307,6 +310,11 @@ class TranscriptionManager:
                     idempotency_key=idempotency_key,
                     transcript=transcript,
                     transcription_chunk=chunk_metric,
+                    transcription_attempt=attempt,
+                    calculation_details={
+                        "submitted_audio_duration_seconds": str(submitted_duration),
+                        "split_depth": split_depth,
+                    },
                 )
         except PricingResolutionError:
             logger.exception(
@@ -360,6 +368,7 @@ class TranscriptionManager:
             )
             if simulated:
                 usage_event = create_simulated_usage_event(
+                    transcription_attempt=attempt,
                     user=transcript.created_by,
                     task_type=TaskPricing.TaskType.TRANSCRIPTION,
                     provider="openai",
@@ -375,7 +384,7 @@ class TranscriptionManager:
                     },
                 )
             else:
-                usage_event = complete_duration_event(
+                usage_event = record_transcription_usage(
                     usage_event,
                     audio_duration_seconds=submitted_duration,
                     provider_request_id=request_id,
@@ -469,7 +478,9 @@ class TranscriptionManager:
                 duration,
                 reason,
             )
-            return self._issue_marker(start_time, duration)
+            raise TranscriptionMediaError(
+                f"Could not transcribe the complete audio range at {start_time:.2f}s for {duration:.2f}s."
+            ) from reason
 
         half = duration / 2
         logger.warning(
@@ -548,18 +559,18 @@ class TranscriptionManager:
         except openai.BadRequestError as exc:
             if exc.code == "audio_too_short":
                 logger.info(
-                    f"Skipping short audio segment at {start_time:.2f}s for {duration:.2f}s"
+                    f"Rejecting incomplete short audio segment at {start_time:.2f}s for {duration:.2f}s"
                 )
                 self._finish_chunk_metric(
                     chunk_metric,
-                    status=TranscriptionChunkMetric.Status.SKIPPED,
+                    status=TranscriptionChunkMetric.Status.FAILED,
                     total_duration_sec=time.perf_counter() - total_started_at,
                     chunk_file_size_bytes=chunk_file_size_bytes,
                     ffmpeg_duration_sec=ffmpeg_duration_sec,
                     openai_duration_sec=openai_duration_sec,
                     error=exc,
                 )
-                return ""
+                raise
 
             if not self._should_split_on_error(exc):
                 self._finish_chunk_metric(
@@ -607,6 +618,18 @@ class TranscriptionManager:
                 chunk_index=chunk_index,
                 reason=exc,
             )
+        except Exception as exc:
+            self._finish_chunk_metric(
+                chunk_metric,
+                status=TranscriptionChunkMetric.Status.FAILED,
+                total_duration_sec=time.perf_counter() - total_started_at,
+                chunk_file_size_bytes=chunk_file_size_bytes,
+                ffmpeg_duration_sec=ffmpeg_duration_sec,
+                openai_duration_sec=openai_duration_sec,
+                error=exc,
+            )
+            raise
+
     def _cleanup_chunk(self, chunk_path: Optional[str]):
         if not chunk_path:
             return

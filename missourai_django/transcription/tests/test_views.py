@@ -20,7 +20,7 @@ from transcription.models import (
     TranscriptionJobMetric,
 )
 from transcription.tasks import transcribe_uploaded_audio
-from transcription.views import _save_upload_for_background_job
+from transcription.views import _save_upload_for_background_job, TRANSCRIPTION_PENDING_TEXT
 
 User = get_user_model()
 
@@ -407,7 +407,7 @@ class UploadAudioTests(TestCase):
         transcript = Transcript.objects.get(id=job.related_object_id)
         self.assertEqual(transcript.name, "Large Upload")
         self.assertEqual(transcript.created_by, self.user)
-        self.assertEqual(transcript.transcript_text, "Transcription in progress...")
+        self.assertEqual(transcript.transcript_text, TRANSCRIPTION_PENDING_TEXT)
         self.assertRedirects(
             response,
             reverse("transcription:view_transcript", args=[transcript.id]),
@@ -499,7 +499,7 @@ class TranscribeUploadedAudioTaskTests(TestCase):
         )
         self.transcript = Transcript.objects.create(
             name="Task Upload",
-            transcript_text="Transcription in progress...",
+            transcript_text=TRANSCRIPTION_PENDING_TEXT,
             created_by=self.user,
         )
         self.job.related_object_id = self.transcript.id
@@ -560,7 +560,7 @@ class TranscribeUploadedAudioTaskTests(TestCase):
             )
 
         self.transcript.refresh_from_db()
-        self.assertEqual(self.transcript.transcript_text, "Transcription in progress...")
+        self.assertEqual(self.transcript.transcript_text, TRANSCRIPTION_PENDING_TEXT)
         self.job.refresh_from_db()
         self.assertEqual(
             self.job.error_message,

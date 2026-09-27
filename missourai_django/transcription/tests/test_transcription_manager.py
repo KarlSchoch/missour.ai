@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import os
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
@@ -11,11 +12,13 @@ from transcription.models import (
     ModelPrice,
     TaskPricing,
     Transcript,
+    TranscriptionBillingAttempt,
     TranscriptionChunkMetric,
     TranscriptionJobMetric,
     UsageEvent,
 )
 from transcription.services.pricing import PricingResolutionError
+from transcription.tasks import transcribe_uploaded_audio
 from transcription.transcription_utils.transcription_manager import (
     TranscriptionManager,
     TranscriptionMediaError,
@@ -184,6 +187,52 @@ class CreateTranscriptTests(TestCase):
             "provider unavailable",
             event.calculation_details["lifecycle"]["reason"],
         )
+
+    @patch.dict(os.environ, {"MODEL_ENV": "test", "OPENAI_API_KEY": "test-key"})
+    def test_failed_second_chunk_leaves_no_billable_charge_for_user(self):
+        manager = self.make_manager(chunk_count=2)
+        manager._transcribe_chunk_file.side_effect = [
+            SimpleNamespace(text="first chunk", id="request-1"),
+            RuntimeError("second chunk provider failure"),
+        ]
+        # The task creates its own metric; retain the real manager and billing flow.
+        self.job_metric.delete()
+
+        def make_task_manager(*args, job_metric, **kwargs):
+            manager.job_metric = job_metric
+            return manager
+
+        with (
+            patch("transcription.tasks.TranscriptionManager", side_effect=make_task_manager),
+            patch("transcription.tasks.default_storage") as storage,
+            patch("transcription.tasks.get_upload_file_size", return_value=2048),
+        ):
+            storage.path.return_value = "upload.wav"
+            storage.exists.return_value = False
+            with self.assertRaisesRegex(RuntimeError, "unexpected error"):
+                transcribe_uploaded_audio.run(
+                    self.background_job.pk, "upload.wav", self.transcript.pk, []
+                )
+
+        self.assertEqual(manager._transcribe_chunk_file.call_count, 2)
+        attempt = TranscriptionBillingAttempt.objects.get(background_job=self.background_job)
+        self.assertEqual(attempt.processing_state, "failed")
+        self.assertEqual(attempt.billing_state, "not_billable")
+        self.assertIsNone(attempt.delivered_at)
+        self.transcript.refresh_from_db()
+        self.assertEqual(self.transcript.transcript_text, "")
+
+        events = UsageEvent.objects.filter(user=self.user, transcription_attempt=attempt)
+        self.assertEqual(events.count(), 2)
+        successful_chunk = events.get(provider_request_id="request-1")
+        # Provider cost remains auditable, but is never passed on to the user.
+        self.assertEqual(successful_chunk.base_cost, Decimal("0.10"))
+        self.assertEqual(successful_chunk.status, UsageEvent.Status.NOT_BILLABLE)
+        self.assertEqual(successful_chunk.billed_cost, Decimal("0"))
+        self.assertEqual(events.filter(status=UsageEvent.Status.FAILED).count(), 1)
+        user_events = UsageEvent.objects.filter(user=self.user)
+        self.assertFalse(user_events.filter(status=UsageEvent.Status.SUCCEEDED).exists())
+        self.assertFalse(user_events.filter(billed_cost__gt=0).exists())
 
     @patch(
         "transcription.transcription_utils.transcription_manager.validate_response_text",

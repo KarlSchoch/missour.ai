@@ -88,6 +88,8 @@ The web application combines a Django backend that exposes APIs and serves the H
 
 ### SQLite concurrency
 
+For delivery-gated transcription charges, migration steps, and billing recovery commands, see [Transcription billing implementation notes](planning/TranscriptionBillingImplementationNotes.md).
+
 Django uses SQLite `IMMEDIATE` transactions with a 20-second lock timeout for both web and Celery processes. This acquires writer access at the start of an explicit atomic transaction, avoiding deferred read-to-write upgrades. SQLite still allows only one writer at a time; the timeout is a lock wait, not a provider-request deadline, and does not add application-level retries.
 
 Keep atomic blocks short and external model calls outside them. Pending usage creation commits before the provider request; billing finalization uses a separate transaction. PostgreSQL remains the longer-term solution for higher write concurrency.

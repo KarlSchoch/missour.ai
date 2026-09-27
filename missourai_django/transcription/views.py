@@ -10,7 +10,7 @@ from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from .forms import TranscriptForm
-from .models import BackgroundJob, Transcript, Topic
+from .models import BackgroundJob, Transcript, Topic, TranscriptionBillingAttempt
 from .tasks import transcribe_uploaded_audio
 from .tagging.tagging_manager import TaggingManager
 
@@ -20,7 +20,7 @@ import json
 import uuid
 
 logger = logging.getLogger(__name__)
-TRANSCRIPTION_PENDING_TEXT = "Transcription in progress..."
+TRANSCRIPTION_PENDING_TEXT = ""
 
 
 @login_required
@@ -98,7 +98,7 @@ def upload_audio(request):
             upload_storage_name = _save_upload_for_background_job(audio_file)
             transcript = Transcript.objects.create(
                 name=name,
-                transcript_text=TRANSCRIPTION_PENDING_TEXT,
+                transcript_text="",
                 created_by=request.user,
             )
             task_id = celery_uuid()
@@ -110,6 +110,7 @@ def upload_audio(request):
                 related_object_id=transcript.id,
             )
 
+            TranscriptionBillingAttempt.objects.create(background_job=job, transcript=transcript)
             transcribe_uploaded_audio.apply_async(
                 args=[
                     job.id,

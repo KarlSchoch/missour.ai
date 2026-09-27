@@ -12,6 +12,7 @@ from .models import (
     Transcript,
     TranscriptionChunkMetric,
     TranscriptionJobMetric,
+    TranscriptionBillingAttempt,
     UsageEvent,
 )
 
@@ -107,6 +108,14 @@ class UsageEventAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+@admin.register(TranscriptionBillingAttempt)
+class TranscriptionBillingAttemptAdmin(UsageEventAdmin):
+    list_display = ("id", "transcript", "background_job", "processing_state", "billing_state", "delivered_at")
+    list_filter = ("processing_state", "billing_state")
+    search_fields = ("transcript__name", "error_message")
+    readonly_fields = tuple(field.name for field in TranscriptionBillingAttempt._meta.fields)
+
 
 admin.site.register([
     BackgroundJob,
