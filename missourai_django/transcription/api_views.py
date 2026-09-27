@@ -24,6 +24,8 @@ class BackgroundJobViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = BackgroundJob.objects.filter(
             created_by=self.request.user
+        ).select_related("billing_attempt", "transcription_metric").prefetch_related(
+            "transcription_metric__chunk_metrics"
         ).order_by("-created_at")
 
         kind = self.request.query_params.get("kind")
@@ -39,17 +41,17 @@ class BackgroundJobViewSet(viewsets.ReadOnlyModelViewSet):
     def list(self, request, *args, **kwargs):
         queryset = list(self.filter_queryset(self.get_queryset())[:25])
 
+        serializer = self.get_serializer(queryset, many=True)
+        data = serializer.data
         active = request.query_params.get("active")
         if active is not None:
             wants_active = active.lower() in {"1", "true", "yes"}
-            queryset = [
+            data = [
                 job
-                for job in queryset
-                if AsyncResult(job.task_id).ready() is not wants_active
+                for job in data
+                if job["ready"] is not wants_active
             ]
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        return Response(data)
 
 class TopicViewSet(viewsets.ModelViewSet):
     queryset = Topic.objects.all()

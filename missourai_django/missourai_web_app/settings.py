@@ -28,6 +28,9 @@ SECRET_KEY = os.getenv('SECRET_KEY', get_random_secret_key())
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
+# Temporary manual-testing hook. Disabled outside DEBUG and when set to 0.
+TRANSCRIPTION_TEST_FAIL_CHUNK = int(os.getenv("TRANSCRIPTION_TEST_FAIL_CHUNK", "0")) if DEBUG else 0
+
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(',')
 CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000"]
 extra_csrf = [

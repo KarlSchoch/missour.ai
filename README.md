@@ -86,6 +86,20 @@ The web application combines a Django backend that exposes APIs and serves the H
   - After issuance, comment nginx 443 block within `default.conf` and restart Nginx so it picks up the certs: `docker compose restart nginx`.
 - Ensure `.env` includes `DJANGO_ALLOWED_HOSTS=missour.ai,www.missour.ai` and `CSRF_TRUSTED_ORIGINS=https://missour.ai,https://www.missour.ai`.
 
+### Manual transcription failure and progress notifications
+
+For a temporary failure test, set `TRANSCRIPTION_TEST_FAIL_CHUNK=3` in `.env.dev` (1-based; use a file with at least three chunks). The switch requires `DEBUG=True` and fails that chunk after creating its pending usage event but before calling the provider. It works for both serial and concurrent processing. Set it back to `0` after testing. This switch is disabled by default in `.env.dev.example` and ignored when `DEBUG=False`.
+
+Recreate web and Celery after changing environment settings or worker code; Celery does not automatically reload Python edits:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --force-recreate web celery-worker
+```
+
+Allow active jobs to finish before recreating workers. `MODEL_ENV=dev` simulates provider calls; `MODEL_ENV=test` and `prod` make real calls for the other chunks and can incur provider costs even when the overall attempt is nonbillable.
+
+The background-job toast polls every three seconds and updates with the currently active chunk indices. Concurrent processing may show multiple indices, and fast chunks may finish between polls. Failure toasts stay visible until dismissed; completion toasts link to the transcript. Durable delivery/failure records supplement Celery result status. Historical terminal jobs older than 15 minutes are not replayed unless their processing was previously observed in this browser.
+
 ### SQLite concurrency
 
 For delivery-gated transcription charges, migration steps, and billing recovery commands, see [Transcription billing implementation notes](planning/TranscriptionBillingImplementationNotes.md).

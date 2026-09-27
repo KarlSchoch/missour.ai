@@ -294,8 +294,13 @@ class TranscriptionManager:
             attempt_id=attempt.pk,
         )
         usage_event = None
+        inject_failure = (
+            settings.DEBUG
+            and settings.TRANSCRIPTION_TEST_FAIL_CHUNK > 0
+            and chunk_index == settings.TRANSCRIPTION_TEST_FAIL_CHUNK
+        )
         try:
-            if simulated:
+            if simulated and not inject_failure:
                 resolve_pricing(
                     TaskPricing.TaskType.TRANSCRIPTION,
                     "openai",
@@ -336,6 +341,8 @@ class TranscriptionManager:
             )
 
         try:
+            if inject_failure:
+                raise RuntimeError(f"Manual test: forced failure for transcription chunk {chunk_index}.")
             response = self._transcribe_chunk_file(chunk_path)
         except Exception as exc:
             if usage_event is not None:

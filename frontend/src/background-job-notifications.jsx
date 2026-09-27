@@ -7,6 +7,10 @@ import "@mantine/notifications/styles.css";
 
 const POLL_INTERVAL_MS = 3000;
 const STORAGE_PREFIX = "missourai.backgroundJobNotification";
+const RECENT_COMPLETION_MS = 15 * 60 * 1000;
+const shownInMemory = new Set();
+const scheduled = new Set();
+const activeMessages = new Map();
 
 function getConfig() {
     const el = document.getElementById("background-job-notifications-config");
@@ -14,15 +18,26 @@ function getConfig() {
 }
 
 function notificationKey(job, state) {
-    return `${STORAGE_PREFIX}.${job.id}.${state}`;
+    return `${STORAGE_PREFIX}.${job.task_id || `${job.id}.${job.created_at}`}.${state}`;
 }
 
 function wasShown(job, state) {
-    return window.localStorage.getItem(notificationKey(job, state)) === "1";
+    const key = notificationKey(job, state);
+    try {
+        return shownInMemory.has(key) || window.localStorage.getItem(key) === "1";
+    } catch {
+        return shownInMemory.has(key);
+    }
 }
 
 function markShown(job, state) {
-    window.localStorage.setItem(notificationKey(job, state), "1");
+    const key = notificationKey(job, state);
+    shownInMemory.add(key);
+    try {
+        window.localStorage.setItem(key, "1");
+    } catch {
+        // Restricted browser storage must not prevent a notification.
+    }
 }
 
 function jobHref(job) {
@@ -32,51 +47,68 @@ function jobHref(job) {
     return new URL(job.transcript_url, window.location.origin).toString();
 }
 
+function JobNotificationMessage({ job, state, message, href }) {
+    // Mark as seen only when the queued notification actually mounts.
+    useEffect(() => { markShown(job, state); }, [job, state]);
+    return <span>{message}{href && <> <Anchor href={href}>View transcript</Anchor></>}</span>;
+}
+
 function showJobNotification(job) {
     const isActive = !job.ready;
     const state = isActive ? "active" : job.successful ? "successful" : "failed";
-    if (wasShown(job, state)) {
-        return;
-    }
+    const activeId = `background-job-${job.id}-active`;
 
     if (isActive) {
-        notifications.show({
-            id: `background-job-${job.id}-active`,
-            title: "Background job queued",
-            message: `${job.label} is running.`,
+        const progress = job.progress;
+        const indices = progress?.active_chunks || [];
+        const message = indices.length
+            ? `Processing ${indices.length === 1 ? "chunk" : "chunks"} ${indices.join(", ")} of ${progress.total_chunks}.`
+            : progress?.started_chunks?.length
+                ? "Finishing transcription processing..."
+                : "Waiting for the worker or preparing audio...";
+        if (activeMessages.get(activeId) === message) return;
+        const data = {
+            id: activeId,
+            title: job.label,
+            message,
             color: "blue",
-            autoClose: 5000,
-        });
+            loading: true,
+            withCloseButton: false,
+            autoClose: false,
+        };
+        if (activeMessages.has(activeId)) notifications.update(data);
+        else notifications.show(data);
+        activeMessages.set(activeId, message);
         markShown(job, state);
         return;
     }
 
+    notifications.hide(activeId);
+    activeMessages.delete(activeId);
+    const key = notificationKey(job, state);
+    if (wasShown(job, state) || scheduled.has(key)) return;
+    const timestamp = Date.parse(job.notification_at || job.created_at);
+    // Do not flood the queue with historical jobs on every new browser/session.
+    if (!wasShown(job, "active") && Number.isFinite(timestamp) && Date.now() - timestamp > RECENT_COMPLETION_MS) return;
+
     const href = jobHref(job);
-    const message = job.failed
+    const message = job.failed && job.transcript_delivered
+        ? `${job.label}: the transcript is available, but follow-up processing failed. Job #${job.id}`
+        : job.failed
         ? `${job.label} failed. ${job.error_message || "Please contact support with this job id."} Job #${job.id}`
         : `${job.label} is complete.`;
 
+    scheduled.add(key);
     notifications.show({
         id: `background-job-${job.id}-${state}`,
         title: job.failed ? "Background job failed" : "Background job complete",
-        message: (
-            <span>
-                {message}
-                {href && (
-                    <>
-                        {" "}
-                        <Anchor href={href}>View transcript</Anchor>
-                    </>
-                )}
-            </span>
-        ),
+        message: <JobNotificationMessage job={job} state={state} message={message} href={href} />,
         color: job.failed ? "red" : "green",
         autoClose: job.failed ? false : 10000,
     });
-    markShown(job, state);
 }
 
-function BackgroundJobNotifications() {
+export function BackgroundJobNotifications() {
     const config = useMemo(getConfig, []);
     const isPolling = useRef(false);
 
@@ -112,6 +144,8 @@ function BackgroundJobNotifications() {
                         }
                     });
                 }
+            } catch (error) {
+                if (!cancelled) console.error("Could not poll background jobs; retrying", error);
             } finally {
                 isPolling.current = false;
                 if (!cancelled) {

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from celery.result import AsyncResult
+from celery import states
 from django.urls import reverse
 
 from .models import BackgroundJob, Topic, Summary, Tag, Transcript
@@ -11,6 +12,9 @@ class BackgroundJobSerializer(serializers.ModelSerializer):
     successful = serializers.SerializerMethodField()
     failed = serializers.SerializerMethodField()
     transcript_url = serializers.SerializerMethodField()
+    progress = serializers.SerializerMethodField()
+    transcript_delivered = serializers.SerializerMethodField()
+    notification_at = serializers.SerializerMethodField()
 
     class Meta:
         model = BackgroundJob
@@ -27,6 +31,9 @@ class BackgroundJobSerializer(serializers.ModelSerializer):
             "error_message",
             "created_at",
             "transcript_url",
+            "progress",
+            "transcript_delivered",
+            "notification_at",
         ]
 
     def _task(self, obj):
@@ -39,16 +46,48 @@ class BackgroundJobSerializer(serializers.ModelSerializer):
         return cache[obj.task_id]
 
     def get_status(self, obj):
+        # Delivery/failure evidence survives result-backend expiry and is
+        # available even before Celery has published its terminal result.
+        if obj.kind == BackgroundJob.Kind.TRANSCRIPTION:
+            attempt = getattr(obj, "billing_attempt", None)
+            metric = getattr(obj, "transcription_metric", None)
+            if obj.error_message or (attempt and attempt.processing_state == "failed"):
+                return states.FAILURE
+            if attempt and attempt.processing_state == "delivered":
+                return states.SUCCESS
+            if metric and metric.status == "failed":
+                return states.FAILURE
         return self._task(obj).status
 
     def get_ready(self, obj):
-        return self._task(obj).ready()
+        return self.get_status(obj) in states.READY_STATES
 
     def get_successful(self, obj):
-        return self._task(obj).successful()
+        return self.get_status(obj) == states.SUCCESS
 
     def get_failed(self, obj):
-        return self._task(obj).failed()
+        return self.get_status(obj) in {states.FAILURE, states.REVOKED}
+
+    def get_transcript_delivered(self, obj):
+        attempt = getattr(obj, "billing_attempt", None)
+        return bool(attempt and attempt.processing_state == "delivered")
+
+    def get_notification_at(self, obj):
+        attempt = getattr(obj, "billing_attempt", None)
+        metric = getattr(obj, "transcription_metric", None)
+        timestamp = (attempt.delivered_at if attempt else None) or (metric.finished_at if metric else None) or obj.created_at
+        return timestamp.isoformat()
+
+    def get_progress(self, obj):
+        metric = getattr(obj, "transcription_metric", None)
+        if obj.kind != BackgroundJob.Kind.TRANSCRIPTION or metric is None:
+            return None
+        chunks = list(metric.chunk_metrics.all())
+        return {
+            "total_chunks": metric.chunk_count,
+            "started_chunks": sorted({chunk.chunk_index for chunk in chunks}),
+            "active_chunks": sorted({chunk.chunk_index for chunk in chunks if chunk.status == "running"}),
+        }
 
     def get_transcript_url(self, obj):
         if (
