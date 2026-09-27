@@ -537,6 +537,58 @@ class Summary(models.Model):
         ]
 
 
+class TranscriptionBillingAttempt(models.Model):
+    """Durable delivery boundary; monetary charges remain on UsageEvent."""
+
+    class ProcessingState(models.TextChoices):
+        PROCESSING = "processing", "Processing"
+        DELIVERED = "delivered", "Delivered"
+        FAILED = "failed", "Failed"
+
+    class BillingState(models.TextChoices):
+        PENDING = "pending", "Pending"
+        FINALIZED = "finalized", "Finalized"
+        NOT_BILLABLE = "not_billable", "Not billable"
+        RECONCILIATION_REQUIRED = "reconciliation_required", "Reconciliation required"
+
+    # 1:1 relationship; Celery transcription task processes an entire file that can contain multiple chunks
+    # One upload -> One BackgroundJob/Celery Task -> One TranscriptionBillingAttempt -> Multiple Chunks
+    # Each Chunk is 1:1 with a UsageEvent
+    background_job = models.OneToOneField(
+        BackgroundJob, on_delete=models.PROTECT, related_name="billing_attempt",
+    )
+    transcript = models.ForeignKey(
+        Transcript, on_delete=models.PROTECT, related_name="billing_attempts",
+    )
+    processing_state = models.CharField(
+        max_length=20, choices=ProcessingState.choices, default=ProcessingState.PROCESSING,
+    )
+    billing_state = models.CharField(
+        max_length=30, choices=BillingState.choices, default=BillingState.PENDING,
+    )
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    finalized_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                name="transcription_billing_state_matches_delivery",
+                condition=(
+                    Q(processing_state="processing", billing_state="pending", delivered_at__isnull=True)
+                    | Q(processing_state="failed", billing_state="not_billable", delivered_at__isnull=True)
+                    | Q(
+                        processing_state="delivered", delivered_at__isnull=False,
+                        billing_state__in=["pending", "finalized", "reconciliation_required"],
+                    )
+                ),
+            ),
+        ]
+
+
 class UsageEventQuerySet(models.QuerySet):
     def update(self, **kwargs):
         raise ValidationError(
@@ -550,6 +602,8 @@ class UsageEventQuerySet(models.QuerySet):
 class UsageEvent(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
+        AWAITING_DELIVERY = "awaiting_delivery", "Awaiting delivery"
+        NOT_BILLABLE = "not_billable", "Not billable"
         SUCCEEDED = "succeeded", "Succeeded"
         FAILED = "failed", "Failed"
         RECONCILIATION_REQUIRED = (
@@ -562,6 +616,19 @@ class UsageEvent(models.Model):
         PROVIDER = "provider", "Provider"
         DURATION = "duration", "Duration"
         SIMULATED = "simulated", "Simulated"
+
+    class ProviderOutcome(models.TextChoices):
+        UNKNOWN = "unknown", "Unknown"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+
+    provider_outcome = models.CharField(
+        max_length=20, choices=ProviderOutcome.choices, default=ProviderOutcome.UNKNOWN,
+    )
+    transcription_attempt = models.ForeignKey(
+        TranscriptionBillingAttempt, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="usage_events",
+    )
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -714,6 +781,14 @@ class UsageEvent(models.Model):
                 ),
             ),
             models.CheckConstraint(
+                name="usage_event_deferred_charge",
+                condition=(~Q(status="awaiting_delivery") | Q(billed_cost__isnull=True, transcription_attempt__isnull=False)),
+            ),
+            models.CheckConstraint(
+                name="usage_event_nonbillable_zero",
+                condition=(~Q(status="not_billable") | Q(billed_cost=0, billed_cost__isnull=False)),
+            ),
+            models.CheckConstraint(
                 name="usage_event_simulated_is_zero",
                 condition=(
                     ~Q(status="simulated")
@@ -737,6 +812,16 @@ class UsageEvent(models.Model):
         self.currency = self.currency.strip().upper()
 
         errors = {}
+        if self.transcription_attempt_id:
+            attempt = self.transcription_attempt
+            if self.user_id != attempt.background_job.created_by_id:
+                errors["user"] = "Usage owner must match the billing attempt."
+            if self.task_type != TaskPricing.TaskType.TRANSCRIPTION:
+                errors["transcription_attempt"] = "Only transcription usage belongs to an attempt."
+            if self.transcript_id != attempt.transcript_id:
+                errors["transcript"] = "Transcript must match the billing attempt."
+            if self.status == self.Status.SUCCEEDED and attempt.processing_state != "delivered":
+                errors["status"] = "Transcription cannot be charged before delivery."
         for field_name in (
             "audio_duration_seconds",
             "base_cost",
@@ -844,6 +929,11 @@ class UsageEvent(models.Model):
     def save(self, *args, **kwargs):
         if self.pk:
             original = UsageEvent.objects.get(pk=self.pk)
+            if original.status == self.Status.NOT_BILLABLE and (
+                self.status not in {self.Status.NOT_BILLABLE, self.Status.FAILED}
+                or self.billed_cost != Decimal("0")
+            ):
+                raise ValidationError("Nonbillable usage cannot become a customer charge.")
             if original.status in {
                 self.Status.SUCCEEDED,
                 self.Status.FAILED,
@@ -853,6 +943,7 @@ class UsageEvent(models.Model):
                     "Completed usage events are immutable and cannot be changed."
                 )
             immutable_fields = (
+                "transcription_attempt_id",
                 "user_id",
                 "task_type",
                 "provider",

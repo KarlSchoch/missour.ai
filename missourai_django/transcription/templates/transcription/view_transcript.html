@@ -28,7 +28,15 @@
     <button type="submit">Analyze</button>
 </form>
 <h3>Trancript Text</h3>
-<p>{{ transcript.transcript_text }}</p>
+{% with attempt=transcript.billing_attempts.last %}
+    {% if attempt.processing_state == 'failed' %}
+        <p role="alert">Transcription failed. No transcription charge applies to this attempt. Please try another upload or contact support.</p>
+    {% elif attempt.processing_state == 'processing' %}
+        <p role="status">Transcription in progress...</p>
+    {% else %}
+        <p>{{ transcript.transcript_text }}</p>
+    {% endif %}
+{% endwith %}
 {% endblock %}
 
 {% block extra_scripts %}

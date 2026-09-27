@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from transcription.models import ModelPrice, TaskPricing, UsageEvent
+from transcription.models import ModelPrice, TaskPricing, UsageEvent, TranscriptionBillingAttempt
 
 COST_QUANTUM = Decimal("0.0000000001")
 TOKEN_RATE_DIVISOR = Decimal("1000000")
@@ -110,8 +110,13 @@ def create_pending_usage_event(
     tag=None,
     transcription_chunk=None,
     calculation_details=None,
+    transcription_attempt=None,
 ):
     """Resolve pricing before an API call and create its pending ledger row."""
+    if transcription_attempt is not None:
+        attempt = TranscriptionBillingAttempt.objects.select_for_update().get(pk=transcription_attempt.pk)
+        if attempt.processing_state != "processing":
+            raise UsageEventLifecycleError("Transcription attempt is closed.")
     occurred_at = occurred_at or timezone.now()
     model_price, task_pricing = resolve_pricing(
         task_type, provider, model_name, occurred_at
@@ -131,6 +136,7 @@ def create_pending_usage_event(
         model_name=model_price.model_name,
         occurred_at=occurred_at,
         status=UsageEvent.Status.PENDING,
+        transcription_attempt=transcription_attempt,
         billing_unit=model_price.billing_unit,
         usage_source=usage_source,
         model_price=model_price,
@@ -162,6 +168,7 @@ def create_simulated_usage_event(
     tag=None,
     transcription_chunk=None,
     calculation_details=None,
+    transcription_attempt=None,
 ):
     """Record a development-mode model call without creating billable usage."""
     occurred_at = occurred_at or timezone.now()
@@ -178,6 +185,7 @@ def create_simulated_usage_event(
         model_name=model_price.model_name,
         occurred_at=occurred_at,
         status=UsageEvent.Status.SIMULATED,
+        transcription_attempt=transcription_attempt,
         billing_unit=model_price.billing_unit,
         usage_source=UsageEvent.UsageSource.SIMULATED,
         model_price=model_price,
@@ -230,12 +238,17 @@ def _lock_transitionable_event(usage_event):
     event_id = usage_event.pk if isinstance(usage_event, UsageEvent) else usage_event
     if event_id is None:
         raise UsageEventLifecycleError("A saved usage event is required.")
+    attempt_id = UsageEvent.objects.values_list("transcription_attempt_id", flat=True).get(pk=event_id)
+    if attempt_id:
+        TranscriptionBillingAttempt.objects.select_for_update().get(pk=attempt_id)
     event = UsageEvent.objects.select_for_update().select_related(
         "model_price", "task_pricing"
     ).get(pk=event_id)
     if event.status not in {
         UsageEvent.Status.PENDING,
         UsageEvent.Status.RECONCILIATION_REQUIRED,
+        UsageEvent.Status.AWAITING_DELIVERY,
+        UsageEvent.Status.NOT_BILLABLE,
     }:
         raise UsageEventLifecycleError(
             f"Usage event {event.pk} cannot transition from {event.status}."
@@ -351,11 +364,11 @@ def complete_duration_event(
     duration = _as_nonnegative_decimal(
         audio_duration_seconds, "audio_duration_seconds"
     ).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
-    price = event.model_price
+    rate = Decimal(event.calculation_details["pricing"]["rate_per_minute"])
     with localcontext() as context:
         context.prec = 50
         base_cost = _quantize_cost(
-            duration / SECONDS_PER_MINUTE * price.rate_per_minute
+            duration / SECONDS_PER_MINUTE * rate
         )
         billed_cost = _quantize_cost(base_cost * event.multiplier)
 
@@ -363,6 +376,14 @@ def complete_duration_event(
     event.base_cost = base_cost
     event.billed_cost = billed_cost
     event.status = UsageEvent.Status.SUCCEEDED
+    if event.transcription_attempt_id:
+        event.provider_outcome = UsageEvent.ProviderOutcome.SUCCEEDED
+        if event.transcription_attempt.processing_state == "failed":
+            event.status = UsageEvent.Status.NOT_BILLABLE
+            event.billed_cost = Decimal("0")
+        else:
+            event.status = UsageEvent.Status.AWAITING_DELIVERY
+            event.billed_cost = None
     if transcript is not None:
         event.transcript = transcript
     if transcription_chunk is not None:
@@ -375,7 +396,7 @@ def complete_duration_event(
             "calculation": {
                 "audio_duration_seconds": str(duration),
                 "seconds_per_minute": str(SECONDS_PER_MINUTE),
-                "rate_per_minute": str(price.rate_per_minute),
+                "rate_per_minute": str(rate),
                 "base_cost": str(base_cost),
                 "multiplier": str(event.multiplier),
                 "billed_cost": str(billed_cost),
@@ -400,6 +421,13 @@ def _transition_without_cost(
 ):
     event = _lock_transitionable_event(usage_event)
     event.status = status
+    if event.transcription_attempt_id:
+        if status == UsageEvent.Status.FAILED:
+            event.provider_outcome = UsageEvent.ProviderOutcome.FAILED
+            event.billed_cost = Decimal("0")
+        elif event.transcription_attempt.processing_state == "failed":
+            event.status = UsageEvent.Status.NOT_BILLABLE
+            event.billed_cost = Decimal("0")
     if provider_request_id:
         event.provider_request_id = provider_request_id
     if summary is not None:

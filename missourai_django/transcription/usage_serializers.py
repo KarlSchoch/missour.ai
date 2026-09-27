@@ -65,7 +65,7 @@ class UsageEventDetailSerializer(InternalFieldsMixin, serializers.ModelSerialize
             'cached_input_tokens', 'output_tokens', 'audio_duration_seconds',
             'base_cost', 'multiplier', 'billed_cost', 'currency', 'model_price_id',
             'task_pricing_id', 'provider_request_id', 'transcript_id', 'summary_id',
-            'tag_id', 'transcription_chunk_id',
+            'tag_id', 'transcription_chunk_id', 'transcription_attempt_id', 'provider_outcome',
         )
 
 

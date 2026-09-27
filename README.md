@@ -86,6 +86,30 @@ The web application combines a Django backend that exposes APIs and serves the H
   - After issuance, comment nginx 443 block within `default.conf` and restart Nginx so it picks up the certs: `docker compose restart nginx`.
 - Ensure `.env` includes `DJANGO_ALLOWED_HOSTS=missour.ai,www.missour.ai` and `CSRF_TRUSTED_ORIGINS=https://missour.ai,https://www.missour.ai`.
 
+### Manual transcription failure and progress notifications
+
+For a temporary failure test, set `TRANSCRIPTION_TEST_FAIL_CHUNK=3` in `.env.dev` (1-based; use a file with at least three chunks). The switch requires `DEBUG=True` and fails that chunk after creating its pending usage event but before calling the provider. It works for both serial and concurrent processing. Set it back to `0` after testing. This switch is disabled by default in `.env.dev.example` and ignored when `DEBUG=False`.
+
+Recreate web and Celery after changing environment settings or worker code; Celery does not automatically reload Python edits:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --force-recreate web celery-worker
+```
+
+Allow active jobs to finish before recreating workers. `MODEL_ENV=dev` simulates provider calls; `MODEL_ENV=test` and `prod` make real calls for the other chunks and can incur provider costs even when the overall attempt is nonbillable.
+
+The background-job toast polls every three seconds and updates with the currently active chunk indices. Concurrent processing may show multiple indices, and fast chunks may finish between polls. Failure toasts stay visible until dismissed; completion toasts link to the transcript. Durable delivery/failure records supplement Celery result status. Historical terminal jobs older than 15 minutes are not replayed unless their processing was previously observed in this browser.
+
+### SQLite concurrency
+
+For delivery-gated transcription charges, migration steps, and billing recovery commands, see [Transcription billing implementation notes](planning/TranscriptionBillingImplementationNotes.md).
+
+Django uses SQLite `IMMEDIATE` transactions with a 20-second lock timeout for both web and Celery processes. This acquires writer access at the start of an explicit atomic transaction, avoiding deferred read-to-write upgrades. SQLite still allows only one writer at a time; the timeout is a lock wait, not a provider-request deadline, and does not add application-level retries.
+
+Keep atomic blocks short and external model calls outside them. Pending usage creation commits before the provider request; billing finalization uses a separate transaction. PostgreSQL remains the longer-term solution for higher write concurrency.
+
+After deploying this settings change, let active jobs finish and restart both web and Celery processes (rebuild production images). No database migration is required. Before deployment, validate simultaneous jobs and chunk writes against a separate database, including usage finalization and lock-timeout behavior. Do not blindly retry whole jobs after database failures: some paid provider calls may already have completed.
+
 **Testing**
 - _Django tests_: Place tests within `missourai_django/transcription/tests/` directory and run them with executing `poetry run manage.py tests transcription`
 - _React/Frontend Tests_: TBD
@@ -690,6 +714,46 @@ Then inspect the same time window in Netdata to understand host pressure during
 that job: CPU, memory, disk I/O, network throughput, process count, and Docker
 container usage.
 
+
+## Usage dashboard demo
+
+Open `/transcription/usage/` after signing in. Personal accounts see their own
+charges; accounts with `transcription.view_all_usage` also see user selection,
+base costs, pricing periods, and task/model/status filters. All month boundaries
+and displayed timestamps are UTC. Expand an event for quantities and identifiers.
+
+To populate the local SQLite database with sample reporting data, run from
+`missourai_django`:
+
+```powershell
+..\.venv\Scripts\python.exe manage.py seed_usage_demo
+```
+
+For the Docker development stack (which mounts the same database):
+
+```sh
+docker compose -f docker-compose.dev.yml exec web python manage.py seed_usage_demo
+```
+
+The command creates four dedicated accounts: `usage-demo-viewer` (organization
+reporting), `usage-demo-alice`, `usage-demo-bob`, and `usage-demo-carol` (personal
+reporting). Random passwords are printed only when accounts are first created.
+Use `python manage.py changepassword usage-demo-viewer` if a password is lost.
+No existing account passwords are changed.
+
+The dataset has 432 events across the current month and two preceding months,
+covering transcription, summaries, tagging, all event statuses, and a multiplier
+change on the 15th of each month. Model names begin with `usage-demo-`; event
+metadata includes `demo: true`. Re-running the command skips existing events.
+No provider API calls are made. Synthetic succeeded events intentionally have
+charges so totals can be explored; these demo accounts therefore contribute to
+organization totals in this local database. Do not use this dataset for invoicing.
+The command is limited to the local `db.sqlite3`; preserve a backup before seeding
+if you want to restore the previous database, since the ledger is immutable.
+
+Try the viewer account, select different months and users, filter on
+`usage-demo-summary`, expand event details, and paginate. Then sign in as Alice
+to compare the personal view. Select an older unseeded month for the empty state.
 
 ## ML Environment
 To use the ML Experiments environment, do the following

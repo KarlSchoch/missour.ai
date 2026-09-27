@@ -1,4 +1,5 @@
 from celery import shared_task
+from celery.exceptions import Ignore
 from django.core.files.storage import default_storage
 from django.utils import timezone
 
@@ -13,6 +14,13 @@ import logging
 import os
 import socket
 import time
+
+from transcription.services.transcription_billing import (
+    claim_transcription_attempt,
+    record_transcript_delivery,
+    try_finalize_transcription_billing,
+    mark_transcription_not_billable,
+)
 
 logger = logging.getLogger(__name__)
 GENERIC_TRANSCRIPTION_ERROR = (
@@ -134,6 +142,12 @@ def transcribe_uploaded_audio(job_id, upload_storage_name, transcript_id, topic_
     job = BackgroundJob.objects.select_related("created_by").get(id=job_id)
     user = job.created_by
     transcript = Transcript.objects.get(id=transcript_id, created_by=user)
+    attempt = claim_transcription_attempt(job, transcript)
+    if attempt is None:
+        # Duplicate delivery must neither repeat paid work nor delete the
+        # upload still being used by the original worker.
+        logger.warning("Duplicate transcription task ignored job_id=%s", job_id)
+        raise Ignore()
     job_metric = None
     task_started_at = time.perf_counter()
 
@@ -162,8 +176,9 @@ def transcribe_uploaded_audio(job_id, upload_storage_name, transcript_id, topic_
         if len(selected_topics) != len(topic_ids):
             raise ValueError("One or more selected topics could not be found.")
 
+        record_transcript_delivery(attempt.pk, transcript_text)
         transcript.transcript_text = transcript_text
-        transcript.save(update_fields=["transcript_text"])
+        try_finalize_transcription_billing(attempt.pk)
 
         if selected_topics:
             tagging_manager = TaggingManager(
@@ -177,6 +192,10 @@ def transcribe_uploaded_audio(job_id, upload_storage_name, transcript_id, topic_
         job.save(update_fields=["error_message"])
         return transcript.id
     except Exception as exc:
+        try:
+            mark_transcription_not_billable(attempt.pk, exc)
+        except Exception:
+            logger.exception("Transcription failure cleanup needs recovery attempt_id=%s", attempt.pk)
         if (
             job_metric
             and job_metric.status == TranscriptionJobMetric.Status.RUNNING
