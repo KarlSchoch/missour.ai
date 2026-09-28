@@ -28,6 +28,7 @@
 .pricing-preview > label input { margin-top: 2px; }
 .pricing-candidates { margin: 16px 0; padding: 16px; border: 1px solid #f59e0b; background: #fffbeb; border-radius: 8px; }
 .pricing-candidates label { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
+.pricing-option-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; padding: 12px; background: #f8fafc; border-left: 4px solid #2563eb; }
 .usage-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; padding: 20px; background: #f1f5f9; border-radius: 8px; }
 .usage-filters label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
 .usage-dashboard input, .usage-dashboard select, .usage-dashboard button { font: inherit; padding: 8px 12px; border: 1px solid #64748b; border-radius: 4px; background: white; color: #243447; }

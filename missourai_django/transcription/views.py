@@ -33,6 +33,7 @@ def usage(request):
                 'users': 'usage-users', 'modelPrices': 'usage-model-prices',
                 'taskPricing': 'usage-task-pricing',
                 'pricingReadiness': 'usage-pricing-readiness',
+                'pricingModelOptions': 'usage-pricing-model-options',
             }.items()
         },
         'capabilities': {

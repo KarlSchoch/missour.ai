@@ -16,7 +16,10 @@ from .usage_serializers import ModelPriceSerializer, TaskPricingSerializer
 from .services.pricing_administration import (
     PricingSelectionRequired,
     change_pricing,
+    configured_models,
+    model_options_for_task,
     readiness,
+    resolve_model_option,
 )
 
 
@@ -40,8 +43,14 @@ class ModelChange(ChangeFields):
 
 class TaskChange(ChangeFields):
     task_type = serializers.ChoiceField(choices=TaskPricing.TaskType.choices)
-    model_price_id = serializers.IntegerField(min_value=1)
+    model_name = serializers.CharField(max_length=100, required=False)
+    model_price_id = serializers.IntegerField(min_value=1, required=False)
     multiplier = serializers.DecimalField(max_digits=12, decimal_places=6)
+
+    def validate(self, attrs):
+        if not attrs.get("model_name") and not attrs.get("model_price_id"):
+            raise serializers.ValidationError({"model_name": "Select a model."})
+        return attrs
 
 
 def pricing_post(request, kind):
@@ -67,15 +76,27 @@ def pricing_post(request, kind):
         data["effective_from"] = timezone.now()
     if "effective_from" not in data:
         raise ValidationError({"effective_from": "Provide a future timestamp or select immediate activation."})
-    # Confirming uses the exact timestamp shown in the preview, not a new one.
-    if kind == "task" and not ModelPrice.objects.filter(pk=data["model_price_id"]).exists():
-        raise ValidationError({"model_price_id": "Model price not found."})
     try:
+        # Confirming uses the exact model-price ID and timestamp resolved during preview.
+        if kind == "task":
+            if "model_price_id" not in data:
+                selected_model = data.pop("model_name")
+                data["model_price_id"] = resolve_model_option(
+                    data["task_type"], selected_model, data["effective_from"],
+                ).pk
+            else:
+                data.pop("model_name", None)
+        if kind == "task" and not ModelPrice.objects.filter(pk=data["model_price_id"]).exists():
+            raise ValidationError({"model_price_id": "Model price not found."})
         candidate, closed, created, impacts, version = change_pricing(
             kind, data, request.user, preview=not bool(token), expected_fingerprint=expected,
         )
     except PricingSelectionRequired as exc:
-        serializer = ModelPriceSerializer if kind == "model" else TaskPricingSerializer
+        serializer = (
+            ModelPriceSerializer
+            if exc.candidates and isinstance(exc.candidates[0], ModelPrice)
+            else TaskPricingSerializer
+        )
         return Response({
             "code": "configuration_conflict" if exc.conflict else "selection_required",
             "detail": (
@@ -125,3 +146,37 @@ class PricingReadinessAPIView(APIView):
         if not (request.user.has_perm("transcription.view_all_usage") or request.user.has_perm("transcription.manage_usage_pricing")):
             raise PermissionDenied("Pricing readiness requires usage-reporting or pricing-management permission.")
         return Response({"tasks": readiness()})
+
+
+class PricingModelOptionsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "head", "options"]
+
+    class Query(serializers.Serializer):
+        task_type = serializers.ChoiceField(choices=TaskPricing.TaskType.choices)
+        at = serializers.DateTimeField(required=False)
+
+    def get(self, request):
+        if not request.user.has_perm("transcription.manage_usage_pricing"):
+            raise PermissionDenied("Model selection requires manage_usage_pricing.")
+        query = self.Query(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        task_type = query.validated_data["task_type"]
+        at = query.validated_data.get("at", timezone.now())
+        options, conflicts = model_options_for_task(task_type, at)
+        configured = configured_models()[task_type]
+
+        def serialize(price):
+            data = ModelPriceSerializer(price).data
+            data["configured_for_task"] = price.model_name == configured
+            return data
+
+        return Response({
+            "task_type": task_type,
+            "at": at,
+            "options": [serialize(price) for price in options],
+            "conflicts": [{
+                "model_name": item["model_name"],
+                "records": [serialize(price) for price in item["records"]],
+            } for item in conflicts],
+        })

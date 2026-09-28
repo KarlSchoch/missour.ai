@@ -24,7 +24,9 @@ Both POST operations require pricing-management permission and normal session CS
 
 Common fields: `effective_from` (timezone-aware timestamp), optional `effective_to`, and `activate_now` (default false). The backend automatically identifies the pricing record applicable at the activation timestamp. An internal `selected_supersedes` value is accepted only when resolving a selection requested by the preview API; administrators do not enter record IDs in the normal form. Immediate activation uses the exact timestamp shown in the preview and requires a configured model/task combination. Otherwise, a future effective timestamp is required. The UI labels its date inputs as UTC.
 
-Model fields: `model_name`, `billing_unit`, appropriate per-million token rates or `rate_per_minute`; provider is OpenAI and currency is USD. Task fields: `task_type`, `model_price_id`, `multiplier`.
+Model fields: `model_name`, `billing_unit`, appropriate per-million token rates or `rate_per_minute`; provider is OpenAI and currency is USD. Task fields: `task_type`, `model_name`, and `multiplier`. The preview backend resolves the compatible model-price record applicable at the activation timestamp and signs its exact ID into the confirmation. Administrators never need to enter a model-price ID.
+
+`GET /api/usage/pricing-model-options/?task_type=<task>&at=<timestamp>` returns model choices with pricing compatible with the task at that instant. It requires pricing-management permission, filters transcription to audio-duration rates and summary/tagging to text-token rates, and reports ambiguous model periods separately rather than presenting them as selectable options.
 
 `GET /api/usage/pricing-readiness/` shows each configured task/model using the runtime pricing resolver. Readiness includes billing-unit and model validation, not just existence of a database row.
 

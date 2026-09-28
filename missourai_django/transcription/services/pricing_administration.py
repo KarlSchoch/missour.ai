@@ -65,6 +65,44 @@ def configured_models():
     }
 
 
+def model_options_for_task(task_type, at=None):
+    """Return compatible model prices applicable to a task at one instant."""
+    at = at or timezone.now()
+    expected_unit = "audio_duration" if task_type == "transcription" else "text_tokens"
+    prices = list(ModelPrice.objects.filter(
+        provider="openai",
+        currency="USD",
+        billing_unit=expected_unit,
+        effective_from__lte=at,
+    ).filter(
+        Q(effective_to__isnull=True) | Q(effective_to__gt=at)
+    ).order_by("model_name", "effective_from", "pk"))
+    grouped = {}
+    for price in prices:
+        grouped.setdefault(price.model_name, []).append(price)
+    options = []
+    conflicts = []
+    for model_name, records in grouped.items():
+        if len(records) == 1:
+            options.append(records[0])
+        else:
+            conflicts.append({"model_name": model_name, "records": records})
+    return options, conflicts
+
+
+def resolve_model_option(task_type, model_name, at):
+    options, conflicts = model_options_for_task(task_type, at)
+    conflict = next((item for item in conflicts if item["model_name"] == model_name), None)
+    if conflict:
+        raise PricingSelectionRequired(conflict["records"], conflict=True)
+    matches = [price for price in options if price.model_name == model_name]
+    if len(matches) != 1:
+        raise ValidationError(
+            f"No compatible {model_name} price applies to {task_type} at the activation time."
+        )
+    return matches[0]
+
+
 def readiness(at=None):
     at = at or timezone.now()
     rows = []
@@ -148,7 +186,12 @@ def change_pricing(kind, data, user, *, preview=False, expected_fingerprint=None
         if candidate.currency != "USD":
             raise ValidationError("Only USD is supported.")
         if immediate and candidate.model_name not in configured_models().values():
-            raise ValidationError("Immediate activation requires a configured model.")
+            active_models = ", ".join(sorted(set(configured_models().values())))
+            raise ValidationError(
+                f"{candidate.model_name} is not currently configured for any task. "
+                f"Immediate activation is limited to configured models ({active_models}). "
+                "Use a future activation when preparing a model rollout."
+            )
         for task, name in configured_models().items():
             expected = "audio_duration" if task == "transcription" else "text_tokens"
             if immediate and name == candidate.model_name and candidate.billing_unit != expected:
@@ -157,6 +200,8 @@ def change_pricing(kind, data, user, *, preview=False, expected_fingerprint=None
     else:
         identity = ("task_type", "model_price_id")
         price = candidate.model_price
+        if candidate.effective_to is None and price.effective_to is not None:
+            candidate.effective_to = price.effective_to
         if price.currency != "USD":
             raise ValidationError("Only USD is supported.")
         if immediate and configured_models()[candidate.task_type] != price.model_name:
