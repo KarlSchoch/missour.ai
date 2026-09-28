@@ -121,6 +121,8 @@ function Report({ api, filters, privileged, users, onPermissionError }) {
 export default function Usage() {
   const initialData = useMemo(() => getInitialData('initial-payload-usage'), [])
   const privileged = Boolean(initialData.capabilities?.canViewAllUsage)
+  const canManagePricing = Boolean(initialData.capabilities?.canManagePricing)
+  const [section, setSection] = useState('usage')
   const [filters, setFilters] = useState({ month: new Date().toISOString().slice(0, 7), user_id: '', task_type: '', model_name: '', status: '' })
   const [model, setModel] = useState('')
   const [users, setUsers] = useState([])
@@ -157,6 +159,15 @@ export default function Usage() {
     <section className="usage-dashboard" aria-labelledby="usage-heading">
       <h2 id="usage-heading">Usage</h2>
       {accessError ? <p role="alert">{accessError}</p> : <>
+        <div className={canManagePricing ? 'usage-layout' : undefined}>
+        {canManagePricing && <aside className="usage-sidebar">
+          <nav aria-label="Usage sections">
+            <button type="button" aria-current={section === 'usage' ? 'page' : undefined} onClick={() => setSection('usage')}>Usage</button>
+            <button type="button" aria-current={section === 'pricing' ? 'page' : undefined} onClick={() => setSection('pricing')}>Pricing Administration</button>
+          </nav>
+        </aside>}
+        <div className="usage-content">
+        <div hidden={canManagePricing && section !== 'usage'}>
         <p>{privileged ? 'Organization usage and charges' : 'Your usage and charges'} · Calendar months in UTC</p>
         <form className="usage-filters" onSubmit={event => { event.preventDefault(); update('model_name', model.trim()) }}>
           <label>Month<input type="month" required value={filters.month} onChange={event => { if (event.target.value) update('month', event.target.value) }} /></label>
@@ -168,7 +179,10 @@ export default function Usage() {
         </form>
         {usersError && <p role="alert">User names could not be loaded. {usersError}</p>}
         <Report key={`${JSON.stringify(filters)}:${pricingRevision}`} api={initialData.apiUrls} filters={filters} privileged={privileged} users={users} onPermissionError={handlePermissionError} />
-        {(privileged || initialData.capabilities?.canManagePricing) && <PricingManagement api={initialData.apiUrls} canView={privileged} canManage={Boolean(initialData.capabilities?.canManagePricing)} onPermissionError={handlePermissionError} onChanged={() => setPricingRevision(value => value + 1)} />}
+        </div>
+        {canManagePricing && section === 'pricing' && <PricingManagement api={initialData.apiUrls} canView={privileged} canManage={canManagePricing} onPermissionError={handlePermissionError} onChanged={() => setPricingRevision(value => value + 1)} />}
+        </div>
+        </div>
       </>}
     </section>
   )

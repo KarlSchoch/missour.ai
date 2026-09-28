@@ -1,11 +1,33 @@
 .usage-dashboard { max-width: 1400px; margin: 0 auto; padding: 24px; color: #243447; }
 .usage-dashboard h2 { font-size: 2rem; margin-bottom: 8px; }
 .usage-dashboard h3 { margin-top: 28px; }
-.pricing-management { margin-top: 36px; border-top: 1px solid #cbd5e1; padding-top: 20px; }
+.usage-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+.usage-content { min-width: 0; }
+.usage-sidebar { position: sticky; top: 20px; }
+.usage-sidebar nav { position: static; background: #f1f5f9; z-index: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 8px; }
+.usage-sidebar button { text-align: left; width: 100%; }
+.usage-sidebar button[aria-current=page] { background: #2563eb; color: white; border-color: #2563eb; }
+.pricing-management { margin-top: 0; padding-top: 0; }
 .pricing-history { overflow-x: auto; }
 .pricing-history table { border-collapse: collapse; width: 100%; }
 .pricing-history th, .pricing-history td { padding: 8px; text-align: left; border-bottom: 1px solid #cbd5e1; }
-.pricing-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f1f5f9; padding: 16px; }
+.pricing-current { overflow-x: auto; margin-top: 12px; }
+.pricing-lines span { display: block; white-space: nowrap; }
+.pricing-status-ready, .pricing-status-error { display: inline-block; padding: 4px 8px; border-radius: 999px; font-weight: 700; }
+.pricing-status-ready { color: #166534; background: #dcfce7; }
+.pricing-status-error { color: #9f1239; background: #ffe4e6; }
+.pricing-current td small { display: block; max-width: 280px; margin-top: 6px; }
+.pricing-history-sections { margin-top: 32px; border-top: 1px solid #cbd5e1; padding-top: 20px; }
+.pricing-history-sections details { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 16px; margin-top: 12px; }
+.pricing-history-sections summary { font-size: 1.05rem; font-weight: 700; }
+.pricing-preview { margin-top: 20px; padding: 20px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; }
+.pricing-preview h3 { margin-top: 0; }
+.pricing-preview-tables h4 { margin: 22px 0 8px; }
+.pricing-table-scroll { overflow-x: auto; }
+.pricing-preview > label { display: flex; flex-direction: row; align-items: flex-start; gap: 8px; margin-top: 20px; font-weight: 600; }
+.pricing-preview > label input { margin-top: 2px; }
+.pricing-candidates { margin: 16px 0; padding: 16px; border: 1px solid #f59e0b; background: #fffbeb; border-radius: 8px; }
+.pricing-candidates label { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
 .usage-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; padding: 20px; background: #f1f5f9; border-radius: 8px; }
 .usage-filters label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
 .usage-dashboard input, .usage-dashboard select, .usage-dashboard button { font: inherit; padding: 8px 12px; border: 1px solid #64748b; border-radius: 4px; background: white; color: #243447; }
@@ -31,3 +53,4 @@
 .usage-pagination { position: static; background: none; z-index: auto; display: flex; align-items: center; justify-content: flex-start; gap: 16px; padding: 20px 0; flex-wrap: wrap; }
 .usage-dashboard [role=alert] { color: #9f1239; padding: 12px; background: #fff1f2; }
 @media (max-width: 640px) { .usage-dashboard { padding: 12px; } .usage-filters label { width: 100%; } }
+@media (max-width: 800px) { .usage-layout { grid-template-columns: minmax(0, 1fr); } .usage-sidebar { position: static; } .usage-sidebar nav { flex-direction: row; flex-wrap: wrap; } .usage-sidebar button { width: auto; flex: 1; } }

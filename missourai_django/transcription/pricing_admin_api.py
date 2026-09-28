@@ -13,11 +13,15 @@ from rest_framework.views import APIView
 
 from .models import ModelPrice, TaskPricing
 from .usage_serializers import ModelPriceSerializer, TaskPricingSerializer
-from .services.pricing_administration import change_pricing, readiness
+from .services.pricing_administration import (
+    PricingSelectionRequired,
+    change_pricing,
+    readiness,
+)
 
 
 class ChangeFields(serializers.Serializer):
-    supersedes = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    selected_supersedes = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     activate_now = serializers.BooleanField(default=False)
     effective_from = serializers.DateTimeField(required=False)
     effective_to = serializers.DateTimeField(required=False, allow_null=True, default=None)
@@ -67,21 +71,49 @@ def pricing_post(request, kind):
     if kind == "task" and not ModelPrice.objects.filter(pk=data["model_price_id"]).exists():
         raise ValidationError({"model_price_id": "Model price not found."})
     try:
-        candidate, closed, version = change_pricing(
+        candidate, closed, created, impacts, version = change_pricing(
             kind, data, request.user, preview=not bool(token), expected_fingerprint=expected,
         )
+    except PricingSelectionRequired as exc:
+        serializer = ModelPriceSerializer if kind == "model" else TaskPricingSerializer
+        return Response({
+            "code": "configuration_conflict" if exc.conflict else "selection_required",
+            "detail": (
+                "Multiple pricing records apply at this activation time. "
+                "The configuration must be corrected before pricing can be changed."
+                if exc.conflict else
+                "Multiple possible records were found. Select the record to supersede."
+            ),
+            "candidates": serializer(exc.candidates, many=True).data,
+        }, status=409)
     except ModelValidationError as exc:
         raise ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages) from exc
     except IntegrityError as exc:
         raise ValidationError("Pricing changed concurrently. Preview again.") from exc
     serialized = (ModelPriceSerializer if kind == "model" else TaskPricingSerializer)(candidate).data
-    result = {"record": serialized, "closes": closed}
+    created_records = []
+    for record in created:
+        record_data = TaskPricingSerializer(record).data
+        if record.model_price_id is None:
+            record_data["model_price_id"] = "proposed_model_price"
+        created_records.append({"kind": "task", "record": record_data})
+    result = {
+        "record": serialized,
+        "closes": closed,
+        "creates": created_records,
+        "task_pricing_impacts": impacts,
+    }
     if not token:
         result["confirmation_token"] = signing.dumps({
             "kind": kind, "user_id": request.user.pk,
             "data": json.loads(json.dumps(data, default=str)), "fingerprint": version,
         }, salt="usage-pricing")
-        result["warning"] = "Model-price supersession closes linked task periods. Create replacement task pricing before the effective time."
+        result["warning"] = (
+            "The applicable model price will be superseded. Linked task multipliers "
+            "will be closed and carried forward to the replacement price."
+            if kind == "model" and closed else
+            "Review the proposed effective period before confirming."
+        )
     return Response(result, status=201 if token else 200)
 
 

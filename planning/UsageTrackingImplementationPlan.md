@@ -17,19 +17,19 @@ main
 
 ### PR tracking
 - [x] PR 1 — Model configuration and billing foundation
-- [ ] PR 2 — Model-call instrumentation
+- [x] PR 2 — Model-call instrumentation
   - Testing
     - For the end-to-end function call, only create a pending event in the `UsageEvent` table when there are multiple open `effective_to` entries within the `ModelPricing` table for the provided `model_name` field
     - For the end-to-end function call, only create a pending event in the `UsageEvent` table when there is no entry within the `ModelPricing` table for the provided `model_name` field
     - For the end-to-end function call, a complete record within the `UsageEvent` table is created when the database and the 
-- [ ] PR 3 — Usage reporting API and page shell
+- [x] PR 3 — Usage reporting API and page shell
   - Test what individual users can see within `ModelPricing` and `TaskPricing` models here
     - Normal user can only query their own usage information (basically their data in the `UsageEvent` model)
     - Normal users cannot query the `ModelPricing` or `TaskPricing` tables
     - User with `view_all_usage` permission can view all information related to pricing (i.e. all the information in `ModelPricing`, `TaskPricing`, and `UsageEvent` ledger) but cannot add records to `ModelPricing` or `TaskPricing`
     - User with `manage_usage_pricing` can add records to `ModelPricing` and `TaskPricing`
     - No one can make any updates to the `UsageEvent` legder
-- [ ] PR 4 — React usage dashboard
+- [x] PR 4 — React usage dashboard
 - [ ] PR 5 — Pricing administration and rollout controls
 
 ## PR 1 — Model Configuration and Billing Foundation

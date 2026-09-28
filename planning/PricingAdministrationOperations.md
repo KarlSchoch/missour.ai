@@ -22,7 +22,7 @@ Use the existing `/api/usage/model-prices/` and `/api/usage/task-pricing/` URLs:
 
 Both POST operations require pricing-management permission and normal session CSRF protection.
 
-Common fields: `effective_from` (timezone-aware timestamp), optional `effective_to`, optional `supersedes` (existing record ID), and `activate_now` (default false). Immediate activation uses the exact timestamp shown in the preview and requires a configured model/task combination. Otherwise, a future effective timestamp is required. The UI labels its date inputs as UTC.
+Common fields: `effective_from` (timezone-aware timestamp), optional `effective_to`, and `activate_now` (default false). The backend automatically identifies the pricing record applicable at the activation timestamp. An internal `selected_supersedes` value is accepted only when resolving a selection requested by the preview API; administrators do not enter record IDs in the normal form. Immediate activation uses the exact timestamp shown in the preview and requires a configured model/task combination. Otherwise, a future effective timestamp is required. The UI labels its date inputs as UTC.
 
 Model fields: `model_name`, `billing_unit`, appropriate per-million token rates or `rate_per_minute`; provider is OpenAI and currency is USD. Task fields: `task_type`, `model_price_id`, `multiplier`.
 
@@ -32,7 +32,7 @@ Model fields: `model_name`, `billing_unit`, appropriate per-million token rates 
 
 Supersede an open-ended record in the same scope using a later start. Closing the old period and creating the replacement is atomic. The sole permitted modification to a used price is closing its effective end without excluding recorded usage; rates, multipliers, and historical usage amounts are not rewritten.
 
-Model-price supersession also closes linked task-pricing periods that cross the boundary. The preview lists these closures. It does **not** silently copy multipliers to the new model-price ID: create replacement task-pricing records separately. Conflicting scheduled task records or immutable existing ends cause the entire operation to fail and roll back. Task-pricing supersession is independent and retains its model-price ID.
+Model-price supersession also closes linked task-pricing periods that cross the boundary and atomically carries their multipliers forward to the replacement model price. The preview lists both the closures and replacement task-pricing records. Conflicting scheduled task records or immutable existing ends cause the entire operation to fail and roll back. Task-pricing supersession is independent and retains its model-price ID.
 
 Preview validation temporarily exercises closures inside a transaction and rolls them back; no new price or permanent closure is saved. Confirmed writes and Django-admin additions share a singleton `PricingWriteLock`, including when no price yet exists in the target scope. Runtime preflight remains mandatory.
 
@@ -48,7 +48,7 @@ Prefer a future UTC activation boundary so all related records can be prepared b
 6. Confirm the readiness display and inspect a representative successful job.
 7. Monitor pending/reconciliation records after deployment, including delivered transcription attempts awaiting billing finalization.
 
-Immediate supersession can temporarily block provider calls until replacement task pricing exists. It can also be rejected if usage was recorded after the preview's proposed boundary. Preview again or choose a future boundary; never backdate charges to force a change through.
+Immediate supersession carries applicable task multipliers forward atomically, so it does not create a task-pricing gap. It can still be rejected if usage was recorded after the preview's proposed boundary or if scheduled/overlapping pricing makes the target ambiguous. Preview again or choose a future boundary; never backdate charges to force a change through.
 
 ## Deployment validation
 

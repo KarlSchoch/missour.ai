@@ -5,10 +5,56 @@ import json
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from transcription.models import ModelPrice, TaskPricing, PricingWriteLock
 from .pricing import resolve_pricing, PricingResolutionError
+
+
+class PricingSelectionRequired(Exception):
+    """More than one record could be the intended supersession target."""
+
+    def __init__(self, candidates, *, conflict=False):
+        self.candidates = candidates
+        self.conflict = conflict
+        super().__init__("Multiple possible pricing records were found.")
+
+
+def _customer_pricing(price, multiplier):
+    """Return display-safe customer rates calculated with Decimal arithmetic."""
+    fields = (
+        "input_rate_per_million",
+        "cached_input_rate_per_million",
+        "output_rate_per_million",
+        "rate_per_minute",
+    )
+    return {
+        "billing_unit": price.billing_unit,
+        "currency": price.currency,
+        **{
+            field: str(getattr(price, field) * multiplier)
+            if getattr(price, field) is not None else None
+            for field in fields
+        },
+    }
+
+
+def _task_pricing_impact(task_type, model_name, current_price, current_multiplier,
+                         proposed_price, proposed_multiplier):
+    return {
+        "task_type": task_type,
+        "model_name": model_name,
+        "multiplier": str(proposed_multiplier),
+        "current_customer_pricing": (
+            _customer_pricing(current_price, current_multiplier)
+            if current_price is not None and current_multiplier is not None else None
+        ),
+        "proposed_customer_pricing": _customer_pricing(
+            proposed_price, proposed_multiplier,
+        ),
+        "ready": True,
+    }
 
 
 def configured_models():
@@ -31,7 +77,18 @@ def readiness(at=None):
             expected = "audio_duration" if task == "transcription" else "text_tokens"
             if price.billing_unit != expected:
                 raise ValidationError(f"{task} requires {expected} pricing.")
-            row.update(ready=True, model_price_id=price.pk, task_pricing_id=pricing.pk)
+            row.update(
+                ready=True,
+                model_price_id=price.pk,
+                task_pricing_id=pricing.pk,
+                currency=price.currency,
+                billing_unit=price.billing_unit,
+                input_rate_per_million=price.input_rate_per_million,
+                cached_input_rate_per_million=price.cached_input_rate_per_million,
+                output_rate_per_million=price.output_rate_per_million,
+                rate_per_minute=price.rate_per_minute,
+                multiplier=pricing.multiplier,
+            )
         except (PricingResolutionError, ValidationError) as exc:
             row["error"] = str(exc)
         rows.append(row)
@@ -79,15 +136,12 @@ def change_pricing(kind, data, user, *, preview=False, expected_fingerprint=None
     if expected_fingerprint is not None and before != expected_fingerprint:
         raise ValidationError("Pricing or active models changed. Preview again before confirming.")
     data = dict(data)
-    supersedes = data.pop("supersedes", None)
+    selected_supersedes = data.pop("selected_supersedes", None)
     immediate = data.pop("activate_now", False)
     start = data["effective_from"]
     if not immediate and start < timezone.now():
         raise ValidationError("Schedule future pricing or select immediate activation; backdating is not allowed.")
     model = ModelPrice if kind == "model" else TaskPricing
-    old = model.objects.select_for_update().filter(pk=supersedes).first() if supersedes else None
-    if supersedes and old is None:
-        raise ValidationError("The record to supersede no longer exists.")
     candidate = model(**data, created_by=user)
     if kind == "model":
         candidate.model_name = candidate.model_name.strip()
@@ -110,17 +164,61 @@ def change_pricing(kind, data, user, *, preview=False, expected_fingerprint=None
         expected = "audio_duration" if candidate.task_type == "transcription" else "text_tokens"
         if price.billing_unit != expected:
             raise ValidationError(f"This task requires {expected} pricing.")
+    scope = model.objects.select_for_update().filter(**{
+        key: getattr(candidate, key) for key in identity
+    })
+    applicable = scope.filter(effective_from__lte=start).filter(
+        Q(effective_to__isnull=True) | Q(effective_to__gt=start)
+    )
+    applicable = list(applicable.order_by("effective_from", "pk"))
+    if selected_supersedes is not None:
+        old = next((record for record in applicable if record.pk == selected_supersedes), None)
+        if old is None:
+            raise ValidationError("The selected pricing record is no longer applicable. Preview again.")
+    elif len(applicable) == 1:
+        old = applicable[0]
+    elif len(applicable) > 1:
+        raise PricingSelectionRequired(applicable, conflict=True)
+    else:
+        old = None
     closed = []
+    carried_task_prices = []
+    impacts = []
     if old:
         if any(getattr(old, key) != getattr(candidate, key) for key in identity):
             raise ValidationError("Supersession must keep the same pricing scope.")
-        if old.effective_to is not None or start <= old.effective_from:
-            raise ValidationError("Supersede an open-ended record with a later effective start.")
+        if start <= old.effective_from:
+            raise ValidationError("A replacement must start after the selected record begins.")
+        previous_end = old.effective_to
+        if candidate.effective_to is None and previous_end is not None:
+            candidate.effective_to = previous_end
         if kind == "model":
             for task_price in old.task_pricings.select_for_update().order_by("pk"):
                 if task_price.effective_from >= start:
                     raise ValidationError("Existing future task pricing conflicts with this boundary.")
                 if task_price.effective_to is None or task_price.effective_to > start:
+                    expected_unit = "audio_duration" if task_price.task_type == "transcription" else "text_tokens"
+                    if candidate.billing_unit != expected_unit:
+                        raise ValidationError(
+                            f"{task_price.task_type} requires {expected_unit} pricing; "
+                            "its multiplier cannot be carried forward."
+                        )
+                    carried_task_prices.append(TaskPricing(
+                        task_type=task_price.task_type,
+                        model_price=candidate,
+                        multiplier=task_price.multiplier,
+                        effective_from=start,
+                        effective_to=task_price.effective_to,
+                        created_by=user,
+                    ))
+                    impacts.append(_task_pricing_impact(
+                        task_price.task_type,
+                        candidate.model_name,
+                        old,
+                        task_price.multiplier,
+                        candidate,
+                        task_price.multiplier,
+                    ))
                     task_price.effective_to = start
                     task_price.save()
                     closed.append({"kind": "task", "id": task_price.pk, "effective_to": start})
@@ -128,17 +226,33 @@ def change_pricing(kind, data, user, *, preview=False, expected_fingerprint=None
         old.save()
         closed.append({"kind": kind, "id": old.pk, "effective_to": start})
     candidate.full_clean()
+    if kind == "task":
+        impacts.append(_task_pricing_impact(
+            candidate.task_type,
+            candidate.model_price.model_name,
+            candidate.model_price if old else None,
+            old.multiplier if old else None,
+            candidate.model_price,
+            candidate.multiplier,
+        ))
     if kind == "model":
         overlaps = ModelPrice.objects.filter(provider=candidate.provider, model_name=candidate.model_name, currency=candidate.currency)
         if candidate.effective_to:
             overlaps = overlaps.filter(effective_from__lt=candidate.effective_to)
-        from django.db.models import Q
         if overlaps.filter(Q(effective_to__isnull=True) | Q(effective_to__gt=start)).exists():
             raise ValidationError("Model-price periods cannot overlap, including across billing units.")
+    created = []
     if not preview:
         candidate.save()
+        if kind == "model" and old:
+            for task_price in carried_task_prices:
+                task_price.model_price = candidate
+                task_price.save()
+                created.append(task_price)
     else:
         # Exercise the same closures/validation, then roll back all writes.
         # No candidate row or historical change is persisted by a preview.
         transaction.set_rollback(True)
-    return candidate, closed, before
+    if preview and kind == "model" and old:
+        created.extend(carried_task_prices)
+    return candidate, closed, created, impacts, before
