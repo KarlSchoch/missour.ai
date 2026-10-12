@@ -1,0 +1,18 @@
+{% extends "transcription/base.html" %}
+{% load django_vite vite_extras transcription_tags %}
+{% block title %}YouTube Transcript - missour.ai{% endblock %}
+{% block content %}
+<h1>Create a transcript from YouTube</h1>
+<p>Submit a public video or completed livestream archive, up to eight hours long. English captions are used when available; otherwise English audio is transcribed.</p>
+<form method="POST">
+    {% csrf_token %}
+    {{ form.as_p }}
+    {% render_analyze_audio_section %}
+    <button type="submit">Create transcript</button>
+</form>
+{% endblock %}
+{% block extra_scripts %}
+    {% vite_react_refresh %}
+    {% vite_hmr_client %}
+    {% vite_asset 'src/analyze-audio-page-section.jsx' %}
+{% endblock %}

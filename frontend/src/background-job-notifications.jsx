@@ -61,11 +61,17 @@ function showJobNotification(job) {
     if (isActive) {
         const progress = job.progress;
         const indices = progress?.active_chunks || [];
-        const message = indices.length
+        const stages = {
+            checking_captions: "Checking for English captions...",
+            downloading_audio: "Downloading video audio...",
+            normalizing_audio: "Preparing audio for transcription...",
+            tagging: "Tagging the saved transcript...",
+        };
+        const message = stages[progress?.stage] || (indices.length
             ? `Processing ${indices.length === 1 ? "chunk" : "chunks"} ${indices.join(", ")} of ${progress.total_chunks}.`
             : progress?.started_chunks?.length
                 ? "Finishing transcription processing..."
-                : "Waiting for the worker or preparing audio...";
+                : "Waiting for the worker or preparing audio...");
         if (activeMessages.get(activeId) === message) return;
         const data = {
             id: activeId,

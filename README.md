@@ -757,6 +757,82 @@ Try the viewer account, select different months and users, filter on
 `usage-demo-summary`, expand event details, and paginate. Then sign in as Alice
 to compare the personal view. Select an older unseeded month for the empty state.
 
+## YouTube transcripts
+
+The **YouTube Transcript** navigation entry accepts individual public YouTube
+videos and available, completed livestream archives up to eight hours long.
+Users must confirm authorization to process the content. Playlists, active or
+upcoming streams, private/account-restricted videos, and age-restricted videos
+are rejected. The application does not use YouTube accounts or the Data API.
+
+`TranscriptionManager` orchestrates metadata, original English captions, and
+audio fallback through focused helpers in `transcription_utils`. Creator captions
+are tried before automatic captions; machine-translated tracks are excluded.
+JSON3 caption timing and append events are normalized into plain text. Empty,
+malformed, or inaccessible English captions trigger audio fallback. Caption gaps
+over five minutes produce visible warnings, since gaps can represent recesses;
+they do not automatically trigger paid transcription. These heuristics require
+calibration on representative hearings and cannot establish complete speech
+coverage without examining audio.
+
+Audio-only downloads converge on the same FFmpeg normalization, chunk extraction,
+and transcription implementation as uploaded media. YouTube audio requires a
+model that reports detected input languages: `gpt-transcribe` (the default), or
+`whisper-1` with verbose output. Each chunk must report English; missing/uncertain
+language or any reported non-English language causes rejection before delivery.
+No translation endpoint or forced-English language hint is used. Language
+detection remains model-based and needs mixed-language/live-worker validation.
+`MODEL_ENV=dev` simulates speech-to-text and intentionally skips language validation.
+
+Views own authorization, ownership, deduplication, and enqueueing. Celery tasks
+own durable delivery, billing, progress persistence, and optional tagging. Retrieval
+uses short-lived subprocesses to enforce hard timeouts; downloads, normalized
+audio, and chunks are cleaned up on normal success/failure. Retrieval retry limits
+apply before speech-to-text. Whole paid jobs are never automatically restarted.
+Source subprocesses use canonical video URLs and the YouTube extractor; caption
+requests restrict HTTPS endpoints, redirects, and resolved addresses.
+
+Deduplication is per user/video ID, with a database uniqueness constraint. Repeat
+submissions reuse an active job or saved transcript. Additional topics tag saved
+text asynchronously and skip existing tags through the existing tagging manager.
+An active tagging job is reused; select further topics after it completes. Failed
+source processing requires explicit retry; the retry button preserves the original
+selected topics that still exist. A worker killed mid-job retains its durable claim;
+review provider/usage evidence before manually resolving that job. This preserves
+the existing no-blind-retry policy around paid requests.
+
+Caption delivery is explicitly recorded on the billing attempt and can finalize
+with zero speech-to-text usage events. Audio keeps the existing delivery-gated
+usage accounting. Tagging runs only for selected topics; summaries remain separate
+user requests. No wallet checks or reservations are introduced.
+
+Deployment requires migration `0024_youtube_sources`, a rebuilt worker image,
+and the existing Celery queue/worker. The Docker image includes Deno and the locked
+`yt-dlp[default]`/EJS dependencies. Local Python-only development also needs a
+supported Deno runtime on PATH for full YouTube extraction. Keep yt-dlp and EJS
+versions aligned when updating; YouTube retrieval may change independently of
+application releases.
+
+Configuration defaults (seconds and bytes unless indicated):
+
+| Setting | Default |
+| --- | --- |
+| `YOUTUBE_MAX_DURATION_SECONDS` | 28800 (eight hours) |
+| `YOUTUBE_MAX_DOWNLOAD_BYTES` | 2147483648 (2 GiB of compressed audio) |
+| `YOUTUBE_SOCKET_TIMEOUT_SECONDS` | 20 |
+| `YOUTUBE_RETRIEVAL_TIMEOUT_SECONDS` | 90 per metadata/caption attempt |
+| `YOUTUBE_DOWNLOAD_TIMEOUT_SECONDS` | 1800 per download attempt |
+| `YOUTUBE_MEDIA_TIMEOUT_SECONDS` | 1800 per FFmpeg/ffprobe operation |
+| `YOUTUBE_RETRIEVAL_ATTEMPTS` | 2; bounded to 1–3 |
+| `YOUTUBE_CAPTION_GAP_SECONDS` | 300 |
+
+`TRANSCRIPTION_MAX_CONCURRENT_CHUNKS` remains the shared audio concurrency control.
+An eight-hour normalized WAV consumes about 922 MB in addition to the compressed
+source and active chunks. Validate available temporary disk space and cleanup
+with a long archived hearing from the deployed worker. Netdata can help observe
+CPU, memory, disk activity, and simultaneous jobs during that test. Local caption
+and short-download success does not establish production-network retrieval.
+
 ## ML Environment
 To use the ML Experiments environment, do the following
 1. Go into the `ml_env` directory.

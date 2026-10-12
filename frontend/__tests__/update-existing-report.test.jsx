@@ -15,7 +15,7 @@ import UpdateExistingReport from '../src/update-existing-report'
 // import 
 import summaries from '../../test/fixtures/api/summary/list.json'
 import topics from '../../test/fixtures/api/topic/list.json'
-// import { MantineProvider } from '@mantine/core';
+import { MantineProvider } from '@mantine/core';
 
 // const renderWithMantine = (ui) => render(<MantineProvider>{ui}</MantineProvider>);
 
@@ -98,7 +98,7 @@ test('NewReportContents not visible on initial load', async () => {
 })
 test('NewReportContents shows up on user selection', async () => {
   // Arrange
-  render(<UpdateExistingReport summaries={summaries} topics={topics} />)
+  render(<MantineProvider><UpdateExistingReport summaries={summaries} topics={topics} /></MantineProvider>)
   
   // Act
   await userEvent.click(screen.getByText('Update Reports'))

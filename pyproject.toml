@@ -21,6 +21,7 @@ langchain-openai = "^1.1.0"
 django-filter = "^25.2"
 celery = "^5.6.3"
 django-celery-results = "^2.6.0"
+yt-dlp = {version = "2026.8.19", extras = ["default"]}
 
 
 [build-system]

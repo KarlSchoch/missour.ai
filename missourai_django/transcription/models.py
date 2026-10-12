@@ -361,6 +361,7 @@ class BackgroundJob(models.Model):
     label = models.CharField(max_length=255)
     related_object_id = models.PositiveBigIntegerField(null=True, blank=True)
     error_message = models.TextField(blank=True, default="")
+    processing_stage = models.CharField(max_length=40, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -370,12 +371,30 @@ class BackgroundJob(models.Model):
 class Transcript(models.Model):
     name = models.CharField(max_length=255)
     transcript_text = models.TextField(default='')
+    source_type = models.CharField(max_length=20, default="upload", choices=[("upload", "Uploaded media"), ("youtube", "YouTube")])
+    source_url = models.URLField(blank=True, default="")
+    video_id = models.CharField(max_length=11, blank=True, default="")
+    video_title = models.CharField(max_length=500, blank=True, default="")
+    source_duration_seconds = models.FloatField(null=True, blank=True)
+    provenance = models.CharField(max_length=30, blank=True, default="", choices=[
+        ("uploaded_audio", "Uploaded audio transcription"), ("creator_captions", "Creator-provided English captions"),
+        ("automatic_captions", "Automatic English captions"), ("audio_transcription", "YouTube audio transcription")])
+    caption_language = models.CharField(max_length=20, blank=True, default="")
+    source_warnings = models.JSONField(default=list, blank=True)
+    retrieval_errors = models.JSONField(default=list, blank=True)
+    requested_topic_ids = models.JSONField(default=list, blank=True)
+    source_status = models.CharField(max_length=20, default="pending", choices=[
+        ("pending", "Pending"), ("processing", "Processing"), ("ready", "Ready"), ("failed", "Failed")])
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="transcripts"
     )
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["created_by", "video_id"],
+                        condition=Q(source_type="youtube"), name="unique_user_youtube_video")]
 
 
 class TranscriptionJobMetric(models.Model):
@@ -576,6 +595,7 @@ class TranscriptionBillingAttempt(models.Model):
         max_length=30, choices=BillingState.choices, default=BillingState.PENDING,
     )
     claimed_at = models.DateTimeField(null=True, blank=True)
+    caption_delivery = models.BooleanField(default=False)
     delivered_at = models.DateTimeField(null=True, blank=True)
     finalized_at = models.DateTimeField(null=True, blank=True)
     error_message = models.TextField(blank=True)

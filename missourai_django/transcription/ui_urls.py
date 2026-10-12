@@ -7,6 +7,7 @@ urlpatterns = [
     path('usage/', views.usage, name='usage'),
     path('', views.index, name='index'),
     path('upload/', views.upload_audio, name='upload_audio'),
+    path('youtube/', views.submit_youtube, name='submit_youtube'),
     path('transcripts/', views.transcripts, name='transcripts'),
     path('transcripts/<int:transcript_id>/', views.view_transcript, name='view_transcript'),
     path('topics/', views.view_topics, name='view_topics'),

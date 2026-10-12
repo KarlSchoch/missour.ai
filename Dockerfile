@@ -1,4 +1,5 @@
 # Stage 1: build frontend assets with Vite
+FROM denoland/deno:bin-2.3.0 AS youtube-js
 FROM node:20-slim AS node-build
 WORKDIR /frontend
 COPY frontend/package*.json ./
@@ -8,6 +9,7 @@ RUN npm run build
 
 # Stage 2: install Python deps with Poetry
 FROM python:3.12-slim AS python-build
+COPY --from=youtube-js /deno /usr/local/bin/deno
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -25,6 +27,7 @@ RUN ./.venv/bin/python missourai_django/manage.py collectstatic --noinput
 
 # Stage 3: runtime image
 FROM python:3.12-slim AS runtime
+COPY --from=youtube-js /deno /usr/local/bin/deno
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DJANGO_VITE_DEV=false \

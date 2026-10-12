@@ -91,6 +91,30 @@ describe("BackgroundJobNotifications", () => {
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
+    test("shows caption checking, audio downloading, and tagging stages", async () => {
+        const jobs = ["checking_captions", "downloading_audio", "tagging"].map(stage => ({
+            ...activeJob, id: 45, task_id: "youtube-45",
+            progress: { stage, active_chunks: [], started_chunks: [], total_chunks: 0 },
+        }));
+        vi.stubGlobal("fetch", vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: async () => [jobs[0]] })
+            .mockResolvedValueOnce({ ok: true, json: async () => [jobs[1]] })
+            .mockResolvedValueOnce({ ok: true, json: async () => [jobs[2]] }));
+        render(<BackgroundJobNotifications />);
+        await runNextPoll();
+        expect(notificationSpies.show).toHaveBeenCalledWith(expect.objectContaining({
+            message: "Checking for English captions...",
+        }));
+        await runNextPoll(3000);
+        expect(notificationSpies.update).toHaveBeenLastCalledWith(expect.objectContaining({
+            message: "Downloading video audio...",
+        }));
+        await runNextPoll(3000);
+        expect(notificationSpies.update).toHaveBeenLastCalledWith(expect.objectContaining({
+            message: "Tagging the saved transcript...",
+        }));
+    });
+
     test("replaces an active toast with a linked completion toast", async () => {
         const runningJob = { ...activeJob, id: 43, task_id: "task-43" };
         const completeJob = {

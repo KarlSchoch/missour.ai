@@ -25,15 +25,17 @@ def claim_transcription_attempt(job, transcript):
     )
     if attempt.transcript_id != transcript.pk:
         raise UsageEventLifecycleError("Attempt belongs to another transcript.")
-    if attempt.claimed_at is not None or attempt.processing_state != "processing":
+    claimed_at = timezone.now()
+    claimed = TranscriptionBillingAttempt.objects.filter(pk=attempt.pk, claimed_at__isnull=True,
+        processing_state="processing").update(claimed_at=claimed_at, updated_at=claimed_at)
+    if not claimed:
         return None
-    attempt.claimed_at = timezone.now()
-    attempt.save(update_fields=["claimed_at", "updated_at"])
+    attempt.claimed_at = claimed_at
     return attempt
 
 
 @transaction.atomic
-def record_transcript_delivery(attempt_id, transcript_text):
+def record_transcript_delivery(attempt_id, transcript_text, *, source_result=None):
     attempt = TranscriptionBillingAttempt.objects.select_for_update().get(pk=attempt_id)
     if attempt.processing_state == "delivered":
         return
@@ -42,10 +44,19 @@ def record_transcript_delivery(attempt_id, transcript_text):
     # Empty text is valid for silent audio; delivery is an explicit state.
     transcript = Transcript.objects.select_for_update().get(pk=attempt.transcript_id)
     transcript.transcript_text = transcript_text
-    transcript.save(update_fields=["transcript_text"])
+    fields = ["transcript_text"]
+    if source_result is not None:
+        transcript.source_status = "ready"
+        transcript.provenance = source_result.provenance
+        transcript.caption_language = source_result.caption_language
+        transcript.source_warnings = source_result.warnings
+        transcript.retrieval_errors = source_result.retrieval_errors
+        fields += ["source_status", "provenance", "caption_language", "source_warnings", "retrieval_errors"]
+        attempt.caption_delivery = source_result.provenance in {"creator_captions", "automatic_captions"}
+    transcript.save(update_fields=fields)
     attempt.processing_state = "delivered"
     attempt.delivered_at = timezone.now()
-    attempt.save(update_fields=["processing_state", "delivered_at", "updated_at"])
+    attempt.save(update_fields=["processing_state", "delivered_at", "caption_delivery", "updated_at"])
 
 
 @transaction.atomic
@@ -56,7 +67,9 @@ def finalize_transcription_billing(attempt_id):
     if attempt.processing_state != "delivered":
         raise UsageEventLifecycleError("Billing requires a durably delivered transcript.")
     events = list(attempt.usage_events.select_for_update().order_by("pk"))
-    if not events:
+    if attempt.caption_delivery and events:
+        raise UsageEventLifecycleError("Caption delivery cannot contain speech-to-text usage.")
+    if not events and not attempt.caption_delivery:
         raise UsageEventLifecycleError("Delivered attempt has no usage evidence.")
     for event in events:
         # Failed parent requests may have been recovered by splitting their

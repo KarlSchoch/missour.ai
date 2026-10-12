@@ -5,6 +5,7 @@
 
 {% block content %}
     <h1>Upload Audio Files for Transcription</h1>
+    <p><a href="{% url 'transcription:submit_youtube' %}">Create a transcript from a YouTube URL</a></p>
     <form method="POST" enctype="multipart/form-data">
         {% csrf_token %}
         {{ form.as_p }}

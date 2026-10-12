@@ -48,12 +48,16 @@ class BackgroundJobSerializer(serializers.ModelSerializer):
     def get_status(self, obj):
         # Delivery/failure evidence survives result-backend expiry and is
         # available even before Celery has published its terminal result.
+        if obj.processing_stage == "failed":
+            return states.FAILURE
+        if obj.processing_stage == "complete":
+            return states.SUCCESS
         if obj.kind == BackgroundJob.Kind.TRANSCRIPTION:
             attempt = getattr(obj, "billing_attempt", None)
             metric = getattr(obj, "transcription_metric", None)
             if obj.error_message or (attempt and attempt.processing_state == "failed"):
                 return states.FAILURE
-            if attempt and attempt.processing_state == "delivered":
+            if attempt and attempt.processing_state == "delivered" and not obj.processing_stage:
                 return states.SUCCESS
             if metric and metric.status == "failed":
                 return states.FAILURE
@@ -80,10 +84,13 @@ class BackgroundJobSerializer(serializers.ModelSerializer):
 
     def get_progress(self, obj):
         metric = getattr(obj, "transcription_metric", None)
+        if metric is None and obj.processing_stage:
+            return {"stage": obj.processing_stage, "total_chunks": 0, "started_chunks": [], "active_chunks": []}
         if obj.kind != BackgroundJob.Kind.TRANSCRIPTION or metric is None:
             return None
         chunks = list(metric.chunk_metrics.all())
         return {
+            "stage": obj.processing_stage,
             "total_chunks": metric.chunk_count,
             "started_chunks": sorted({chunk.chunk_index for chunk in chunks}),
             "active_chunks": sorted({chunk.chunk_index for chunk in chunks if chunk.status == "running"}),

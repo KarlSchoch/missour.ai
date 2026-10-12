@@ -48,6 +48,9 @@ class CreateTranscriptTests(TestCase):
             label="Test transcription",
             related_object_id=self.transcript.pk,
         )
+        self.attempt = TranscriptionBillingAttempt.objects.create(
+            background_job=self.background_job, transcript=self.transcript,
+        )
         self.job_metric = TranscriptionJobMetric.objects.create(
             background_job=self.background_job,
             transcript=self.transcript,
@@ -115,8 +118,8 @@ class CreateTranscriptTests(TestCase):
         )
         ## One usage event created per chunk
         self.assertEqual(events.count(), 2)
-        ## All usage events succeed
-        self.assertFalse(events.exclude(status=UsageEvent.Status.SUCCEEDED).exists())
+        # Provider success waits for durable transcript delivery before billing.
+        self.assertFalse(events.exclude(status=UsageEvent.Status.AWAITING_DELIVERY).exists())
         ## Specific field
         self.assertEqual(
             list(events.values_list("provider_request_id", flat=True)),
@@ -135,15 +138,14 @@ class CreateTranscriptTests(TestCase):
             2,
         )
 
-    def test_chunk_extraction_error_returns_warning_cleans_up_and_creates_no_usage(self):
+    def test_chunk_extraction_error_raises_cleans_up_and_creates_no_usage(self):
         manager = self.make_manager()
         manager.read_audio_chunk.side_effect = TranscriptionMediaError(
             "Could not extract audio"
         )
 
-        result = manager.create_transcript()
-
-        self.assertIn("audio from 00:00:00 to 00:00:10", result)
+        with self.assertRaises(TranscriptionMediaError):
+            manager.create_transcript()
         manager._cleanup_chunk.assert_called_once_with(None)
         manager._cleanup_normalized_audio.assert_called_once_with()
         # Validate that no UsageEvent was created
@@ -280,7 +282,7 @@ class CreateTranscriptTests(TestCase):
         self.assertEqual(event.status, UsageEvent.Status.RECONCILIATION_REQUIRED)
 
     @patch(
-        "transcription.transcription_utils.transcription_manager.complete_duration_event",
+        "transcription.transcription_utils.transcription_manager.record_transcription_usage",
         side_effect=RuntimeError("could not complete duration event"),
     )
     def test_duration_completion_failure_returns_text_and_reconciles(

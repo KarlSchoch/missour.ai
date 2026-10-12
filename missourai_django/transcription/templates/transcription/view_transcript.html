@@ -8,6 +8,21 @@
     <br />
     <a href="{% url 'transcription:transcripts' %}">Back to Transcripts</a>
     <h3>{{ transcript.name }}</h3>
+    {% if transcript.source_type == 'youtube' %}
+        <p>Source: <a href="{{ transcript.source_url }}" target="_blank" rel="noopener noreferrer">{{ transcript.video_title|default:transcript.video_id }}</a></p>
+        {% if transcript.provenance %}<p>{{ transcript.get_provenance_display }}{% if transcript.caption_language %} ({{ transcript.caption_language }}){% endif %}</p>{% endif %}
+        {% for warning in transcript.source_warnings %}<p role="status">{{ warning }}</p>{% endfor %}
+        {% if transcript.source_status == 'failed' %}
+            {% for error in transcript.retrieval_errors %}<p role="alert">{{ error }}</p>{% endfor %}
+            <form method="POST" action="{% url 'transcription:submit_youtube' %}">
+                {% csrf_token %}
+                <input type="hidden" name="youtube_url" value="{{ transcript.source_url }}">
+                <input type="hidden" name="retry" value="true">
+                <label><input type="checkbox" name="authorized" required> I am authorized to process this video's content.</label>
+                <button type="submit">Retry video processing</button>
+            </form>
+        {% endif %}
+    {% endif %}
 </div>
 <p>
     {% block view_transcript_chunks_page_section %}
@@ -30,7 +45,11 @@
 <h3>Trancript Text</h3>
 {% with attempt=transcript.billing_attempts.last %}
     {% if attempt.processing_state == 'failed' %}
+        {% if transcript.source_type == 'youtube' %}
+        <p role="alert">Transcription failed. No transcription charge applies to this attempt. Use Retry video processing to try again.</p>
+        {% else %}
         <p role="alert">Transcription failed. No transcription charge applies to this attempt. Please try another upload or contact support.</p>
+        {% endif %}
     {% elif attempt.processing_state == 'processing' %}
         <p role="status">Transcription in progress...</p>
     {% else %}

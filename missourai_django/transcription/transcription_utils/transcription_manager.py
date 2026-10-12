@@ -38,6 +38,9 @@ from transcription.services.pricing import (
 )
 
 from transcription.services.transcription_billing import record_transcription_usage
+from .sources import SourceError, SourceResult, validate_english_response, validate_video_metadata, youtube_source
+from .captions import english_tracks, normalize_json3
+from .youtube import YouTubeSource
 
 logger = logging.getLogger(__name__)
 
@@ -48,16 +51,27 @@ class TranscriptionMediaError(Exception):
 class TranscriptionManager:
     def __init__(
         self,
-        api_key: str,
-        file_path: str,
+        api_key: str | None = None,
+        file_path: str | None = None,
         max_file_size: int = 20,
         max_split_depth: int = 3,
         min_chunk_duration_sec: int = 15,
         max_concurrent_chunks: int = 2,
         job_metric: Optional[TranscriptionJobMetric] = None,
         model_name: Optional[str] = None,
+        youtube_url: str | None = None,
+        progress=None,
+        metadata_callback=None,
     ):
-        self.client = OpenAI(api_key=api_key)
+        if bool(file_path) == bool(youtube_url):
+            raise SourceError("Provide exactly one uploaded file or YouTube URL.")
+        self.api_key = api_key
+        self.client = None
+        self.youtube_url = youtube_source(youtube_url)[1] if youtube_url else None
+        self.progress = progress or (lambda stage: None)
+        self.metadata_callback = metadata_callback or (lambda info: None)
+        self.require_english = bool(youtube_url)
+        self.retrieval_errors = []
         self.model_name = model_name or settings.TRANSCRIPTION_MODEL
         self.max_file_size = max_file_size
         self.file_path = file_path
@@ -87,6 +101,14 @@ class TranscriptionManager:
             )
         )
 
+        if file_path:
+            self._prepare_audio()
+
+    def _prepare_audio(self):
+        if not self.api_key:
+            raise SourceError("Audio transcription is not configured. Please contact support.")
+        self.client = (OpenAI(api_key=self.api_key, timeout=120, max_retries=0)
+                       if self.require_english else OpenAI(api_key=self.api_key))
         raw_probe_data = self._probe_media(
             self.file_path,
             read_error_message="Could not read the uploaded media file.",
@@ -94,6 +116,9 @@ class TranscriptionManager:
         )
         self._ensure_audio_stream(raw_probe_data)
         raw_file_duration = self._duration_from_probe(raw_probe_data)
+        if self.require_english and (raw_file_duration is None or not math.isfinite(raw_file_duration)
+                or raw_file_duration <= 0 or raw_file_duration > settings.YOUTUBE_MAX_DURATION_SECONDS):
+            raise SourceError("The downloaded audio exceeds the duration limit or has no usable duration.")
 
         try:
             self._normalize_audio_source()
@@ -118,13 +143,28 @@ class TranscriptionManager:
             self._cleanup_normalized_audio()
             raise
 
+    def _run_media(self, command, **kwargs):
+        if getattr(self, "require_english", False):
+            kwargs["timeout"] = settings.YOUTUBE_MEDIA_TIMEOUT_SECONDS
+        try:
+            return subprocess.run(command, **kwargs)
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            # ffprobe has no output file; ffmpeg's final argument is the
+            # temporary normalized/chunk WAV owned by this manager.
+            if command[0] == "ffmpeg":
+                self._cleanup_chunk(command[-1])
+            message = ("Audio preparation timed out. Please retry or contact support."
+                       if isinstance(exc, subprocess.TimeoutExpired)
+                       else "Audio processing tools are unavailable. Please contact support.")
+            raise SourceError(message) from exc
+
     def _probe_media(
         self,
         path: str,
         read_error_message: str,
         inspect_error_message: str,
     ) -> dict:
-        probe = subprocess.run(
+        probe = self._run_media(
             [
                 "ffprobe",
                 "-v", "quiet",
@@ -165,7 +205,7 @@ class TranscriptionManager:
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_audio:
             self.normalized_audio_path = tmp_audio.name
 
-        result = subprocess.run(
+        result = self._run_media(
             [
                 "ffmpeg",
                 "-y",
@@ -200,7 +240,7 @@ class TranscriptionManager:
             chunk_path = tmp_chunk.name
 
         started_at = time.perf_counter()
-        result = subprocess.run(
+        result = self._run_media(
             [
                 "ffmpeg",
                 "-y",
@@ -229,10 +269,14 @@ class TranscriptionManager:
             logger.info("MODEL_ENV is DEV.  Bypassing external API calls.")
             return "Short transcript text resembling actual API output."
 
+        options = {}
+        if getattr(self, "require_english", False) and self.model_name == "whisper-1":
+            options["response_format"] = "verbose_json"
         with open(chunk_path, "rb") as audio_file:
             transcript = self.client.audio.transcriptions.create(
                 model=self.model_name,
                 file=audio_file,
+                **options,
             )
 
         return transcript
@@ -281,6 +325,8 @@ class TranscriptionManager:
         # Unit-style callers without a persisted job cannot establish ownership.
         if self.job_metric is None:
             response = self._transcribe_chunk_file(chunk_path)
+            if getattr(self, "require_english", False) and not is_simulated_model_environment():
+                validate_english_response(response)
             return getattr(response, "text", response)
 
         transcript = self.job_metric.transcript
@@ -440,6 +486,8 @@ class TranscriptionManager:
             chunk_metric.pk if chunk_metric else None,
             usage_event.status if usage_event else "reconciliation_required",
         )
+        if getattr(self, "require_english", False) and not simulated:
+            validate_english_response(response)
         return transcript_text
 
     def _should_split_on_error(self, exc: Exception) -> bool:
@@ -760,6 +808,49 @@ class TranscriptionManager:
             close_old_connections()
 
     def create_transcript(self) -> str:
+        if getattr(self, "youtube_url", None):
+            return self.process_source().text
+        return self._create_audio_transcript()
+
+    def process_source(self) -> SourceResult:
+        if not self.youtube_url:
+            return SourceResult(self._create_audio_transcript(), "uploaded_audio")
+        source = YouTubeSource()
+        self.progress("checking_captions")
+        info = source.retrieve("metadata", self.youtube_url)
+        video_id, _ = youtube_source(self.youtube_url)
+        if info.get("id") != video_id:
+            raise SourceError("The retrieved video does not match the submitted URL.")
+        validate_video_metadata(info, settings.YOUTUBE_MAX_DURATION_SECONDS)
+        self.metadata_callback(info)
+        errors = []
+        for provenance, language, url in english_tracks(info):
+            try:
+                data = source.retrieve("caption", url)
+                text, warnings = normalize_json3(data, info["duration"], settings.YOUTUBE_CAPTION_GAP_SECONDS)
+                return SourceResult(text, provenance, info.get("title") or "", info["duration"], language, warnings, errors)
+            except (SourceError, TypeError, ValueError, AttributeError) as exc:
+                errors.append(str(exc) if isinstance(exc, SourceError) else "English captions were malformed.")
+        errors = list(dict.fromkeys(errors)) or ["No usable original English caption track was available."]
+        self.retrieval_errors = errors
+        if self.model_name not in {"gpt-transcribe", "whisper-1"}:
+            raise SourceError("YouTube audio requires a transcription model that reports detected languages (gpt-transcribe or whisper-1).")
+        self.progress("downloading_audio")
+        try:
+            with tempfile.TemporaryDirectory(prefix="missour-youtube-") as directory:
+                self.file_path = source.retrieve("audio", self.youtube_url, directory)["path"]
+                resolved = os.path.realpath(self.file_path)
+                if os.path.commonpath([resolved, os.path.realpath(directory)]) != os.path.realpath(directory):
+                    raise SourceError("The audio download returned an invalid file.")
+                self.progress("normalizing_audio")
+                self._prepare_audio()
+                self.progress("transcribing_audio")
+                text = self._create_audio_transcript()
+                return SourceResult(text, "audio_transcription", info.get("title") or "", info["duration"], retrieval_errors=errors)
+        finally:
+            self._cleanup_normalized_audio()
+
+    def _create_audio_transcript(self) -> str:
         chunks = self._build_chunk_ranges()
         target_chunks = len(chunks)
         self._update_job_metric(chunk_count=target_chunks)

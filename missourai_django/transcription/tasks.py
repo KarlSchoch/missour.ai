@@ -9,6 +9,7 @@ from transcription.transcription_utils.transcription_manager import (
     TranscriptionManager,
     TranscriptionMediaError,
 )
+from transcription.transcription_utils.sources import SourceError
 
 import logging
 import os
@@ -213,3 +214,87 @@ def transcribe_uploaded_audio(job_id, upload_storage_name, transcript_id, topic_
     finally:
         if default_storage.exists(upload_storage_name):
             default_storage.delete(upload_storage_name)
+
+
+def _tag_selected_topics(transcript, topic_ids):
+    selected = list(Topic.objects.filter(id__in=topic_ids, created_by=transcript.created_by))
+    if len(selected) != len(set(topic_ids)):
+        raise ValueError("One or more selected topics could not be found.")
+    if selected:
+        TaggingManager(api_key=os.getenv("OPENAI_API_KEY"), transcript=transcript, topics=selected).tag_transcript()
+
+
+@shared_task
+def transcribe_youtube(job_id, transcript_id, topic_ids):
+    job = BackgroundJob.objects.select_related("created_by").get(pk=job_id)
+    transcript = Transcript.objects.get(pk=transcript_id, created_by=job.created_by, source_type="youtube")
+    attempt = claim_transcription_attempt(job, transcript)
+    if attempt is None:
+        raise Ignore()
+    started = time.perf_counter()
+    manager = None
+    metric = TranscriptionJobMetric.objects.create(background_job=job, transcript=transcript,
+        max_concurrent_chunks=get_transcription_max_concurrent_chunks(), worker_hostname=socket.gethostname())
+
+    def progress(stage):
+        BackgroundJob.objects.filter(pk=job.pk).update(processing_stage=stage)
+
+    def metadata(info):
+        transcript.video_title = (info.get("title") or "")[:500]
+        transcript.source_duration_seconds = info["duration"]
+        fields = ["video_title", "source_duration_seconds"]
+        if transcript.name == transcript.video_id and transcript.video_title:
+            transcript.name = transcript.video_title[:255]
+            fields.append("name")
+        transcript.save(update_fields=fields)
+        BackgroundJob.objects.filter(pk=job.pk).update(label=f"Transcribe {transcript.name}")
+
+    try:
+        Transcript.objects.filter(pk=transcript.pk).update(source_status="processing")
+        manager = TranscriptionManager(api_key=os.getenv("OPENAI_API_KEY"), youtube_url=transcript.source_url,
+            job_metric=metric, max_concurrent_chunks=metric.max_concurrent_chunks,
+            progress=progress, metadata_callback=metadata)
+        result = manager.process_source()
+        record_transcript_delivery(attempt.pk, result.text, source_result=result)
+        transcript.transcript_text = result.text
+        try_finalize_transcription_billing(attempt.pk)
+        finish_transcription_job_metric(metric, TranscriptionJobMetric.Status.SUCCESS, time.perf_counter() - started)
+        progress("tagging" if topic_ids else "complete")
+        _tag_selected_topics(transcript, topic_ids)
+        progress("complete")
+        return transcript.pk
+    except Exception as exc:
+        logger.exception("YouTube processing failed job_id=%s", job.pk)
+        mark_transcription_not_billable(attempt.pk, exc)
+        transcript.refresh_from_db()
+        if transcript.source_status != "ready":
+            Transcript.objects.filter(pk=transcript.pk).update(source_status="failed",
+                retrieval_errors=(manager.retrieval_errors if manager else []) + [str(exc) if isinstance(exc, SourceError)
+                    else "Video processing failed. Please retry or contact support."])
+            finish_transcription_job_metric(metric, TranscriptionJobMetric.Status.FAILED, time.perf_counter() - started, exc)
+        job.error_message = ("Transcript tagging failed. The transcript remains available."
+            if transcript.source_status == "ready" else str(exc) if isinstance(exc, SourceError)
+            else "Video processing failed. Please retry or contact support.")
+        job.processing_stage = "failed"
+        job.save(update_fields=["error_message", "processing_stage"])
+        raise
+
+
+@shared_task
+def tag_saved_transcript(job_id, transcript_id, topic_ids):
+    from django.db import transaction
+    job = BackgroundJob.objects.get(pk=job_id)
+    # A conditional DB update claims the job even when select_for_update is
+    # unavailable (SQLite). Redelivery never repeats tagging calls.
+    with transaction.atomic():
+        claimed = BackgroundJob.objects.filter(pk=job.pk, processing_stage="pending").update(processing_stage="tagging")
+    if not claimed:
+        raise Ignore()
+    try:
+        transcript = Transcript.objects.get(pk=transcript_id, created_by=job.created_by, source_status="ready")
+        _tag_selected_topics(transcript, topic_ids)
+        BackgroundJob.objects.filter(pk=job.pk).update(processing_stage="complete")
+        return transcript.pk
+    except Exception:
+        BackgroundJob.objects.filter(pk=job.pk).update(processing_stage="failed", error_message="Transcript tagging failed. The transcript remains available.")
+        raise
